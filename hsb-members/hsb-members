@@ -1,0 +1,132 @@
+#! /bin/bash
+
+# 	Member list generator for Hackerspace Brussels 
+#	(c) 2010 Frederic Pasteleurs <frederic@askarel.be>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+
+ME=$(basename $0)
+DB="$ME.csv"
+
+# Build the prompt array
+M_INPUT[1]="Firstname:"
+M_INPUT[2]="Family name:"
+M_INPUT[3]="Nickname:"
+M_INPUT[4]="Phone number:"
+M_INPUT[5]="E-mail address:"
+
+
+############### <FUNCTIONS> ###############
+# Function to call when we bail out
+die ()
+{
+    echo "$ME: $1. Exit"
+    if [ "_$2" = "_" ]; then
+	exit 1
+	else
+	exit $2
+    fi
+}
+
+# Generate the 'Communication' field for the virement
+# Format: +++DDD/DDDD/DDDSS++
+# DDDDDDDDDD: Any number you like.
+# SS: Above number mod 97. Set to 97 if zero.
+# Banks love obsolete^Wproven technologies. :-)
+mkcomm ()
+{
+# We don't need cryptographically secure hashing here.
+# What we need is uniqueness, and the size of the .csv is helping us here.
+# With only 10^10 possibilities (a bit more than 2^33), true randomness 
+# is just a source of collisions.
+# In case of collision, the function can take a salt as an optional parameter.
+COMMSTR="$(cat $DB|wc -l)$1$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM"
+COMMSTR="${COMMSTR:0:10}"		# Trim string length to 10
+COMM_MODULO=$(expr $COMMSTR % 97 )	# Get reminder
+case $COMM_MODULO in			# Padding and/or correction
+    "0") COMM_MODULO="97" ;;
+    [1-9]) COMM_MODULO="0$COMM_MODULO" ;;
+esac
+#echo "$COMMSTR$COMM_MODULO" #Debug
+echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop into blocks
+}
+
+############### </FUNCTIONS> ###############
+
+# Run script
+if [ ! -f $DB ]; then
+    touch $DB || die "Cannot create members file"
+fi
+
+# CSV data format:
+# firstname, name, nickname, phonenumber, email, date_entered, virement_string
+
+case $1 in
+    list-current)
+    echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
+    cat $DB|while read LINE; do
+	test -z "$(echo $LINE |cut -d ',' -f 8)" && echo "$LINE"
+    done
+    ;;
+    add)
+    DATALINE="$(date +%F),$(mkcomm)"
+    for i in $(seq 1 ${#M_INPUT[@]}); do
+	echo -n "[$i/${#M_INPUT[@]}] ${M_INPUT[$i]} "
+	read
+	DATALINE="$DATALINE,$REPLY"
+    done
+    echo "$DATALINE," >> $DB
+    echo "Added to db file: $DATALINE,"
+    ;;
+    modify)
+    echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
+    ;;
+    dry)
+    echo -n "$ME: dry run:  "
+    mkcomm $2
+    ;;
+    remove)
+    test -z "$2" && die "You must specify member name or e-mail address"
+    case $(grep -i $2 $DB|wc -l) in
+	0)
+	die "$2 not found in file $DB"
+	;;
+	1)
+	test "$(grep -i $2 $DB|cut -d ',' -f 8 | wc -c)" != "1" && die "Membership already cancelled"
+    	    mv $DB $DB.bak
+    	    grep -iv "$2" "$DB.bak" > "$DB"
+	    CANCELLINE="$(grep -i "$2" "$DB.bak")$(date +%F)"
+    	    echo "$CANCELLINE" >> "$DB"
+	    echo "$CANCELLINE: Membership cancelled"
+	    rm $DB.bak
+	;;
+	*)
+	grep -i $2 $DB
+	echo "$ME: $(grep -i $2 $DB|wc -l) results: refine your query."
+	exit 1
+	;;
+    esac
+    ;;
+    list-cancelled)
+    echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
+	
+    ;;
+    *)
+    echo "Usage: $ME [list-current|add|modify|dry|remove|list-cancelled]"
+    exit 1
+    ;;
+esac
+
