@@ -64,6 +64,22 @@ esac
 echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop into blocks
 }
 
+listcurrent ()
+{
+echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
+cat $DB|while read LINE; do
+	test -z "$(echo $LINE |cut -d ',' -f 8)" && echo "$LINE"
+done
+}
+
+listcancelled ()
+{
+echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
+cat $DB|while read LINE; do
+	test -n "$(echo $LINE |cut -d ',' -f 8)" && echo "$LINE"
+done
+}
+
 ############### </FUNCTIONS> ###############
 
 # Run script
@@ -71,15 +87,9 @@ if [ ! -f $DB ]; then
     touch $DB || die "Cannot create members file"
 fi
 
-# CSV data format:
-# firstname, name, nickname, phonenumber, email, date_entered, virement_string
-
 case $1 in
     list-current)
-    echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
-    cat $DB|while read LINE; do
-	test -z "$(echo $LINE |cut -d ',' -f 8)" && echo "$LINE"
-    done
+    listcurrent
     ;;
     add)
     DATALINE="$(date +%F),$(mkcomm)"
@@ -121,8 +131,7 @@ case $1 in
     esac
     ;;
     list-cancelled)
-    echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
-	
+    listcancelled
     ;;
     *)
     echo "Usage: $ME [list-current|add|modify|dry|remove|list-cancelled]"
