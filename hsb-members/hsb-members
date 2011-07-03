@@ -19,7 +19,8 @@
 
 
 ME=$(basename $0)
-DB="$ME.csv"
+DB="$0.csv"
+CONFIGFILE="$0.conf"
 
 # Build the prompt array
 M_INPUT[1]="Firstname:"
@@ -66,7 +67,6 @@ echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop int
 
 listcurrent ()
 {
-echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
 cat $DB|while read LINE; do
 	test -z "$(echo $LINE |cut -d ',' -f 8)" && echo "$LINE"
 done
@@ -74,7 +74,6 @@ done
 
 listcancelled ()
 {
-echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
 cat $DB|while read LINE; do
 	test -n "$(echo $LINE |cut -d ',' -f 8)" && echo "$LINE"
 done
@@ -87,8 +86,14 @@ if [ ! -f $DB ]; then
     touch $DB || die "Cannot create members file"
 fi
 
+# Load config file and check sanity
+test -f "$CONFIGFILE" || die "No config file found ($CONFIGFILE)"
+. $CONFIGFILE
+
+
 case $1 in
     list-current)
+    echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
     listcurrent
     ;;
     add)
@@ -102,7 +107,20 @@ case $1 in
     echo "Added to db file: $DATALINE,"
     ;;
     modify)
-    echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
+    test -z "$2" && die "You must specify member name or e-mail address"
+    case $(listcurrent|grep -i $2 |wc -l) in
+	0)
+	die "$2 not found in file $DB"
+	;;
+	1)
+        echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
+        ;;
+        *)
+	grep -i $2 $DB
+	echo "$ME: $(listcurrent|grep -i $2 |wc -l) results: refine your query."
+	exit 1
+	;;
+    esac
     ;;
     dry)
     echo -n "$ME: dry run:  "
@@ -116,12 +134,14 @@ case $1 in
 	;;
 	1)
 	test "$(grep -i $2 $DB|cut -d ',' -f 8 | wc -c)" != "1" && die "Membership already cancelled"
+	    # Keep backup files around
+	    rm $DB.bak.bak
+    	    mv $DB.bak $DB.bak.bak
     	    mv $DB $DB.bak
     	    grep -iv "$2" "$DB.bak" > "$DB"
 	    CANCELLINE="$(grep -i "$2" "$DB.bak")$(date +%F)"
     	    echo "$CANCELLINE" >> "$DB"
 	    echo "$CANCELLINE: Membership cancelled"
-	    rm $DB.bak
 	;;
 	*)
 	grep -i $2 $DB
@@ -131,10 +151,14 @@ case $1 in
     esac
     ;;
     list-cancelled)
+    echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
     listcancelled
     ;;
+    count-current)
+    echo "There are $(listcurrent|wc -l) active members in database $DB."
+    ;;
     *)
-    echo "Usage: $ME [list-current|add|modify|dry|remove|list-cancelled]"
+    echo "Usage: $ME [list-current|add|modify|dry|remove|list-cancelled|count-current]"
     exit 1
     ;;
 esac

@@ -55,8 +55,8 @@ for i in $(cat $UNPAID); do
 	echo "
 Hello $FIRSTNAME,
 
-We are doing the books today and we noticed that you did not contribute financially
-to the hackerspace project this year while still being registered in our database
+Today is general assembly day and we noticed that you did not contribute financially
+to the hackerspace project while still being registered in our database
 as an active member.
 
 In case you want to keep your membership active, here are the banking informations
@@ -68,7 +68,7 @@ Communication field: $COMMUNICATION
 If you want to terminate your membership, just say so in your reply and we will
 not bother you anymore.
 
-You will be reminded two more times. If we don't hear from you, your membership 
+This is the last warning. If we don't hear from you, your membership 
 will be automatically cancelled.
 
 -- 
