@@ -29,6 +29,22 @@ M_INPUT[3]="Nickname:"
 M_INPUT[4]="Phone number:"
 M_INPUT[5]="E-mail address:"
 
+# Create member file if it do not exist
+if [ ! -f $DB ]; then
+    touch $DB || die "Cannot create members file"
+fi
+
+# Load config file and check sanity
+test -f "$CONFIGFILE" || die "No config file found ($CONFIGFILE)"
+. $CONFIGFILE
+test -n "$BANKACCOUNT" || die "$CONFIGFILE: BANKACCOUNT variable is empty"
+test -n "$BANKNAME" || die "$CONFIGFILE: BANKNAME variable is empty"
+test -n "$MAILFROM" || die "$CONFIGFILE: MAILFROM variable (sender e-mail address) is empty"
+test -n "$MONTHLYFEE" || die "$CONFIGFILE: MONTHLYFEE variable is empty"
+# By delault we talk in euros
+test -n "$CURRENCY" || CURRENCY="EUR"
+# A year is (usually) 12 months. This is an override if needed
+test -n "$YEARLYFEE" || YEARLYFEE=$((12*$MONTHLYFEE))
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -82,15 +98,6 @@ done
 ############### </FUNCTIONS> ###############
 
 # Run script
-if [ ! -f $DB ]; then
-    touch $DB || die "Cannot create members file"
-fi
-
-# Load config file and check sanity
-test -f "$CONFIGFILE" || die "No config file found ($CONFIGFILE)"
-. $CONFIGFILE
-
-
 case $1 in
     list-current)
     echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
@@ -105,6 +112,30 @@ case $1 in
     done
     echo "$DATALINE," >> $DB
     echo "Added to db file: $DATALINE,"
+    echo "Hello $(echo $DATALINE|cut -d ',' -f 3),
+
+This e-mail is the confirmation that you are registered as an official
+member of Hackerspace Brussels VZW/ASBL.
+
+Since we have to spend money for the facilities, internet and electricity,
+we need to ask you some every month. Not much, but it's enough to keep us 
+afloat. You can ask your bank to make an automatic transfer to the following
+bank account: ${BANKACCOUNT:0:4} ${BANKACCOUNT:4:4} ${BANKACCOUNT:8:4} ${BANKACCOUNT:12:4} ${BANKACCOUNT:16:4} ${BANKACCOUNT:20:4}
+Monthly ammount: $MONTHLYFEE $CURRENCY
+Communication: $(echo $DATALINE|cut -d ',' -f 2)
+
+You *MUST* use the communication string above: it allow us to automate the
+day by day follow up of the financial aspect of the association.
+
+You also have the possibility to pay one year at once. In that case, the 
+ammount will be $YEARLYFEE $CURRENCY
+
+-- 
+Hackerspace Brussels
+
+This mail is sent automagically from a broken half-assed bash script. You
+can see the gory details here: https://github.com/askarel/hsb-members
+"| mail -s "HSBXL - Welcome aboard" $(echo $DATALINE|cut -d ',' -f 7) && echo "mail sent to $(echo $DATALINE|cut -d ',' -f 7)"
     ;;
     modify)
     test -z "$2" && die "You must specify member name or e-mail address"
