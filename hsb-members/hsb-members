@@ -17,7 +17,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
 ME=$(basename $0)
 DB="$0.csv"
 CONFIGFILE="$0.conf"
@@ -45,6 +44,8 @@ test -n "$MONTHLYFEE" || die "$CONFIGFILE: MONTHLYFEE variable is empty"
 test -n "$CURRENCY" || CURRENCY="EUR"
 # A year is (usually) 12 months. This is an override if needed
 test -n "$YEARLYFEE" || YEARLYFEE=$((12*$MONTHLYFEE))
+# In case the bank account number has spaces
+BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -95,6 +96,36 @@ cat $DB|while read LINE; do
 done
 }
 
+editmember ()
+{
+echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
+}
+
+deletemember ()
+{
+echo
+}
+
+# Pick an active member and do something with him
+# Parameter 1: member to work on
+# Parameter 2: Function to execute on member
+pickactive ()
+{
+test $# = 2 || die "pickactive() need two parameters"
+case $(listcurrent|grep -i $1 |wc -l) in
+    0)
+    die "$1 not found in active records from file $DB"
+    ;;
+    1)
+    $2 $1
+    ;;
+    *)
+    listcurrent|grep -i $1
+    die "$(listcurrent|grep -i $1 |wc -l) results: refine your query"
+    ;;
+esac
+}
+
 ############### </FUNCTIONS> ###############
 
 # Run script
@@ -137,26 +168,6 @@ This mail is sent automagically from a broken half-assed bash script. You
 can see the gory details here: https://github.com/askarel/hsb-members
 "| mail -s "HSBXL - Welcome aboard" $(echo $DATALINE|cut -d ',' -f 7) && echo "mail sent to $(echo $DATALINE|cut -d ',' -f 7)"
     ;;
-    modify)
-    test -z "$2" && die "You must specify member name or e-mail address"
-    case $(listcurrent|grep -i $2 |wc -l) in
-	0)
-	die "$2 not found in file $DB"
-	;;
-	1)
-        echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
-        ;;
-        *)
-	grep -i $2 $DB
-	echo "$ME: $(listcurrent|grep -i $2 |wc -l) results: refine your query."
-	exit 1
-	;;
-    esac
-    ;;
-    dry)
-    echo -n "$ME: dry run:  "
-    mkcomm $2
-    ;;
     remove)
     test -z "$2" && die "You must specify member name or e-mail address"
     case $(grep -i $2 $DB|wc -l) in
@@ -188,8 +199,17 @@ can see the gory details here: https://github.com/askarel/hsb-members
     count-current)
     echo "There are $(listcurrent|wc -l) active members in database $DB."
     ;;
+    modify)
+    test -z "$2" && die "You must specify member name or e-mail address"
+    pickactive $2 editmember
+    ;;
+    dry)
+    echo -n "$ME: dry run:  "
+    #mkcomm $2
+    #pickactive $2 $3
+    ;;
     *)
-    echo "Usage: $ME [list-current|add|modify|dry|remove|list-cancelled|count-current]"
+    echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry]"
     exit 1
     ;;
 esac
