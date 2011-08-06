@@ -103,7 +103,18 @@ echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some
 
 deletemember ()
 {
-echo
+# Keep backup files around
+DBNEW="$DB"
+DB=$DB.bak
+test -f $DB.bak && rm $DB.bak
+test -f $DB && mv $DB $DB.bak
+mv $DBNEW $DB
+listcancelled > $DBNEW
+listcurrent | grep -iv "$1" >> "$DBNEW"
+CANCELLINE="$(listcurrent|grep -i "$1" )$(date +%F)"
+echo "$CANCELLINE" >> "$DBNEW"
+echo "$CANCELLINE: Membership cancelled"
+DB=$DBNEW
 }
 
 # Pick an active member and do something with him
@@ -170,27 +181,7 @@ can see the gory details here: https://github.com/askarel/hsb-members
     ;;
     remove)
     test -z "$2" && die "You must specify member name or e-mail address"
-    case $(grep -i $2 $DB|wc -l) in
-	0)
-	die "$2 not found in file $DB"
-	;;
-	1)
-	test "$(grep -i $2 $DB|cut -d ',' -f 8 | wc -c)" != "1" && die "Membership already cancelled"
-	    # Keep backup files around
-	    rm $DB.bak.bak
-    	    mv $DB.bak $DB.bak.bak
-    	    mv $DB $DB.bak
-    	    grep -iv "$2" "$DB.bak" > "$DB"
-	    CANCELLINE="$(grep -i "$2" "$DB.bak")$(date +%F)"
-    	    echo "$CANCELLINE" >> "$DB"
-	    echo "$CANCELLINE: Membership cancelled"
-	;;
-	*)
-	grep -i $2 $DB
-	echo "$ME: $(grep -i $2 $DB|wc -l) results: refine your query."
-	exit 1
-	;;
-    esac
+    pickactive $2 deletemember
     ;;
     list-cancelled)
     echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
