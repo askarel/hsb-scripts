@@ -17,11 +17,17 @@
 #
 
 ACCOUNT="BE69979429775578"
-BANKFILE="./bank/$ACCOUNT-2010-2011-full.csv"
+
+test -z "$1" && echo "Please tell me what year on the command line" && exit 1
+
+BANKFILE="./bank/$ACCOUNT-year-$1-full.csv"
+
+test -e $BANKFILE || echo "$BANKFILE not found"
+test -e $BANKFILE || exit 1
 
 ./hsb-members list-current| while read LINE; do
 
-echo "-- $(echo $LINE| cut -d ',' -f 5) ($(echo $LINE| cut -d ',' -f 3-4))  ------------------------------------------------"
+echo "-- $(echo $LINE| cut -d ',' -f 5) ($(echo $LINE| cut -d ',' -f 3-4), $(echo $LINE| cut -d ',' -f 1))  ------------------------------------------------"
 cat $BANKFILE| grep "$(echo $LINE | cut -d ',' -f 2)"
 
 
