@@ -27,7 +27,7 @@ test -e $BANKFILE || exit 1
 
 ./hsb-members list-current| while read LINE; do
 
-echo "-- $(echo $LINE| cut -d ',' -f 5) ($(echo $LINE| cut -d ',' -f 3-4), $(echo $LINE| cut -d ',' -f 1))  ------------------------------------------------"
+echo "-- $(echo $LINE| cut -d ',' -f 5) ($(echo $LINE| cut -d ',' -f 3-4), entered on $(echo $LINE| cut -d ',' -f 1))  ------------------------------------------------"
 cat $BANKFILE| grep "$(echo $LINE | cut -d ',' -f 2)"
 
 

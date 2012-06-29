@@ -21,31 +21,32 @@ ME=$(basename $0)
 DB="$0.csv"
 CONFIGFILE="$0.conf"
 
-# Build the prompt array
+# Build the prompt array (SQL)
+# Format of the structure: SQLINPUT[number]="fieldname|[YN]|field description"
+SQL_FIELD[1]="firstname|Y|Firstname:"
+SQL_FIELD[2]="name|Y|Family name:"
+SQL_FIELD[3]="nickname|Y|Nickname:"
+SQL_FIELD[4]="phonenumber|Y|Phone number:"
+SQL_FIELD[5]="emailaddress|Y|E-mail address:"
+SQL_FIELD[6]="why_member|Y|Please explain why you want to be a member (free text):"
+# end of mandatory inputs. The rest is optional
+SQL_FIELD[7]="birthdate|N|About you: Your birth date (YYYY-MM-DD):"
+SQL_FIELD[8]="birthcity|N|           In which city were you born ?"
+SQL_FIELD[9]="birthcountry|N|           In which country ?"
+SQL_FIELD[10]="nationalregistry|N|           National registry number:"
+SQL_FIELD[11]="snailcommune|N|About your home: which commune:"
+SQL_FIELD[12]="snailpostcode|N|                 Postal code:"
+SQL_FIELD[13]="snailstreet|N|           Street name:"
+SQL_FIELD[14]="snailnumber|N|           House/building number:"
+SQL_FIELD[15]="snailbox|N|           Mailbox number (leave empty if N/A):"
+
+# Build the prompt array (CSV)
 M_INPUT[1]="Firstname:"
 M_INPUT[2]="Family name:"
 M_INPUT[3]="Nickname:"
 M_INPUT[4]="Phone number:"
 M_INPUT[5]="E-mail address:"
 
-# Create member file if it do not exist
-if [ ! -f $DB ]; then
-    touch $DB || die "Cannot create members file"
-fi
-
-# Load config file and check sanity
-test -f "$CONFIGFILE" || die "No config file found ($CONFIGFILE)"
-. $CONFIGFILE
-test -n "$BANKACCOUNT" || die "$CONFIGFILE: BANKACCOUNT variable is empty"
-test -n "$BANKNAME" || die "$CONFIGFILE: BANKNAME variable is empty"
-test -n "$MAILFROM" || die "$CONFIGFILE: MAILFROM variable (sender e-mail address) is empty"
-test -n "$MONTHLYFEE" || die "$CONFIGFILE: MONTHLYFEE variable is empty"
-# By delault we talk in euros
-test -n "$CURRENCY" || CURRENCY="EUR"
-# A year is (usually) 12 months. This is an override if needed
-test -n "$YEARLYFEE" || YEARLYFEE=$((12*$MONTHLYFEE))
-# In case the bank account number has spaces
-BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -59,19 +60,22 @@ die ()
     fi
 }
 
+# run a SQL command, data returned is tab-separated 
+# exit code 0: request successful
+runsql ()
+{
+    test -z "$1" && die "Empty SQL request"
+    mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names -e "$1" 2>&1
+}
+
 # Generate the 'Communication' field for the virement
 # Format: +++DDD/DDDD/DDDSS+++
-# DDDDDDDDDD: Any number you like.
+# DDDDDDDDDD: Any number you like. This is the only parameter needed.
 # SS: Above number mod 97. Set to 97 if zero.
 # Banks love obsolete^Wproven technologies. :-)
 mkcomm ()
 {
-# We don't need cryptographically secure hashing here.
-# What we need is uniqueness, and the size of the .csv is helping us here.
-# With only 10^10 possibilities (a bit more than 2^33), true randomness 
-# is just a source of collisions.
-# In case of collision, the function can take a salt as an optional parameter.
-COMMSTR="$(cat $DB|wc -l)$1$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM"
+COMMSTR="$1"
 COMMSTR="${COMMSTR:0:10}"		# Trim string length to 10
 COMM_MODULO=$(expr $COMMSTR % 97 )	# Get reminder
 case $COMM_MODULO in			# Padding and/or correction
@@ -139,6 +143,36 @@ esac
 
 ############### </FUNCTIONS> ###############
 
+############### <SANITY CHECKS> ###############
+# Create member file if it do not exist
+if [ ! -f $DB ]; then
+    touch $DB || die "Cannot create members file"
+fi
+
+# Load config file and check sanity
+test -f "$CONFIGFILE" || die "No config file found ($CONFIGFILE)"
+. $CONFIGFILE
+test -n "$BANKACCOUNT" || die "$CONFIGFILE: BANKACCOUNT variable is empty"
+test -n "$BANKNAME" || die "$CONFIGFILE: BANKNAME variable is empty"
+test -n "$MAILFROM" || die "$CONFIGFILE: MAILFROM variable (sender e-mail address) is empty"
+test -n "$MONTHLYFEE" || die "$CONFIGFILE: MONTHLYFEE variable is empty"
+test -n "$SQLUSER" || die "$CONFIGFILE: SQLUSER variable is empty"
+test -n "$SQLPASS" || die "$CONFIGFILE: SQLPASS variable is empty"
+test -n "$SQLDB" || die "Database to use not specified"
+# By delault we talk in euros
+test -n "$CURRENCY" || CURRENCY="EUR"
+# A year is (usually) 12 months. This is an override if needed
+test -n "$YEARLYFEE" || YEARLYFEE=$((12*$MONTHLYFEE))
+# In case the bank account number has spaces
+BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
+# If empty, use localhost
+test -n "$SQLHOST" || SQLHOST="127.0.0.1"
+############### </SANITY CHECKS> ###############
+
+#SQLRESULT=$(runsql "show tables;")
+#echo $?
+#echo "\"$SQLRESULT\""
+
 # Run script
 case $1 in
     list-current)
@@ -146,7 +180,11 @@ case $1 in
     listcurrent
     ;;
     add)
-    DATALINE="$(date +%F),$(mkcomm)"
+# We don't need cryptographically secure hashing here.
+# What we need is uniqueness, and the size of the .csv is helping us here.
+# With only 10^10 possibilities (a bit more than 2^33), true randomness 
+# is just a source of collisions.
+    DATALINE="$(date +%F),$(mkcomm $(cat $DB|wc -l)$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM)"
     for i in $(seq 1 ${#M_INPUT[@]}); do
 	echo -n "[$i/${#M_INPUT[@]}] ${M_INPUT[$i]} "
 	read
@@ -168,9 +206,6 @@ Communication: $(echo $DATALINE|cut -d ',' -f 2)
 
 You *MUST* use the communication string above: it allow us to automate the
 day by day follow up of the financial aspect of the association.
-
-You also have the possibility to pay one year at once. In that case, the 
-amount will be $YEARLYFEE $CURRENCY
 
 -- 
 Hackerspace Brussels
@@ -196,7 +231,8 @@ can see the gory details here: https://github.com/askarel/hsb-members
     ;;
     dry)
     echo -n "$ME: dry run:  "
-    #mkcomm $2
+#    mkcomm "$(cat $DB|wc -l)$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM"
+    mkcomm "$2"
     #pickactive $2 $3
     ;;
     *)
