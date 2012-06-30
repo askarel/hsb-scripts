@@ -167,11 +167,42 @@ test -n "$YEARLYFEE" || YEARLYFEE=$((12*$MONTHLYFEE))
 BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
 # If empty, use localhost
 test -n "$SQLHOST" || SQLHOST="127.0.0.1"
-############### </SANITY CHECKS> ###############
 
-#SQLRESULT=$(runsql "show tables;")
-#echo $?
-#echo "\"$SQLRESULT\""
+# Is the database usable ? Try listing the tables.
+SQLRESULT=$(runsql "show tables;")
+test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+# Does the main table exist ? Try it by asking a description.
+SQLRESULT=$(runsql "desc hsbmembers;")
+if [ $? != "0" ]; then
+    echo "Trying to create table hsbmembers..."
+    SQLRESULT=$(runsql "create table hsbmembers (id int not null auto_increment primary key, 
+				    entrydate date not null, 
+				    structuredcomm char(21) unique not null, 
+				    firstname char(30) not null, 
+				    name char(30) not null, 
+				    nickname char(30), 
+				    phonenumber char(15), 
+				    emailaddress char(60) not null, 
+				    exitdate date, 
+				    passwordhash char(60) not null default 'mouh', 
+				    flags bigint not null default 0, 
+				    birthdate date, 
+				    birthcity char(30), 
+				    birthcountry char(20), 
+				    nationalregistry char(15), 
+				    snailcommune char(20), 
+				    snailpostcode char (10), 
+				    snailstreet char(30), 
+				    snailnumber char(10), 
+				    snailbox char(6), 
+				    openpgpkeyid char(20), 
+				    activated_date date, 
+				    mail_flags bigint not null default 0, 
+				    why_member text not null);")
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+fi
+
+############### </SANITY CHECKS> ###############
 
 # Run script
 case $1 in
