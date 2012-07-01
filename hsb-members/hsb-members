@@ -40,6 +40,9 @@ SQL_FIELD[13]="snailstreet|N|           Street name:"
 SQL_FIELD[14]="snailnumber|N|           House/building number:"
 SQL_FIELD[15]="snailbox|N|           Mailbox number (leave empty if N/A):"
 
+# Field descriptions for migrating away from the csv file.
+CSVFIELDS="entrydate,structuredcomm,firstname,name,nickname,phonenumber,emailaddress,exitdate"
+
 # Build the prompt array (CSV)
 M_INPUT[1]="Firstname:"
 M_INPUT[2]="Family name:"
@@ -105,6 +108,7 @@ editmember ()
 echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
 }
 
+# THIS FUNCTION WILL BE DELETED ONCE THE SQL DB CODE IS USABLE
 deletemember ()
 {
 # Keep backup files around
@@ -141,10 +145,86 @@ case $(listcurrent|grep -i $1 |wc -l) in
 esac
 }
 
+# Format one line of the CSV into SQL
+formlinetosql ()
+{
+for i in $( seq  8 )
+do
+    if [ -z "$(echo $1 |cut -d ',' -f $i)" ];
+	then
+		echo -n "NULL,"
+	else
+		echo -n "\"$(echo $1 |cut -d ',' -f $i)\","
+    fi
+done
+
+}
+
+# Migrate data from the csv file to the SQL database.
+# Must be run once. Old backup files are kept.
+migratecsv2sql ()
+{
+if [ -f $DB ]; then
+    while read line
+    do
+	runsql "insert into hsbmembers ($CSVFIELDS,why_member) values (
+	$(formlinetosql "$line")\"migrated from CSV\");"
+    done < $DB
+
+#    test -f "$DB.bak.bak" && rm "$DB.bak.bak"
+#    test -f "$DB.bak" && mv "$DB.bak" "$DB.bak.bak"
+#    mv "$DB" "$DB.bak"
+else
+    die "No migration needed"
+fi
+}
+
+# Add a member to the CSV file
+# THIS FUNCTION WILL BE DELETED ONCE THE SQL DB CODE IS USABLE
+csvaddmember ()
+{
+# We don't need cryptographically secure hashing here.
+# What we need is uniqueness, and the size of the .csv is helping us here.
+# Due to early design mistake, the members communication will now start with zero.
+# Existing ones will still be valid. I plan to use communication starting with
+# 9 for prepaid drink cards. Communications starting with 6,7 and 8 are undefined at the moment.
+DATALINE="$(date +%F),$(mkcomm 0$(cat $DB|wc -l)$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM)"
+for i in $(seq 1 ${#M_INPUT[@]}); do
+    echo -n "[$i/${#M_INPUT[@]}] ${M_INPUT[$i]} "
+    read
+    DATALINE="$DATALINE,$REPLY"
+done
+echo "$DATALINE," >> $DB
+echo "Added to db file: $DATALINE,"
+echo "Hello $(echo $DATALINE|cut -d ',' -f 3),
+
+This e-mail is the confirmation that you are registered as an official
+member of Hackerspace Brussels VZW/ASBL.
+
+Since we have to spend money for the facilities, internet and electricity,
+we need to ask you some every month. Not much, but it's enough to keep us 
+afloat. You can ask your bank to make an automatic transfer to the following
+bank account: ${BANKACCOUNT:0:4} ${BANKACCOUNT:4:4} ${BANKACCOUNT:8:4} ${BANKACCOUNT:12:4} ${BANKACCOUNT:16:4} ${BANKACCOUNT:20:4}
+Monthly amount: $MONTHLYFEE $CURRENCY
+Communication: $(echo $DATALINE|cut -d ',' -f 2)
+
+You *MUST* use the communication string above: it allow us to automate the
+day by day follow up of the financial aspect of the association.
+
+-- 
+Hackerspace Brussels
+
+This mail is sent automagically from a broken half-assed bash script. You
+can see the gory details here: https://github.com/askarel/hsb-members
+"| mail -s "HSBXL - Welcome aboard" $(echo $DATALINE|cut -d ',' -f 7) && echo "mail sent to $(echo $DATALINE|cut -d ',' -f 7)"
+
+}
+
 ############### </FUNCTIONS> ###############
 
 ############### <SANITY CHECKS> ###############
-# Create member file if it do not exist
+# Create member file if it do not exist.
+# THIS FUNCTION WILL BE DELETED ONCE THE SQL DB CODE IS USABLE
 if [ ! -f $DB ]; then
     touch $DB || die "Cannot create members file"
 fi
@@ -196,7 +276,7 @@ if [ $? != "0" ]; then
 				    snailnumber char(10), 
 				    snailbox char(6), 
 				    openpgpkeyid char(20), 
-				    activated_date date, 
+				    activateddate date, 
 				    mail_flags bigint not null default 0, 
 				    why_member text not null);")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
@@ -207,68 +287,42 @@ fi
 # Run script
 case $1 in
     list-current)
-    echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
-    listcurrent
+	echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
+	listcurrent
     ;;
     add)
-# We don't need cryptographically secure hashing here.
-# What we need is uniqueness, and the size of the .csv is helping us here.
-# With only 10^10 possibilities (a bit more than 2^33), true randomness 
-# is just a source of collisions.
-    DATALINE="$(date +%F),$(mkcomm $(cat $DB|wc -l)$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM)"
-    for i in $(seq 1 ${#M_INPUT[@]}); do
-	echo -n "[$i/${#M_INPUT[@]}] ${M_INPUT[$i]} "
-	read
-	DATALINE="$DATALINE,$REPLY"
-    done
-    echo "$DATALINE," >> $DB
-    echo "Added to db file: $DATALINE,"
-    echo "Hello $(echo $DATALINE|cut -d ',' -f 3),
-
-This e-mail is the confirmation that you are registered as an official
-member of Hackerspace Brussels VZW/ASBL.
-
-Since we have to spend money for the facilities, internet and electricity,
-we need to ask you some every month. Not much, but it's enough to keep us 
-afloat. You can ask your bank to make an automatic transfer to the following
-bank account: ${BANKACCOUNT:0:4} ${BANKACCOUNT:4:4} ${BANKACCOUNT:8:4} ${BANKACCOUNT:12:4} ${BANKACCOUNT:16:4} ${BANKACCOUNT:20:4}
-Monthly amount: $MONTHLYFEE $CURRENCY
-Communication: $(echo $DATALINE|cut -d ',' -f 2)
-
-You *MUST* use the communication string above: it allow us to automate the
-day by day follow up of the financial aspect of the association.
-
--- 
-Hackerspace Brussels
-
-This mail is sent automagically from a broken half-assed bash script. You
-can see the gory details here: https://github.com/askarel/hsb-members
-"| mail -s "HSBXL - Welcome aboard" $(echo $DATALINE|cut -d ',' -f 7) && echo "mail sent to $(echo $DATALINE|cut -d ',' -f 7)"
+	csvaddmember
     ;;
     remove)
-    test -z "$2" && die "You must specify member name or e-mail address"
-    pickactive $2 deletemember
+	test -z "$2" && die "You must specify member name or e-mail address"
+	pickactive $2 deletemember
     ;;
     list-cancelled)
-    echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
-    listcancelled
+	echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
+	listcancelled
     ;;
     count-current)
-    echo "There are $(listcurrent|wc -l) active members in database $DB."
+	echo "There are $(listcurrent|wc -l) active members in database $DB."
     ;;
     modify)
-    test -z "$2" && die "You must specify member name or e-mail address"
-    pickactive $2 editmember
+	test -z "$2" && die "You must specify member name or e-mail address"
+	pickactive $2 editmember
     ;;
     dry)
-    echo -n "$ME: dry run:  "
-#    mkcomm "$(cat $DB|wc -l)$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM"
-    mkcomm "$2"
-    #pickactive $2 $3
+	echo -n "$ME: dry run:  "
+#	mkcomm "$(cat $DB|wc -l)$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM"
+	mkcomm "$2"
+	#pickactive $2 $3
+    ;;
+    migrate)
+	migratecsv2sql
+    ;;
+    importbankcsv)
+	die "not implemented"
     ;;
     *)
-    echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry]"
-    exit 1
+	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv]"
+	exit 1
     ;;
 esac
 
