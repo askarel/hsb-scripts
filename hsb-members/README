@@ -9,3 +9,8 @@ Give it a try and enjoy.
 The command mail(1) must be fully working and be able to send mail to the
 outside world. Having a local SMTP relay is a good idea.
 
+The scripts are being reworked to use a MySQL database. The .CSV is still the
+recomended way to store the data. Don't rely on the Mysql bits, but have a 
+database ready to be used. :-)
+
+

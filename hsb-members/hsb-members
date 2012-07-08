@@ -22,34 +22,26 @@ DB="$0.csv"
 CONFIGFILE="$0.conf"
 
 # Build the prompt array (SQL)
-# Format of the structure: SQLINPUT[number]="fieldname|[YN]|field description"
-SQL_FIELD[1]="firstname|Y|Firstname:"
-SQL_FIELD[2]="name|Y|Family name:"
-SQL_FIELD[3]="nickname|Y|Nickname:"
-SQL_FIELD[4]="phonenumber|Y|Phone number:"
-SQL_FIELD[5]="emailaddress|Y|E-mail address:"
-SQL_FIELD[6]="why_member|Y|Please explain why you want to be a member (free text):"
+# Format of the structure: SQLINPUT[number]="fieldname|field description|RESULT"
+SQL_FIELD[1]="firstname|Firstname"
+SQL_FIELD[2]="name|Family name"
+SQL_FIELD[3]="nickname|Nickname"
+SQL_FIELD[4]="phonenumber|Phone number"
+SQL_FIELD[5]="emailaddress|E-mail address"
+SQL_FIELD[6]="why_member|Please explain why you want to be a member (free text)"
 # end of mandatory inputs. The rest is optional
-SQL_FIELD[7]="birthdate|N|About you: Your birth date (YYYY-MM-DD):"
-SQL_FIELD[8]="birthcity|N|           In which city were you born ?"
-SQL_FIELD[9]="birthcountry|N|           In which country ?"
-SQL_FIELD[10]="nationalregistry|N|           National registry number:"
-SQL_FIELD[11]="snailcommune|N|About your home: which commune:"
-SQL_FIELD[12]="snailpostcode|N|                 Postal code:"
-SQL_FIELD[13]="snailstreet|N|           Street name:"
-SQL_FIELD[14]="snailnumber|N|           House/building number:"
-SQL_FIELD[15]="snailbox|N|           Mailbox number (leave empty if N/A):"
+SQL_FIELD[7]="birthdate|About you: Your birth date (YYYY-MM-DD)"
+SQL_FIELD[8]="birthcity|           City were you born"
+SQL_FIELD[9]="birthcountry|           In which country"
+SQL_FIELD[10]="nationalregistry|          National registry number"
+SQL_FIELD[11]="snailcommune|About your home: which commune"
+SQL_FIELD[12]="snailpostcode|                 Postal code"
+SQL_FIELD[13]="snailstreet|                  Street name"
+SQL_FIELD[14]="snailnumber|                  House/building number"
+SQL_FIELD[15]="snailbox|                  Mailbox number (leave empty if N/A)"
 
 # Field descriptions for migrating away from the csv file.
 CSVFIELDS="entrydate,structuredcomm,firstname,name,nickname,phonenumber,emailaddress,exitdate"
-
-# Build the prompt array (CSV)
-M_INPUT[1]="Firstname:"
-M_INPUT[2]="Family name:"
-M_INPUT[3]="Nickname:"
-M_INPUT[4]="Phone number:"
-M_INPUT[5]="E-mail address:"
-
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -89,60 +81,101 @@ esac
 echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop into blocks
 }
 
-listcurrent ()
+listcurrentsql ()
 {
-cat $DB|while read LINE; do
-	test -z "$(echo $LINE |cut -d ',' -f 8)" && echo "$LINE"
+    SQLRESULT=$(runsql "select entrydate,structuredcomm,firstname,name,nickname,phonenumber,emailaddress from hsbmembers where exitdate is null;")
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    echo "$SQLRESULT"|tr "\t" ','
+}
+
+listcancelledsql ()
+{
+    SQLRESULT=$(runsql "select entrydate,structuredcomm,firstname,name,nickname,phonenumber,emailaddress,exitdate from hsbmembers where exitdate is not null;")
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    echo "$SQLRESULT"|tr "\t" ','
+}
+
+countcurrentsql ()
+{
+    SQLRESULT=$(runsql "select count(structuredcomm) from hsbmembers where exitdate is null;") #" Syntax higlighter choke on that.
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    echo "There are currently $SQLRESULT members in the database."
+}
+
+deletemembersql ()
+{
+    SQLRESULT=$(runsql "select count(structuredcomm) from hsbmembers where exitdate is null and emailaddress like \"$1\"; ") #" Syntax higlighter choke on that.
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    test "$SQLRESULT" != "1" && die "$1 not found within active members ($SQLRESULT)"
+    SQLRESULT=$(runsql "update hsbmembers set exitdate=(select curdate()) where exitdate is null and emailaddress like \"$1\";") #" Syntax higlighter choke on that.
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    echo "$1: membership cancelled."
+
+}
+
+# User interface - data is appended as a third field on the prompt
+inputdata ()
+{
+for i in $(seq 1 ${#SQL_FIELD[@]}); do
+    echo -n "[$i/${#SQL_FIELD[@]}] $(echo -n "${SQL_FIELD[$i]}"|cut -d '|' -f 2) [$(echo -n "${SQL_FIELD[$i]}"|cut -d '|' -f 3)]: "
+    read
+    SQL_FIELD[$i]="$(echo -n "${SQL_FIELD[$i]}"|cut -d '|' -f 1,2)|$REPLY"
 done
 }
 
-listcancelled ()
+# Add a new member to the database: build the query with the provided data
+addmember ()
 {
-cat $DB|while read LINE; do
-	test -n "$(echo $LINE |cut -d ',' -f 8)" && echo "$LINE"
-done
+    inputdata
+    THESQL="insert into hsbmembers (entrydate, structuredcomm"
+    for i in $(seq 1 ${#SQL_FIELD[@]}); do
+	THESQL="$THESQL, $(echo -n "${SQL_FIELD[$i]}"|cut -d '|' -f 1)"
+    done
+    THESQL="$THESQL ) values ((select curdate()), \"$(mkcomm 0$RANDOM$RANDOM$RANDOM$RANDOM)\""
+    for i in $(seq 1 ${#SQL_FIELD[@]}); do
+	if [ -z "$(echo -n "${SQL_FIELD[$i]}"|cut -d '|' -f 3)" ];
+	    then
+		THESQL="$THESQL, NULL"
+	    else
+		THESQL="$THESQL, \"$(echo -n "${SQL_FIELD[$i]}"|cut -d '|' -f 3)\""
+	fi
+    done
+    THESQL="$THESQL );"
+#    echo "$THESQL"
+    SQLRESULT=$(runsql "$THESQL")
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    SQLRESULT=$(runsql "select structuredcomm,firstname,emailaddress,why_member from hsbmembers where exitdate is null and emailaddress like \"$(echo -n "${SQL_FIELD[5]}"|cut -d '|' -f 3)\";"| tr "\t" "," ) #" Syntax higlighter choke on that.
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    echo "Added to DB: $SQLRESULT"
+    echo "Hello $(echo $SQLRESULT|cut -d ',' -f 2),
+
+This e-mail is the confirmation that you are registered as an official
+member of Hackerspace Brussels VZW/ASBL.
+
+Since we have to spend money for the facilities, internet and electricity,
+we need to ask you some every month. Not much, but it's enough to keep us 
+afloat. You can ask your bank to make an automatic transfer to the following
+bank account: ${BANKACCOUNT:0:4} ${BANKACCOUNT:4:4} ${BANKACCOUNT:8:4} ${BANKACCOUNT:12:4} ${BANKACCOUNT:16:4} ${BANKACCOUNT:20:4}
+Monthly amount: $MONTHLYFEE $CURRENCY
+Communication: $(echo $SQLRESULT|cut -d ',' -f 1)
+
+You *MUST* use the communication string above: it allow us to automate the
+day by day follow up of the financial aspect of the association.
+
+You decided to join us for the following reason:
+$(echo "$SQLRESULT"|cut -d ',' -f 4-)
+
+-- 
+Hackerspace Brussels
+
+This mail is sent automagically from a broken half-assed bash script. You
+can see the gory details here: https://github.com/askarel/hsb-members
+"| mail -s "HSBXL - Welcome aboard" $(echo $SQLRESULT|cut -d ',' -f 3) && echo "mail sent to $(echo $SQLRESULT|cut -d ',' -f 3)"
 }
 
 editmember ()
 {
 echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
-}
-
-# THIS FUNCTION WILL BE DELETED ONCE THE SQL DB CODE IS USABLE
-deletemember ()
-{
-# Keep backup files around
-DBNEW="$DB"
-DB=$DB.bak
-test -f $DB.bak && rm $DB.bak
-test -f $DB && mv $DB $DB.bak
-mv $DBNEW $DB
-listcancelled > $DBNEW
-listcurrent | grep -iv "$1" >> "$DBNEW"
-CANCELLINE="$(listcurrent|grep -i "$1" )$(date +%F)"
-echo "$CANCELLINE" >> "$DBNEW"
-echo "$CANCELLINE: Membership cancelled"
-DB=$DBNEW
-}
-
-# Pick an active member and do something with him
-# Parameter 1: member to work on
-# Parameter 2: Function to execute on member
-pickactive ()
-{
-test $# = 2 || die "pickactive() need two parameters"
-case $(listcurrent|grep -i $1 |wc -l) in
-    0)
-    die "$1 not found in active records from file $DB"
-    ;;
-    1)
-    $2 $1
-    ;;
-    *)
-    listcurrent|grep -i $1
-    die "$(listcurrent|grep -i $1 |wc -l) results: refine your query"
-    ;;
-esac
 }
 
 # Format one line of the CSV into SQL
@@ -157,7 +190,6 @@ do
 		echo -n "\"$(echo $1 |cut -d ',' -f $i)\","
     fi
 done
-
 }
 
 # Migrate data from the csv file to the SQL database.
@@ -167,67 +199,21 @@ migratecsv2sql ()
 if [ -f $DB ]; then
     while read line
     do
+	echo "Importing $(echo $line|cut -d ',' -f 2)..."
 	runsql "insert into hsbmembers ($CSVFIELDS,why_member) values (
 	$(formlinetosql "$line")\"migrated from CSV\");"
     done < $DB
-
-#    test -f "$DB.bak.bak" && rm "$DB.bak.bak"
-#    test -f "$DB.bak" && mv "$DB.bak" "$DB.bak.bak"
-#    mv "$DB" "$DB.bak"
+    test -f "$DB.bak.bak" && rm "$DB.bak.bak"
+    test -f "$DB.bak" && mv "$DB.bak" "$DB.bak.bak"
+    mv "$DB" "$DB.bak"
 else
     die "No migration needed"
 fi
 }
 
-# Add a member to the CSV file
-# THIS FUNCTION WILL BE DELETED ONCE THE SQL DB CODE IS USABLE
-csvaddmember ()
-{
-# We don't need cryptographically secure hashing here.
-# What we need is uniqueness, and the size of the .csv is helping us here.
-# Due to early design mistake, the members communication will now start with zero.
-# Existing ones will still be valid. I plan to use communication starting with
-# 9 for prepaid drink cards. Communications starting with 6,7 and 8 are undefined at the moment.
-DATALINE="$(date +%F),$(mkcomm 0$(cat $DB|wc -l)$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM)"
-for i in $(seq 1 ${#M_INPUT[@]}); do
-    echo -n "[$i/${#M_INPUT[@]}] ${M_INPUT[$i]} "
-    read
-    DATALINE="$DATALINE,$REPLY"
-done
-echo "$DATALINE," >> $DB
-echo "Added to db file: $DATALINE,"
-echo "Hello $(echo $DATALINE|cut -d ',' -f 3),
-
-This e-mail is the confirmation that you are registered as an official
-member of Hackerspace Brussels VZW/ASBL.
-
-Since we have to spend money for the facilities, internet and electricity,
-we need to ask you some every month. Not much, but it's enough to keep us 
-afloat. You can ask your bank to make an automatic transfer to the following
-bank account: ${BANKACCOUNT:0:4} ${BANKACCOUNT:4:4} ${BANKACCOUNT:8:4} ${BANKACCOUNT:12:4} ${BANKACCOUNT:16:4} ${BANKACCOUNT:20:4}
-Monthly amount: $MONTHLYFEE $CURRENCY
-Communication: $(echo $DATALINE|cut -d ',' -f 2)
-
-You *MUST* use the communication string above: it allow us to automate the
-day by day follow up of the financial aspect of the association.
-
--- 
-Hackerspace Brussels
-
-This mail is sent automagically from a broken half-assed bash script. You
-can see the gory details here: https://github.com/askarel/hsb-members
-"| mail -s "HSBXL - Welcome aboard" $(echo $DATALINE|cut -d ',' -f 7) && echo "mail sent to $(echo $DATALINE|cut -d ',' -f 7)"
-
-}
-
 ############### </FUNCTIONS> ###############
 
 ############### <SANITY CHECKS> ###############
-# Create member file if it do not exist.
-# THIS FUNCTION WILL BE DELETED ONCE THE SQL DB CODE IS USABLE
-if [ ! -f $DB ]; then
-    touch $DB || die "Cannot create members file"
-fi
 
 # Load config file and check sanity
 test -f "$CONFIGFILE" || die "No config file found ($CONFIGFILE)"
@@ -278,41 +264,69 @@ if [ $? != "0" ]; then
 				    openpgpkeyid char(20), 
 				    activateddate date, 
 				    mail_flags bigint not null default 0, 
-				    why_member text not null);")
+				    why_member text not null
+				    );")
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+fi
+
+# Does the bank statements table exist ? Try it by asking a description.
+SQLRESULT=$(runsql "desc $BANKACCOUNT;")
+if [ $? != "0" ]; then
+    echo "Trying to create table $BANKACCOUNT..."
+    SQLRESULT=$(runsql "create table $BANKACCOUNT (paydate date,
+				    transactionid char(30) unique not null,
+				    ammount decimal (15,2) not null,
+				    currency char (5) not null,
+				    otheraccount char (30),
+				    otheraccount_owner char (30),
+				    communication1 char (30),
+				    communication2 char (30));")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 fi
 
 ############### </SANITY CHECKS> ###############
 
+test -f $DB && migratecsv2sql
+
 # Run script
 case $1 in
     list-current)
 	echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email"
-	listcurrent
+	listcurrentsql
     ;;
     add)
-	csvaddmember
+#	csvaddmember
+	addmember
+    ;;
+    addsql)
+	addmember
+    ;;
+    editsql)
+    inputdata
+
+for i in $(seq 1 ${#SQL_FIELD[@]}); do
+    echo "[$i/${#SQL_FIELD[@]}] ${SQL_FIELD[$i]} "
+done
+    inputdata
     ;;
     remove)
-	test -z "$2" && die "You must specify member name or e-mail address"
-	pickactive $2 deletemember
+	test -z "$2" && die "You must specify member e-mail address"
+	deletemembersql "$2"
     ;;
     list-cancelled)
 	echo "# date_entered, virement_string, firstname, name, nickname, phonenumber, email, date_cancelled"
-	listcancelled
+	listcancelledsql
     ;;
     count-current)
-	echo "There are $(listcurrent|wc -l) active members in database $DB."
+	countcurrentsql
     ;;
     modify)
-	test -z "$2" && die "You must specify member name or e-mail address"
-	pickactive $2 editmember
+	test -z "$2" && die "You must specify member e-mail address"
+	editmember "$2"
     ;;
     dry)
 	echo -n "$ME: dry run:  "
-#	mkcomm "$(cat $DB|wc -l)$(cat $DB|wc -c)$RANDOM$RANDOM$RANDOM"
 	mkcomm "$2"
-	#pickactive $2 $3
     ;;
     migrate)
 	migratecsv2sql
