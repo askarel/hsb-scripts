@@ -2,3 +2,7 @@
 - Day by day overview of membership payment
 - automatic reminder (CSV download/membership payment)
 - Mail when membership is cancelled
+- Secure against SQL injection
+- Handle user flags
+- Make a web interface
+- ...
