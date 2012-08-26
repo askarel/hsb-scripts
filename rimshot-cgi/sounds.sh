@@ -24,28 +24,30 @@ ME=$(basename $0)
 METHODNAME="PLAY"
 PLAYPROG="paplay"
 
-echo "Content-type: text/html\n\n"
-
 cat << EOM
+Content-type: text/html
+
+
+<!DOCTYPE html>
 <HTML>
-    <HEAD>
-	<TITLE>Rimshot and other shit</TITLE>
-    </HEAD>
-    <BODY>
-    <H1>HSBXL TROLLING PAGE</H1>
+ <HEAD>
+  <TITLE>Rimshot and other shit</TITLE>
+ </HEAD>
+ <BODY>
+  <H1>HSBXL TROLLING PAGE</H1>
 EOM
 
 if [ -d "$DIR_AUDIOFILES" ]; then
-    echo "	<FORM ACTION=\"$ME\" method=\"GET\">"
-    echo "	<P><INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$METHODNAME\"></INPUT></P>"
+    echo "  <FORM ACTION=\"$ME\" method=\"GET\">"
+    echo "   <P><INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$METHODNAME\"></INPUT></P>"
     for i in $( ls -1 "$DIR_AUDIOFILES" ); do
-	echo "	<INPUT TYPE=\"SUBMIT\" VALUE=\"$i\" NAME=\"$METHODNAME\"></INPUT>"
+	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$i\" NAME=\"$METHODNAME\"></INPUT>"
     done
-    echo "	</FORM>"
+    echo "  </FORM>"
 fi
 
 cat << EOM
-    </BODY>
+ </BODY>
 </HTML>
 EOM
 
