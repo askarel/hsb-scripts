@@ -1,0 +1,5 @@
+DEFAULT linux
+
+LABEL linux
+    KERNEL /zoppas/zoppas.knl
+    INITRD /zoppas/zoppasfs.gz

@@ -1,0 +1,53 @@
+#!/bin/sh
+
+sleep 2
+
+gotoxy()
+{
+    echo -ne "\033[${2};${1}H"
+}
+
+
+# Use gotoxy to set the start of the line. Start from the left
+# Parameter: how many chars long ?
+hline()
+{
+    HLINE="\033(0q\033(B"
+    HLINE="-"
+    for i in $(seq 1 $1); do echo -ne "$HLINE" ; done
+}
+
+
+
+clear
+
+cat << EOF
+
+			HSBXL price list
+
+Coca-cola	1,00 EUR		Jupiler		1,00 EUR
+Club-mate 33 cl	1,00 EUR		Duvel		2,00 EUR
+Club-mate 50 cl	1,50 EUR		Leffe		1,50 EUR
+Hausmarke cola	1,50 EUR		Chimay		2,00 EUR
+Hermann Brause	1,50 EUR		Westmalle	2,00 EUR
+Ice tea		1,00 EUR		Hoegaarden	1,50 EUR
+Hot tea		0,50 EUR		
+
+Paprika nuts	1,00 EUR		T-shirt		15 EUR
+Paprika chips	0,50 EUR		Stickers	0,50 EUR
+Salty chips	0,50 EUR
+Grills		1,00 EUR
+Instant noodles	1,00 EUR
+
+Key of the space (members only)			4 EUR
+
+EOF
+
+hline 79
+
+
+while true; do
+    gotoxy 1 24 ; echo -ne ">>>" ; read REPLY
+    gotoxy 1 24 ; echo -ne "\033[K"
+    gotoxy 1 23 ; echo -ne "\033[K $REPLY"
+done

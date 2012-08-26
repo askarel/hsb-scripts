@@ -1,0 +1,19 @@
+# Busybox Init
+
+# Script to launch upon bootup
+::sysinit:/etc/init.d/kickstart
+
+# Hand to the user
+::respawn:-/bin/zoppas
+tty2::askfirst:-/bin/ash
+tty3::askfirst:-/bin/ash
+tty4::askfirst:-/bin/ash
+tty5::askfirst:-/bin/ash
+
+# Init restart
+::restart:/sbin/init
+
+# Reboot stuff
+::ctrlaltdel:/sbin/reboot
+::shutdown:/etc/init.d/kickstop
+

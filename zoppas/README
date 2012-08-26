@@ -1,0 +1,10 @@
+Zoppas - Hackerspace Brussels fridge computer
+
+This directory hold the files needed to build the system image and
+the application(s) that run on the fridge
+
+The kernel builder is a bunch of scripts used for my car computer, they need 
+to be cleaned up so they can easily be repurposed for another application, 
+that's why it's not included in the package yet.
+
+The folder zoppasfs is the additional ramdisk image. 

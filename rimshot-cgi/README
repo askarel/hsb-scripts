@@ -1,0 +1,13 @@
+The trolling page
+
+This project started one evening after a couple of beers and too many bad jokes.
+It got production ready about two hours later. (http://xkcd.com/323/)
+
+This script is meant to be used as a CGI script for your web server 
+(apache in our case), the script suppose you're using Pulseaudio: in that case,
+you must add the user www-data (or whatever user your web server run at) to the
+pulseaudio user (pulse-access) to get audio. Otherwise, just change the variable
+PLAYPROG to the player of your choice. The variable DIR_AUDIOFILES must be set
+to the directory holding the files you want to play. To add more buttons to the
+page, just add more files to the directory.
+
