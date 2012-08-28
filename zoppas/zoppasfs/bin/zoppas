@@ -1,12 +1,25 @@
 #!/bin/sh
 
-sleep 2
+ME=$(basename $0)
+CACHEDIR="/var/tmp/$ME"
+BARCODEFILE="${ME}-barcodes.csv"
+
+############### FUNCTIONS ###############
+# Function to call when we bail out
+die ()
+{
+    echo "$ME: $1. Exit"
+    if [ "_$2" = "_" ]; then
+	exit 1
+	else
+	exit $2
+    fi
+}
 
 gotoxy()
 {
-    echo -ne "\033[${2};${1}H"
+    /bin/echo -ne "\033[${2};${1}H"
 }
-
 
 # Use gotoxy to set the start of the line. Start from the left
 # Parameter: how many chars long ?
@@ -14,16 +27,36 @@ hline()
 {
     HLINE="\033(0q\033(B"
     HLINE="-"
-    for i in $(seq 1 $1); do echo -ne "$HLINE" ; done
+    for i in $(seq 1 $1); do /bin/echo -ne "$HLINE" ; done
 }
 
+############### CODE ###############
+# Look for config file in the following locations: /etc, user directory and 
+# script directory. Script directory always wins.
+test -e "/etc/$ME.conf" && CONFIGFILE="/etc/$ME.conf"
+test -e "$HOME/$ME.conf" && CONFIGFILE="$HOME/$ME.conf"
+test -e "$0.conf" && CONFIGFILE="$0.conf"
+test -z "$CONFIGFILE" && die "No config file found"
+# Bring the config file
+. "$CONFIGFILE"
+# validate config file
+test -n "$ORGNAME" || die "Variable ORGNAME is empty. Set it to the name of your organization"
+test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
+# By default we talk in euros
+test -n "$CURRENCY" || CURRENCY="EUR"
+# Optional delay to wait
+test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && sleep $WAITFORSTART
+# Fetch the CSV holding the barcodes
+mkdir -p "$CACHEDIR"
+wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
 
+
+echo "Starting Zoppas..."
 
 clear
 
-cat << EOF
-
-			HSBXL price list
+echo "
+			$ORGNAME price list
 
 Coca-cola	1,00 EUR		Jupiler		1,00 EUR
 Club-mate 33 cl	1,00 EUR		Duvel		2,00 EUR
@@ -40,14 +73,14 @@ Grills		1,00 EUR
 Instant noodles	1,00 EUR
 
 Key of the space (members only)			4 EUR
+"
 
-EOF
 
 hline 79
 
 
 while true; do
-    gotoxy 1 24 ; echo -ne ">>>" ; read REPLY
-    gotoxy 1 24 ; echo -ne "\033[K"
-    gotoxy 1 23 ; echo -ne "\033[K $REPLY"
+    gotoxy 1 24 ; /bin/echo -ne ">>>" ; read REPLY
+    gotoxy 1 24 ; /bin/echo -ne "\033[K"
+    gotoxy 1 23 ; /bin/echo -ne "\033[K $REPLY"
 done
