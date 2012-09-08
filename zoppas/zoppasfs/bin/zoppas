@@ -121,12 +121,14 @@ blanksalescreen()
     clear >> $TMPDIR/blanksalescreen
     gotoxy 1 1 blanksalescreen; outtext "Barcode nr." blanksalescreen
     gotoxy 15 1 blanksalescreen; outtext "Description" blanksalescreen
-    gotoxy $(( $MAXX - 15 )) 1 blanksalescreen; outtext "Quantity" blanksalescreen
-    gotoxy $(( $MAXX - 6 )) 1 blanksalescreen; outtext "Price" blanksalescreen
+    gotoxy $(( $MAXX - 15 )) 1 blanksalescreen; outtext "Quant." blanksalescreen
+    gotoxy $(( $MAXX - 23 )) 1 blanksalescreen; outtext "U.Price" blanksalescreen
+    gotoxy $(( $MAXX - 7 )) 1 blanksalescreen; outtext "SubTot." blanksalescreen
     gotoxy 1 2 blanksalescreen; hline $MAXX blanksalescreen
     gotoxy 14 1 blanksalescreen; vline $(( $MAXY - 2 )) blanksalescreen
+    gotoxy $(( $MAXX - 24 )) 1 blanksalescreen; vline $(( $MAXY - 2 )) blanksalescreen
     gotoxy $(( $MAXX - 16 )) 1 blanksalescreen; vline $(( $MAXY - 2 )) blanksalescreen
-    gotoxy $(( $MAXX - 7 )) 1 blanksalescreen; vline $MAXY blanksalescreen
+    gotoxy $(( $MAXX - 8 )) 1 blanksalescreen; vline $MAXY blanksalescreen
     gotoxy 1 $(( $MAXY - 2 )) blanksalescreen;  hline $MAXX blanksalescreen
     gotoxy $(( $MAXX - 15 )) $MAXY blanksalescreen; outtext "TOTAL:" blanksalescreen
 }
@@ -134,7 +136,19 @@ blanksalescreen()
 updatesalescreen()
 {
     if [ -f $SALEFILE ]; then
-	echo test
+	YCOUNTER=3
+	SALETOTAL=0
+	cat $SALEFILE|sort|uniq -c|tr -s ' ' ' ' |
+	while read QUANTITY BARCODE
+	do
+#	    SUBTOTAL=$(( $(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) * 2 ))
+	    gotoxy 1 $YCOUNTER ; outtext "$BARCODE"
+	    gotoxy 15 $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 2)"
+	    gotoxy $(( $MAXX - 22 )) $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3)"
+	    gotoxy $(( $MAXX - 14 )) $YCOUNTER ; outtext "$QUANTITY  "
+	    gotoxy $(( $MAXX - 6 )) $YCOUNTER ; outtext "$SUBTOTAL   "
+	    YCOUNTER=$(( $YCOUNTER + 1 ))
+	done
     fi
 }
 
@@ -167,7 +181,6 @@ echo "Building screens..."
 pricelist
 prompt
 blanksalescreen
-echo "Starting Zoppas..."
 
 while true; do
     if [ -f $SALEFILE ]; then
@@ -176,8 +189,19 @@ while true; do
     else
 	showbuffer pricelist
     fi
-    gotoxy 1 $(( $MAXY - 2 )) ; /bin/echo -ne "\033[K$REPLY"
     showbuffer prompt
     read REPLY
-    ## Put here the test if known barcode
+    case "$REPLY" in
+	"CANCEL")
+		rm $SALEFILE
+	;;
+	"EXIT")
+		rm -rf $TMPDIR
+		exit 0
+	;;
+	*)
+        ## Put here the test if known barcode
+	    echo "$REPLY" >> $SALEFILE
+	;;
+    esac
 done
