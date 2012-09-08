@@ -1,8 +1,12 @@
 #!/bin/sh
 
-ME=$(basename $0)
+ME="$(basename $0)"
+TMPDIR="$(mktemp -d /tmp/$ME.XXXXXXXXXXXXXX)"
 CACHEDIR="/var/tmp/$ME"
 BARCODEFILE="${ME}-barcodes.csv"
+SALEFILE="$TMPDIR/currentsale"
+MAXX="$COLUMNS"
+MAXY="$LINES"
 
 ############### FUNCTIONS ###############
 # Function to call when we bail out
@@ -16,18 +20,122 @@ die ()
     fi
 }
 
+# Erase a buffer file (1 parameter: buffer name)
+destroybuffer()
+{
+    test -f "$TMPDIR/$1" && rm "$TMPDIR/$1"
+}
+
+# Show a predefined buffer (1 parameter: buffer name)
+showbuffer()
+{
+    test -f "$TMPDIR/$1" && cat $TMPDIR/$1
+}
+
+# Position the cursor on the screen (1=X 2=Y)
+# Parameter 3 is the buffer name to use.
+# Leave parameter 3 empty for immediate display
 gotoxy()
 {
-    /bin/echo -ne "\033[${2};${1}H"
+    BUF="$TMPDIR/$3"
+    test -z "$3" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
+    /bin/echo -ne "\033[${2};${1}H" >> $BUF
+    test -z "$3" && cat $BUF && rm $BUF
 }
 
 # Use gotoxy to set the start of the line. Start from the left
-# Parameter: how many chars long ?
+# Parameter 1: how many chars long ?
+# Parameter 2: the buffer name to use.
+# Leave parameter 2 empty for immediate display
 hline()
 {
+    BUF="$TMPDIR/$2"
+    test -z "$2" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
     HLINE="\033(0q\033(B"
     HLINE="-"
-    for i in $(seq 1 $1); do /bin/echo -ne "$HLINE" ; done
+    for i in $(seq 1 $1); do /bin/echo -ne "$HLINE" >> $BUF ; done
+    test -z "$2" && cat $BUF && rm $BUF
+}
+
+# Use gotoxy to set the start of the line. Start from the top
+# Parameter 1: how many chars long ?
+# Parameter 2: the buffer name to use.
+# Leave parameter 2 empty for immediate display
+vline()
+{
+    BUF="$TMPDIR/$2"
+    test -z "$2" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
+    HLINE="|\033[1B\33[1D"
+    for i in $(seq 1 $1); do  
+	/bin/echo -ne "$HLINE" >> $BUF
+    done
+    test -z "$2" && cat $BUF && rm $BUF
+}
+
+# Parameter 1: the string  /!\ QUOTE IT /!\
+# Parameter 2: the buffer name to use.
+# Leave parameter 2 empty for immediate display
+outtext()
+{
+    BUF="$TMPDIR/$2"
+    test -z "$2" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
+    /bin/echo -ne "$1" >> $BUF
+    test -z "$2" && cat $BUF && rm $BUF
+}
+
+############### BUFFERS ###############
+
+pricelist()
+{
+    clear >> $TMPDIR/pricelist
+    gotoxy 1 1 pricelist
+    echo "
+			$ORGNAME price list
+
+Coca-cola	1,00 $CURRENCY		Jupiler		1,00 $CURRENCY
+Club-mate 33 cl	1,00 $CURRENCY		Duvel		2,00 $CURRENCY
+Club-mate 50 cl	1,50 $CURRENCY		Leffe		1,50 $CURRENCY
+Hausmarke cola	1,50 $CURRENCY		Chimay		2,00 $CURRENCY
+Hermann Brause	1,50 $CURRENCY		Westmalle	2,00 $CURRENCY
+Ice tea		1,00 $CURRENCY		Hoegaarden	1,50 $CURRENCY
+Hot tea		0,50 $CURRENCY		
+
+Paprika nuts	1,00 $CURRENCY		T-shirt		15 $CURRENCY
+Paprika chips	0,50 $CURRENCY		Stickers	0,50 $CURRENCY
+Salty chips	0,50 $CURRENCY
+Grills		1,00 $CURRENCY
+Instant noodles	1,00 $CURRENCY
+
+Key of the space (members only)			4 $CURRENCY
+" >> $TMPDIR/pricelist
+}
+
+prompt()
+{
+    PROMPT="Scan/type a barcode >>>"
+    gotoxy 1 $(( $MAXY -1 )) prompt; outtext "\033[K$PROMPT" prompt
+}
+
+blanksalescreen()
+{
+    clear >> $TMPDIR/blanksalescreen
+    gotoxy 1 1 blanksalescreen; outtext "Barcode nr." blanksalescreen
+    gotoxy 15 1 blanksalescreen; outtext "Description" blanksalescreen
+    gotoxy $(( $MAXX - 15 )) 1 blanksalescreen; outtext "Quantity" blanksalescreen
+    gotoxy $(( $MAXX - 6 )) 1 blanksalescreen; outtext "Price" blanksalescreen
+    gotoxy 1 2 blanksalescreen; hline $MAXX blanksalescreen
+    gotoxy 14 1 blanksalescreen; vline $(( $MAXY - 2 )) blanksalescreen
+    gotoxy $(( $MAXX - 16 )) 1 blanksalescreen; vline $(( $MAXY - 2 )) blanksalescreen
+    gotoxy $(( $MAXX - 7 )) 1 blanksalescreen; vline $MAXY blanksalescreen
+    gotoxy 1 $(( $MAXY - 2 )) blanksalescreen;  hline $MAXX blanksalescreen
+    gotoxy $(( $MAXX - 15 )) $MAXY blanksalescreen; outtext "TOTAL:" blanksalescreen
+}
+
+updatesalescreen()
+{
+    if [ -f $SALEFILE ]; then
+	echo test
+    fi
 }
 
 ############### CODE ###############
@@ -44,43 +152,32 @@ test -n "$ORGNAME" || die "Variable ORGNAME is empty. Set it to the name of your
 test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
 # By default we talk in euros
 test -n "$CURRENCY" || CURRENCY="EUR"
+# By default, detect screen size from environment:
+# If a specific screen size is defined in config file, use it.
+# when all else fail, default to 80x25 :-)
+test -z "$MAXX" && MAXX="80"
+test -z "$MAXY" && MAXY="25"
 # Optional delay to wait
 test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && sleep $WAITFORSTART
 # Fetch the CSV holding the barcodes
 mkdir -p "$CACHEDIR"
 wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
 
-
+echo "Building screens..."
+pricelist
+prompt
+blanksalescreen
 echo "Starting Zoppas..."
 
-clear
-
-echo "
-			$ORGNAME price list
-
-Coca-cola	1,00 EUR		Jupiler		1,00 EUR
-Club-mate 33 cl	1,00 EUR		Duvel		2,00 EUR
-Club-mate 50 cl	1,50 EUR		Leffe		1,50 EUR
-Hausmarke cola	1,50 EUR		Chimay		2,00 EUR
-Hermann Brause	1,50 EUR		Westmalle	2,00 EUR
-Ice tea		1,00 EUR		Hoegaarden	1,50 EUR
-Hot tea		0,50 EUR		
-
-Paprika nuts	1,00 EUR		T-shirt		15 EUR
-Paprika chips	0,50 EUR		Stickers	0,50 EUR
-Salty chips	0,50 EUR
-Grills		1,00 EUR
-Instant noodles	1,00 EUR
-
-Key of the space (members only)			4 EUR
-"
-
-
-hline 79
-
-
 while true; do
-    gotoxy 1 24 ; /bin/echo -ne ">>>" ; read REPLY
-    gotoxy 1 24 ; /bin/echo -ne "\033[K"
-    gotoxy 1 23 ; /bin/echo -ne "\033[K $REPLY"
+    if [ -f $SALEFILE ]; then
+	showbuffer blanksalescreen
+	updatesalescreen
+    else
+	showbuffer pricelist
+    fi
+    gotoxy 1 $(( $MAXY - 2 )) ; /bin/echo -ne "\033[K$REPLY"
+    showbuffer prompt
+    read REPLY
+    ## Put here the test if known barcode
 done
