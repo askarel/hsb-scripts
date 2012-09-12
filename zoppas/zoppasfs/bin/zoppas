@@ -146,13 +146,18 @@ updatesalescreen()
 	do
 #	    SUBTOTAL=$(( $(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) * 2 ))
 	    gotoxy 1 $YCOUNTER ; outtext "$BARCODE"
-	    gotoxy 15 $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 2)"
+	    gotoxy 15 $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 2) "
 	    gotoxy $(( $MAXX - 22 )) $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) "
 	    gotoxy $(( $MAXX - 14 )) $YCOUNTER ; outtext "$QUANTITY  "
 	    gotoxy $(( $MAXX - 6 )) $YCOUNTER ; outtext "$SUBTOTAL "
 	    YCOUNTER=$(( $YCOUNTER + 1 ))
 	done
     fi
+}
+
+badbarcode()
+{
+    gotoxy 1 $MAXY badbarcode; outtext "$1" badbarcode
 }
 
 ############### CODE ###############
@@ -192,7 +197,9 @@ while true; do
     else
 	showbuffer pricelist
     fi
+    showbuffer badbarcode
     showbuffer prompt
+    destroybuffer badbarcode
     read REPLY
     case "$REPLY" in
 	"CANCEL")
@@ -204,7 +211,19 @@ while true; do
 	;;
 	*)
         ## Put here the test if known barcode
-	    test -n "$REPLY" && echo "$REPLY" >> $SALEFILE
+	    if [ -n "$REPLY" ]; then
+		case "$(cat $CACHEDIR/$BARCODEFILE|cut -d ';' -f 1|grep -w "$REPLY"|wc -l)" in
+		    "0")
+			badbarcode "Barcode '$REPLY' not found in database. Please try another one"
+		    ;;
+		    "1")
+			echo "$REPLY" >> $SALEFILE
+		    ;;
+		    *)
+			badbarcode "'$REPLY' is ambiguous: $(cat $CACHEDIR/$BARCODEFILE|cut -d ';' -f 1|grep "$REPLY"|wc -l) results."
+		    ;;
+		esac
+	    fi
 	;;
     esac
 done
