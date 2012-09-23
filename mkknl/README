@@ -5,3 +5,11 @@ This kernel builder take a config file and downloads the packages, unpack them,
 compile them and cram everything into the built-in initramfs of the kernel.
 
 You end up with a single file bootable system.
+
+
+At the moment, the scripts are not very functional: the script was originaly 
+written to rebuild the software of my car computer and was never intended for
+any other use, a lot of stuff need to be rewritten.
+
+Even non-functional, the script is included to give a glimpse of how i built 
+the system for the fridge. It will be cleaned in the end.

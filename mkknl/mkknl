@@ -10,8 +10,8 @@ KCONFIG="$ME.knl.conf"
 UCLIBCCONFIG="$ME.uclibc.conf"
 FILESYSTEM="$ME.filesystem"
 
-if [ -f $MYDIR/$MYVARS ]; then
-    . $MYDIR/$MYVARS
+if [ -f $MYVARS ]; then
+    . ./$MYVARS
     else
     echo "$ME: File $MYVARS cannot be found. This file contains default parameters."
     exit 1
