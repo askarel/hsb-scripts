@@ -1,0 +1,77 @@
+#!/bin/sh
+ME=$(basename $0)
+MYDIR="$(dirname $0)"
+MYVARS="mkknl.vars"
+
+PKG_NAME="zlib"
+PKG_VERSION="1.2.5"
+PKG_FTP="http://zlib.net"
+
+if [ -f $MYDIR/../../$MYVARS ]; then
+    . $MYDIR/../../$MYVARS
+    else
+    echo "$ME: File $MYVARS cannot be found."
+    exit 1
+fi
+
+PKG_LOC="$WORKDIR/$PKG_NAME-$PKG_VERSION"
+
+case "$1" in
+    UPDATE)
+	echo "$ME ($PKG_NAME) $1 (stub)"
+    ;;
+    GET)
+    echo "$ME ($PKG_NAME) $1"
+    wget -c "$PKG_FTP/$PKG_NAME-$PKG_VERSION.tar.bz2" -O "$DOWNLOADS/$PKG_NAME-$PKG_VERSION.tar.bz2"
+    ;;
+    CHECK)
+	echo "$ME ($PKG_NAME) $1 (stub)"
+    ;;
+    UNPACK)
+    echo "$ME ($PKG_NAME) $1"
+    tar -xjvf "$DOWNLOADS/$PKG_NAME-$PKG_VERSION.tar.bz2" -C "$WORKDIR"
+    ;;
+    BUILD)
+        echo "$ME ($PKG_NAME) $1"
+	test -f $MYDIR/.config && cp $MYDIR/.config $PKG_LOC/.config
+	CURDIR=$PWD
+	cd $PKG_LOC
+	./configure --static
+	for i in $(find $CURDIR/*.patch) ;  do
+	    echo "Applying patch $i..."
+	    patch  < $i
+	done
+	make
+#	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE
+	cd $CURDIR
+    ;;
+    INSTALL)
+        echo "$ME ($PKG_NAME) $1"
+	CURDIR=$PWD
+	cd $PKG_LOC
+	make prefix="$WORKDIR/cross-compiler-$TOOL_ARCH" install
+#	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CONFIG_PREFIX=$WORKROOT install
+	cd $CURDIR
+    ;;
+    CLEAN)
+        echo "$ME ($PKG_NAME) $1"
+	CURDIR=$PWD
+	cd $PKG_LOC
+	make clean
+	make distclean
+	cd $CURDIR
+    ;;
+    CONFIGURE)
+        echo "$ME ($PKG_NAME) $1"
+	test -f $MYDIR/.config && cp $MYDIR/.config $PKG_LOC/.config
+	CURDIR=$PWD
+	cd $PKG_LOC
+#	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE menuconfig
+	cd $CURDIR
+	test -f $PKG_LOC/.config && cp $PKG_LOC/.config $MYDIR/.config
+    ;;
+    *)
+	echo "$ME: need a parameter (UPDATE|GET|CHECK|UNPACK|BUILD|INSTALL|CLEAN|CONFIGURE)"
+	exit 1
+    ;;
+esac

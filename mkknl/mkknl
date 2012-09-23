@@ -1,0 +1,227 @@
+#!/bin/sh
+############### VARS ###############
+ME=$(basename $0)
+MYDIR="$(dirname $0)"
+MYVARS="$ME.vars"
+#MYCONFIGFILE="$ME.conf"
+CPIOPATHS="$ME.cpiopaths"
+KNLVERSIONFILE="$ME.knl.ver"
+KCONFIG="$ME.knl.conf"
+UCLIBCCONFIG="$ME.uclibc.conf"
+FILESYSTEM="$ME.filesystem"
+
+if [ -f $MYDIR/$MYVARS ]; then
+    . $MYDIR/$MYVARS
+    else
+    echo "$ME: File $MYVARS cannot be found. This file contains default parameters."
+    exit 1
+fi
+
+# Default FTP server
+KNLFTP="http://ftp.kernel.org/pub/linux/kernel/v3.x"
+UCLIBCFTP="http://uclibc.org/downloads"
+
+TOOL_VERSION="0.9.30.1"
+UCLIBCVERSION="0.9.33.2"
+KNL_VERSION="3.4.7"
+
+############### FUNCTIONS ###############
+# Function to call when we bail out
+die ()
+{
+    echo "$ME: $1. Exit"
+    if [ "_$2" = "_" ]; then
+	exit 1
+	else
+	exit $2
+    fi
+}
+
+# Fetch and validate kernel source.
+knlget ()
+{
+    test -z "$1" && die "knlget() need to know the kernel version to download"
+    wget -c "$KNLFTP/linux-$1.tar.bz2" -O "$DOWNLOADS/linux-$1.tar.bz2"
+    wget -c "$KNLFTP/linux-$1.tar.bz2.sign" -O "$DOWNLOADS/linux-$1.tar.bz2.sign"
+#    gpg --verify "$DOWNLOADS/linux-$1.tar.bz2.sign" "$DOWNLOADS/linux-$1.tar.bz2" 2> /dev/null || die "BAD SIGNATURE: PLEASE RE-DOWNLOAD THE FILE" 2
+}
+
+knlver ()
+{
+#	KNL_VERSION=$(wget -c $KNLFTP -q -O - |html2text|grep "LATEST-IS" |cut -d ' ' -f 1|cut -d '-' -f 3)
+#	test -z $KNL_VERSION && die "Cannot determine current kernel version"
+	echo $KNL_VERSION > $KNLVERSIONFILE
+	echo "Latest kernel version is $(cat $KNLVERSIONFILE)" 
+}
+
+knlunpack ()
+{
+    test -z "$1" && die "knlunpack() need to know the kernel version to unpack"
+    tar -xjvf "$DOWNLOADS/linux-$1.tar.bz2" -C "$WORKDIR"
+}
+
+uclibcget ()
+{
+    test -z "$1" && die "uclibcget() need to know the version"
+    wget -c "$UCLIBCFTP/uClibc-$1.tar.bz2" -O "$DOWNLOADS/uClibc-$1.tar.bz2"
+    wget -c "$UCLIBCFTP/uClibc-$1.tar.bz2.sign" -O "$DOWNLOADS/uClibc-$1.tar.bz2.sign"
+#    gpg --verify "$DOWNLOADS/uClibc-$1.tar.bz2.sign" "$DOWNLOADS/uClibc-$1.tar.bz2" 2> /dev/null || die "BAD SIGNATURE: PLEASE RE-DOWNLOAD THE FILE" 2
+}
+
+uclibcunpack ()
+{
+    test -z "$1" && die "uclibcunpack() need to know the uClibc version to unpack"
+    tar -xjvf "$DOWNLOADS/uClibc-$1.tar.bz2" -C "$WORKDIR"
+}
+
+toolget ()
+{
+    test -z "$1" && die "toolget() need to know the version"
+    test -z "$2" && die "toolget() need to know the target arch"
+    wget -c "$UCLIBCFTP/binaries/$1/cross-compiler-$2.tar.bz2" -O "$DOWNLOADS/cross-compiler-$2.tar.bz2"
+}
+
+toolunpack ()
+{
+    test -z "$1" && die "toolunpack() need to know the version to unpack"
+    test -z "$2" && die "toolunpack() need to know the target arch"
+    tar -xjvf "$DOWNLOADS/cross-compiler-$2.tar.bz2" -C "$WORKDIR"
+}
+
+keepknlsource ()
+{
+    test -z "$1" && die "keepknlsource() need to know the kernel version to keep"
+    for i in $(ls -1 $WORKDIR |grep linux|grep -v $1); do
+	echo "Removing $WORKDIR/$i"
+	rm -rf $WORKDIR/$i
+    done
+    for i in $(ls -1 $DOWNLOADS|grep linux|grep -v $1); do
+	echo "Removing $DOWNLOADS/$i"
+	rm -f $DOWNLOADS/$i
+    done
+}
+
+processpackage ()
+{
+    for i in $(find $ME.d -mindepth 1 -type d -print|sort); do
+	test -x ./$i/$ME.sub && ./$i/$ME.sub $1
+    done
+}
+
+############### CODE ###############
+
+# Bring user parameters
+#. ./$MYCONFIGFILE
+
+test -n "$PROJECT_NAME" || die "Variable PROJECT_NAME is not defined"
+
+if [ "_$KNL_VERSION" = "_" ]; then
+    if [ -e $KNLVERSIONFILE ]; then
+	KNL_VERSION=$(cat $KNLVERSIONFILE)
+	else
+	knlver
+    fi
+fi
+
+KNLLOC="$WORKDIR/linux-$KNL_VERSION"
+export PATH="$WORKDIR/cross-compiler-$TOOL_ARCH/bin:$PATH"
+
+mkdir -p $WORKDIR
+mkdir -p $DOWNLOADS
+
+case $1 in
+    get)
+	knlget $KNL_VERSION
+#	uclibcget $UCLIBCVERSION
+	toolget $TOOL_VERSION $TOOL_ARCH
+	processpackage GET
+	knlunpack $KNL_VERSION
+#	uclibcunpack $UCLIBCVERSION
+	toolunpack $TOOL_VERSION $TOOL_ARCH
+	processpackage UNPACK
+	;;
+
+    update)
+	knlver
+	exit 0
+	;;
+
+    clean)
+	processpackage CLEAN
+	CURDIR=$PWD
+	cd $KNLLOC
+	make clean
+	cd $CURDIR
+	test -d $WORKROOT && rm -rf $WORKROOT
+	# There might be libraries left from a previous build: clean up.
+	test -d $WORKDIR/cross-compiler-$TOOL_ARCH && rm -rf $WORKDIR/cross-compiler-$TOOL_ARCH
+	exit 0
+	;;
+
+    configure)
+	processpackage CONFIGURE
+	test -f $KCONFIG && cp $KCONFIG $KNLLOC/.config
+	CURDIR=$PWD
+	cd $KNLLOC
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE menuconfig
+	cd $CURDIR
+	test -f $KNLLOC/.config && cp $KNLLOC/.config $KCONFIG
+	;;
+
+    build)
+	test -f $KCONFIG || die "file $KCONFIG not found. Run '$ME configure' to generate one"
+	test -f $CPIOPATHS || die "File $CPIOPATHS not found. Please generate one."
+	test -f $KCONFIG && cp $KCONFIG $KNLLOC/.config
+	test -d $WORKROOT && rm -rf $WORKROOT
+	mkdir -p $WORKROOT/lib
+	# There might be libraries left from a previous build: clean up.
+	test -d $WORKDIR/cross-compiler-$TOOL_ARCH && rm -rf $WORKDIR/cross-compiler-$TOOL_ARCH
+	toolunpack $TOOL_VERSION $TOOL_ARCH
+	# Copy libs
+	cp -P $WORKDIR/cross-compiler-$TOOL_ARCH/lib/*.so* $WORKROOT/lib
+	cat $KCONFIG| grep -v 'CONFIG_INITRAMFS_SOURCE' > $KNLLOC/.config
+	echo "CONFIG_INITRAMFS_SOURCE=\"$PWD/$CPIOPATHS $WORKROOT\"" >> $KNLLOC/.config
+	echo "CONFIG_INITRAMFS_ROOT_UID=0"  >> $KNLLOC/.config
+	echo "CONFIG_INITRAMFS_ROOT_GID=0"  >> $KNLLOC/.config
+	echo "CONFIG_INITRAMFS_COMPRESSION_NONE=y"  >> $KNLLOC/.config
+	echo  "\n$ME: building..."
+	# Copy tiny filesystem
+	rsync -av $MYDIR/$FILESYSTEM/ $WORKROOT/
+	# Make and install the rest
+	processpackage BUILD
+	processpackage INSTALL
+	CURDIR=$PWD
+	cd $KNLLOC
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE modules
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE INSTALL_MOD_PATH=$WORKROOT firmware_install
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE INSTALL_MOD_PATH=$WORKROOT modules_install
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE headers_install
+	# Use busybox depmod for modules dependencies 
+	$WORKROOT/sbin/depmod -b $WORKROOT $KNL_VERSION-jb
+	cd $KNLLOC
+	# Build the kernel with all my junk in
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE
+	cd $CURDIR
+	cp $KNLLOC/arch/x86/boot/bzImage "$CURDIR/$PROJECT_NAME.$ME.knl"
+	exit 0
+	;;
+
+    rmold)
+	echo "$ME: Deleting old releases"
+	keepknlsource $KNL_VERSION
+	;;
+
+    *)	echo "Syntax: $ME: [get|update|clean|configure|build|rmold]"
+	echo ""
+	echo " get		Fetch the selected kernel version from repository"
+	echo " update		Get the latest kernel version"
+	echo " clean		Remove staging directory and clean up kernel tree"
+	echo " configure	Run 'make menuconfig'"
+	echo " build		Create kernel image and built-in initramfs"
+	echo " rmold		Remove old kernel versions"
+	exit 1
+	;;
+esac
+
+
+

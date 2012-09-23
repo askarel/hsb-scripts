@@ -1,0 +1,65 @@
+#!/bin/sh
+ME=$(basename $0)
+MYDIR="$(dirname $0)"
+MYVARS="mkknl.vars"
+
+PKG_NAME="mysoft"
+PKG_VERSION="1.0"
+PKG_FTP="http://example.net/downloads"
+
+if [ -f $MYDIR/../../$MYVARS ]; then
+    . $MYDIR/../../$MYVARS
+    else
+    echo "$ME: File $MYVARS cannot be found."
+    exit 1
+fi
+
+PKG_LOC="$WORKDIR/$PKG_NAME-$PKG_VERSION"
+
+case "$1" in
+    UPDATE)
+	echo "$ME UPDATE (stub)"
+    ;;
+    GET)
+    wget -c "$PKG_FTP/$PKG_NAME-$PKG_VERSION.tar.bz2" -O "$DOWNLOADS/$PKG_NAME-$PKG_VERSION.tar.bz2"
+    wget -c "$PKG_FTP/$PKG_NAME-$PKG_VERSION.tar.bz2.sign" -O "$DOWNLOADS/$PKG_NAME-$PKG_VERSION.tar.bz2.sign"
+    ;;
+    CHECK)
+	echo "$ME CHECK (stub)"
+    ;;
+    UNPACK)
+    tar -xjvf "$DOWNLOADS/$PKG_NAME-$PKG_VERSION.tar.bz2" -C "$WORKDIR"
+    ;;
+    BUILD)
+	test -f $MYDIR/.config && cp $MYDIR/.config $PKG_LOC/.config
+	CURDIR=$PWD
+	cd $PKG_LOC
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE
+	cd $CURDIR
+    ;;
+    INSTALL)
+	CURDIR=$PWD
+	cd $PKG_LOC
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CONFIG_PREFIX=$WORKROOT install
+	cd $CURDIR
+    ;;
+    CLEAN)
+	CURDIR=$PWD
+	cd $PKG_LOC
+	make clean
+	make distclean
+	cd $CURDIR
+    ;;
+    CONFIGURE)
+	test -f $MYDIR/.config && cp $MYDIR/.config $PKG_LOC/.config
+	CURDIR=$PWD
+	cd $PKG_LOC
+	make ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE menuconfig
+	cd $CURDIR
+	test -f $PKG_LOC/.config && cp $PKG_LOC/.config $MYDIR/.config
+    ;;
+    *)
+	echo "$ME: need a parameter (UPDATE|GET|CHECK|UNPACK|BUILD|INSTALL|CLEAN|CONFIGURE)"
+	exit 1
+    ;;
+esac

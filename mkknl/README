@@ -1,0 +1,7 @@
+
+mkknl - the kernel builder
+
+This kernel builder take a config file and downloads the packages, unpack them,
+compile them and cram everything into the built-in initramfs of the kernel.
+
+You end up with a single file bootable system.
