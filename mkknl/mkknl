@@ -8,7 +8,7 @@ CPIOPATHS="$ME.cpiopaths"
 KNLVERSIONFILE="$ME.knl.ver"
 KCONFIG="$ME.knl.conf"
 UCLIBCCONFIG="$ME.uclibc.conf"
-FILESYSTEM="$ME.filesystem"
+FILESYSTEM="$ME.rootfs"
 
 if [ -f $MYVARS ]; then
     . ./$MYVARS

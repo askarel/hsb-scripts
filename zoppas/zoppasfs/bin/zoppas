@@ -167,7 +167,7 @@ updatesalescreen()
 	    gotoxy 15 $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 2) "
 	    gotoxy $(( $MAXX - 22 )) $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) "
 	    gotoxy $(( $MAXX - 14 )) $YCOUNTER ; outtext "$QUANTITY  "
-	    gotoxy $(( $MAXX - 6 )) $YCOUNTER ; outtext "$SUBTOTAL "
+	    gotoxy $(( $MAXX - 6 )) $YCOUNTER ; outtext "$(awk "BEGIN{print $(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) * $QUANTITY}" )" #" Syntax highlighter choke on that.
 	    YCOUNTER=$(( $YCOUNTER + 1 ))
 	done
     fi
