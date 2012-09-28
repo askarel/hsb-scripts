@@ -101,6 +101,25 @@ outtext()
     test -z "$2" && cat $BUF && rm $BUF
 }
 
+# Search data in csv file
+# parameter 1: file name
+# parameter 2: column(s) to search into. Leave empty to search all fields
+# output: line number(s) of the matching entries (1 match per line)
+findincsv()
+{
+    echo
+}
+
+# Get data from CSV file
+# parameter 1: file name
+# parameter 2: row number (-1 for all rows)
+# parameter 3: column number (-1 for all columns)
+# output: chosen data
+getcsvdata()
+{
+    echo
+}
+
 ############### BUFFERS ###############
 
 pricelist()
@@ -111,8 +130,8 @@ pricelist()
 			$ORGNAME price list
 
 Coca-cola	1,00 $CURRENCY		Jupiler		1,00 $CURRENCY
-Club-mate 33 cl	1,00 $CURRENCY		Duvel		2,00 $CURRENCY
-Club-mate 50 cl	1,50 $CURRENCY		Leffe		1,50 $CURRENCY
+Club-mate 33 cl	2,00 $CURRENCY		Duvel		2,00 $CURRENCY
+Club-mate 50 cl	2,50 $CURRENCY		Leffe		1,50 $CURRENCY
 Hausmarke cola	1,50 $CURRENCY		Chimay		2,00 $CURRENCY
 Hermann Brause	1,50 $CURRENCY		Westmalle	2,00 $CURRENCY
 Ice tea		1,00 $CURRENCY		Hoegaarden	1,50 $CURRENCY
@@ -162,12 +181,14 @@ updatesalescreen()
 	cat $1|sort|uniq -c|tr -s ' ' ' ' |
 	while read QUANTITY BARCODE
 	do
-#	    SUBTOTAL=$(( $(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) * 2 ))
+	    SUBTOTAL="$(awk "BEGIN{printf \"%.2f\n\", ( $(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) * $QUANTITY) }" )" #" Syntax highlighter choke on that.
+	    SALETOTAL="$(awk "BEGIN{printf \"%.2f\n\", ($SALETOTAL + $SUBTOTAL)}" )" #" Syntax highlighter choke on that.
 	    gotoxy 1 $YCOUNTER ; outtext "$BARCODE"
 	    gotoxy 15 $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 2) "
 	    gotoxy $(( $MAXX - 22 )) $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) "
 	    gotoxy $(( $MAXX - 14 )) $YCOUNTER ; outtext "$QUANTITY  "
-	    gotoxy $(( $MAXX - 6 )) $YCOUNTER ; outtext "$(awk "BEGIN{print $(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) * $QUANTITY}" )" #" Syntax highlighter choke on that.
+	    gotoxy $(( $MAXX - 6 )) $YCOUNTER ; outtext "$SUBTOTAL"
+	    gotoxy $(( $MAXX - 6 )) $MAXY ; outtext "$SALETOTAL"
 	    YCOUNTER=$(( $YCOUNTER + 1 ))
 	done
     fi
