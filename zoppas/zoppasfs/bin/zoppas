@@ -26,6 +26,11 @@ SALEFILE="$TMPDIR/currentsale"
 MAXX="$COLUMNS"
 MAXY="$LINES"
 
+# products fields description
+PRODUCT_FIELD_BARCODE='1'
+PRODUCT_FIELD_DESCRIPTION='2'
+PRODUCT_FIELD_PRICE='3'
+
 ############### FUNCTIONS ###############
 # Function to call when we bail out
 die ()
@@ -101,23 +106,52 @@ outtext()
     test -z "$2" && cat $BUF && rm $BUF
 }
 
+# Search an exact match in the CSV file
+# parameter 1: file name
+# parameter 2: what to search
+# parameter 3: column(s) to search into. Leave empty to search all fields
+# output: line number(s) of the matching entries (1 match per line)
+matchincsv()
+{
+    if [ -f "$1" ]; then
+	F="$3"
+	test -z "$F" && F='1-'
+	die "$1 exist"
+    else
+	die "matchincsv(): File $1 doesn't exist"
+    fi
+}
+
 # Search data in csv file
 # parameter 1: file name
-# parameter 2: column(s) to search into. Leave empty to search all fields
+# parameter 2: what to search
+# parameter 3: column(s) to search into. Leave empty to search all fields
 # output: line number(s) of the matching entries (1 match per line)
 findincsv()
 {
-    echo
+    if [ -f "$1" ]; then
+	F="$3"
+	test -z "$F" && F='1-'
+	cat "$1"|cut -d ';' -f "$F"| grep -n "$2"|cut -d ':' -f 1
+    else
+	die "findincsv(): File $1 doesn't exist"
+    fi
 }
 
 # Get data from CSV file
 # parameter 1: file name
-# parameter 2: row number (-1 for all rows)
-# parameter 3: column number (-1 for all columns)
+# parameter 2: row number
+# parameter 3: column number (if empty, return the whole line)
 # output: chosen data
 getcsvdata()
 {
-    echo
+    if [ -f "$1" ]; then
+	F="$3"
+	test -z "$F" && F='1-'
+	cat "$1"|sed -n "${2}p"|cut -d ';' -f "$F"
+    else
+	die "getcsvdata(): File $1 doesn't exist"
+    fi
 }
 
 ############### BUFFERS ###############
@@ -229,6 +263,10 @@ pricelist
 prompt
 blanksalescreen
 
+# Testing the csv parsing functions (will go away)
+#findincsv "$CACHEDIR/$BARCODEFILE" "SPACE" 1
+#exit 0
+
 while true; do
     if [ -f $SALEFILE ]; then
 	showbuffer blanksalescreen
@@ -251,7 +289,7 @@ while true; do
 	*)
         ## Put here the test if known barcode
 	    if [ -n "$REPLY" ]; then
-		case "$(cat $CACHEDIR/$BARCODEFILE|cut -d ';' -f 1|grep -w "$REPLY"|wc -l)" in
+		case "$(findincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" 1 |wc -l)" in
 		    "0")
 			badbarcode "Barcode '$REPLY' not found in database. Please try another one"
 		    ;;
@@ -259,7 +297,7 @@ while true; do
 			echo "$REPLY" >> $SALEFILE
 		    ;;
 		    *)
-			badbarcode "'$REPLY' is ambiguous: $(cat $CACHEDIR/$BARCODEFILE|cut -d ';' -f 1|grep "$REPLY"|wc -l) results."
+			badbarcode "'$REPLY' is ambiguous: $(findincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" 1|wc -l) results."
 		    ;;
 		esac
 	    fi
