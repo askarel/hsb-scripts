@@ -106,17 +106,19 @@ outtext()
     test -z "$2" && cat $BUF && rm $BUF
 }
 
-# Search an exact match in the CSV file
+# Search an exact match in the CSV file.
 # parameter 1: file name
 # parameter 2: what to search
 # parameter 3: column(s) to search into. Leave empty to search all fields
 # output: line number(s) of the matching entries (1 match per line)
+# 	  no output -> no match.
 matchincsv()
 {
     if [ -f "$1" ]; then
 	F="$3"
 	test -z "$F" && F='1-'
-	die "$1 exist"
+	cat "$1"|cut -d ';' -f "$F"| grep -wn "^${2}$" | cut -d ':' -f 1
+#	die "$1 exist"
     else
 	die "matchincsv(): File $1 doesn't exist"
     fi
@@ -215,11 +217,12 @@ updatesalescreen()
 	cat $1|sort|uniq -c|tr -s ' ' ' ' |
 	while read QUANTITY BARCODE
 	do
-	    SUBTOTAL="$(awk "BEGIN{printf \"%.2f\n\", ( $(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) * $QUANTITY) }" )" #" Syntax highlighter choke on that.
+	    POSITION=$(matchincsv "$CACHEDIR/$BARCODEFILE" "$BARCODE" $PRODUCT_FIELD_BARCODE)
+	    SUBTOTAL="$(awk "BEGIN{printf \"%.2f\n\", ( $(getcsvdata "$CACHEDIR/$BARCODEFILE" "$POSITION" $PRODUCT_FIELD_PRICE ) * $QUANTITY) }" )" #" Syntax highlighter choke on that.
 	    SALETOTAL="$(awk "BEGIN{printf \"%.2f\n\", ($SALETOTAL + $SUBTOTAL)}" )" #" Syntax highlighter choke on that.
 	    gotoxy 1 $YCOUNTER ; outtext "$BARCODE"
-	    gotoxy 15 $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 2) "
-	    gotoxy $(( $MAXX - 22 )) $YCOUNTER ; outtext "$(cat $CACHEDIR/$BARCODEFILE|grep "$BARCODE"|cut -d ';' -f 3) "
+	    gotoxy 15 $YCOUNTER ; outtext "$(getcsvdata "$CACHEDIR/$BARCODEFILE" "$POSITION" $PRODUCT_FIELD_DESCRIPTION) "
+	    gotoxy $(( $MAXX - 22 )) $YCOUNTER ; outtext "$(getcsvdata "$CACHEDIR/$BARCODEFILE" "$POSITION" $PRODUCT_FIELD_PRICE) "
 	    gotoxy $(( $MAXX - 14 )) $YCOUNTER ; outtext "$QUANTITY  "
 	    gotoxy $(( $MAXX - 6 )) $YCOUNTER ; outtext "$SUBTOTAL"
 	    gotoxy $(( $MAXX - 6 )) $MAXY ; outtext "$SALETOTAL"
@@ -264,8 +267,7 @@ prompt
 blanksalescreen
 
 # Testing the csv parsing functions (will go away)
-#findincsv "$CACHEDIR/$BARCODEFILE" "SPACE" 1
-#exit 0
+#matchincsv "$CACHEDIR/$BARCODEFILE" "SPACE:KEY" 1
 
 while true; do
     if [ -f $SALEFILE ]; then
@@ -289,16 +291,16 @@ while true; do
 	*)
         ## Put here the test if known barcode
 	    if [ -n "$REPLY" ]; then
-		case "$(findincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" 1 |wc -l)" in
-		    "0")
+		case "$(matchincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" $PRODUCT_FIELD_BARCODE)" in
+		    "")
 			badbarcode "Barcode '$REPLY' not found in database. Please try another one"
 		    ;;
-		    "1")
+		    *)
 			echo "$REPLY" >> $SALEFILE
 		    ;;
-		    *)
-			badbarcode "'$REPLY' is ambiguous: $(findincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" 1|wc -l) results."
-		    ;;
+#		    *)
+#			badbarcode "'$REPLY' is ambiguous: $(findincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" 1|wc -l) results."
+#		    ;;
 		esac
 	    fi
 	;;
