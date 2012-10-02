@@ -25,6 +25,7 @@ BARCODEFILE="${ME}-barcodes.csv"
 SALEFILE="$TMPDIR/currentsale"
 MAXX="$COLUMNS"
 MAXY="$LINES"
+CSVSEPARATOR=';'
 
 # products fields description
 PRODUCT_FIELD_BARCODE='1'
@@ -266,9 +267,6 @@ pricelist
 prompt
 blanksalescreen
 
-# Testing the csv parsing functions (will go away)
-#matchincsv "$CACHEDIR/$BARCODEFILE" "SPACE:KEY" 1
-
 while true; do
     if [ -f $SALEFILE ]; then
 	showbuffer blanksalescreen
@@ -288,20 +286,34 @@ while true; do
 		rm -rf $TMPDIR
 		exit 0
 	;;
+	"UNSCAN") # Remove last scan
+		cat "$SALEFILE" | sed '$d' > "$SALEFILE.tmp"
+		rm "$SALEFILE"
+		mv "$SALEFILE.tmp" "$SALEFILE"
+		# if there was only one item, cancel the sale
+		test "$(cat "$SALEFILE"|wc -l)" = "0" && rm "$SALEFILE"
+	;;
+	"CASH")
+		badbarcode "There is no logging at the moment. :-)"
+		rm "$SALEFILE"
+	;;
+	"TRANSFER")
+		badbarcode "Transferring from account to account not implemented yet."
+	;;
 	*)
-        ## Put here the test if known barcode
+        ## Test if known barcode
 	    if [ -n "$REPLY" ]; then
-		case "$(matchincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" $PRODUCT_FIELD_BARCODE)" in
-		    "")
-			badbarcode "Barcode '$REPLY' not found in database. Please try another one"
-		    ;;
-		    *)
+		# product barcode processing
+		if [ -n  "$(matchincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" $PRODUCT_FIELD_BARCODE)" ]; then
 			echo "$REPLY" >> $SALEFILE
-		    ;;
-#		    *)
-#			badbarcode "'$REPLY' is ambiguous: $(findincsv "$CACHEDIR/$BARCODEFILE" "$REPLY" 1|wc -l) results."
-#		    ;;
-		esac
+			unset REPLY
+		fi
+		# donation barcode processing
+		
+		# paycard processing
+		
+		# When all else fail:
+		test -n "$REPLY" && badbarcode "No idea what to do with barcode '$REPLY'. Try again."
 	    fi
 	;;
     esac
