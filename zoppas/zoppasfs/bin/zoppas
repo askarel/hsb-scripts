@@ -158,7 +158,7 @@ getcsvdata()
     fi
 }
 
-# Automagically position text snippet on the screen based on an index.
+# Automagically position text snippet on the screen based on an index, screen width and a length.
 # parameter 1: index
 # parameter 2: snippet maximum length
 # parameter 3: text
@@ -166,34 +166,34 @@ getcsvdata()
 # leave parameter 4 empty for immediate display
 positionbyindex()
 {
-    echo ""
+    BUF="$TMPDIR/$4"
+    test -z "$4" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
+    # Determine how many columns we can fit on one line
+    XSLOT=$(( $MAXX / $2 ))
+    # Determine the row index
+    YSLOT=$(( ( $1 - 1) / $XSLOT ))
+    gotoxy $(( 1 + ( $2 * ( ($1 - 1) % $XSLOT ) ) )) $(( 4 + $YSLOT )) "$4"  ; /bin/echo -ne "$3" >> $BUF
+    test -z "$4" && cat $BUF && rm $BUF
 }
 
 ############### BUFFERS ###############
 
+# Show price list screen
 pricelist()
 {
     clear >> $TMPDIR/pricelist
     PRHEADER="$ORGNAME price list"
-    gotoxy $(( ( $MAXX - $(echo "$PRHEADER"|wc -c) ) / 2 )) 2 pricelist; outtext "$ORGNAME price list" pricelist
+    gotoxy $(( ( $MAXX - $(echo "$PRHEADER"|wc -c) ) / 2 )) 2 pricelist; outtext "$PRHEADER" pricelist
 
-    gotoxy 1 4 pricelist; outtext "
-Coca-cola	1,00 $CURRENCY		Jupiler		1,00 $CURRENCY
-Club-mate 33 cl	2,00 $CURRENCY		Duvel		2,00 $CURRENCY
-Club-mate 50 cl	2,50 $CURRENCY		Leffe		1,50 $CURRENCY
-Hausmarke cola	1,50 $CURRENCY		Chimay		2,00 $CURRENCY
-Hermann Brause	1,50 $CURRENCY		Westmalle	2,00 $CURRENCY
-Ice tea		1,00 $CURRENCY		Hoegaarden	1,50 $CURRENCY
-Hot tea		0,50 $CURRENCY		
-
-Paprika nuts	1,00 $CURRENCY		T-shirt		15 $CURRENCY
-Paprika chips	0,50 $CURRENCY		Stickers	0,50 $CURRENCY
-Salty chips	0,50 $CURRENCY
-Grills		1,00 $CURRENCY
-Instant noodles	1,00 $CURRENCY
-
-Key of the space (members only)			4 $CURRENCY
-" pricelist
+    for i in $( seq 1 $(cat "$CACHEDIR/$BARCODEFILE" |wc -l) ); do
+	# price string
+	ITEMPRICE="$(getcsvdata "$CACHEDIR/$BARCODEFILE" $i $PRODUCT_FIELD_PRICE) $CURRENCY"
+	# Calculate maximum description length
+	ITEMDESCLEN=$(( $MAXPRICELINE - $(echo $ITEMPRICE|wc -c) -2))
+	# Trim description
+	ITEMDESC="$(getcsvdata "$CACHEDIR/$BARCODEFILE" $i $PRODUCT_FIELD_DESCRIPTION | cut -c 1-$ITEMDESCLEN)"
+        positionbyindex $i $MAXPRICELINE "$(printf "%${ITEMDESCLEN}s %s" "$ITEMDESC" "$ITEMPRICE")" pricelist
+    done
 }
 
 prompt()
@@ -271,7 +271,7 @@ test -n "$MONIES" || MONIES="0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;
 test -z "$MAXX" && MAXX="80"
 test -z "$MAXY" && MAXY="25"
 # Maximum length of the price line
-test -z "$MAXPRICELINE" && MAXPRICELINE="26"
+test -z "$MAXPRICELINE" && MAXPRICELINE="39"
 # Optional delay to wait
 test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && sleep $WAITFORSTART
 # Fetch the CSV holding the barcodes
