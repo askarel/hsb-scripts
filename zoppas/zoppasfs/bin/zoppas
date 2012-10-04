@@ -31,6 +31,7 @@ CSVSEPARATOR=';'
 PRODUCT_FIELD_BARCODE='1'
 PRODUCT_FIELD_DESCRIPTION='2'
 PRODUCT_FIELD_PRICE='3'
+PRODUCT_FIELD_REMAINSTOCK='4'
 
 ############### FUNCTIONS ###############
 # Function to call when we bail out
@@ -157,15 +158,26 @@ getcsvdata()
     fi
 }
 
+# Automagically position text snippet on the screen based on an index.
+# parameter 1: index
+# parameter 2: snippet maximum length
+# parameter 3: text
+# parameter 4: buffer
+# leave parameter 4 empty for immediate display
+positionbyindex()
+{
+    echo ""
+}
+
 ############### BUFFERS ###############
 
 pricelist()
 {
     clear >> $TMPDIR/pricelist
-    gotoxy 1 1 pricelist
-    echo "
-			$ORGNAME price list
+    PRHEADER="$ORGNAME price list"
+    gotoxy $(( ( $MAXX - $(echo "$PRHEADER"|wc -c) ) / 2 )) 2 pricelist; outtext "$ORGNAME price list" pricelist
 
+    gotoxy 1 4 pricelist; outtext "
 Coca-cola	1,00 $CURRENCY		Jupiler		1,00 $CURRENCY
 Club-mate 33 cl	2,00 $CURRENCY		Duvel		2,00 $CURRENCY
 Club-mate 50 cl	2,50 $CURRENCY		Leffe		1,50 $CURRENCY
@@ -181,7 +193,7 @@ Grills		1,00 $CURRENCY
 Instant noodles	1,00 $CURRENCY
 
 Key of the space (members only)			4 $CURRENCY
-" >> $TMPDIR/pricelist
+" pricelist
 }
 
 prompt()
@@ -249,18 +261,25 @@ test -z "$CONFIGFILE" && die "No config file found"
 # validate config file
 test -n "$ORGNAME" || die "Variable ORGNAME is empty. Set it to the name of your organization"
 test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
-# By default we talk in euros
+# By default we talk in euros, and we define the full set of coins and notes of the currency.
+# Change it in the config file if you're not in the euro zone.
 test -n "$CURRENCY" || CURRENCY="EUR"
+test -n "$MONIES" || MONIES="0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;20.00;50.00;100.00;200.00;500.00"
 # By default, detect screen size from environment:
 # If a specific screen size is defined in config file, use it.
 # when all else fail, default to 80x25 :-)
 test -z "$MAXX" && MAXX="80"
 test -z "$MAXY" && MAXY="25"
+# Maximum length of the price line
+test -z "$MAXPRICELINE" && MAXPRICELINE="26"
 # Optional delay to wait
 test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && sleep $WAITFORSTART
 # Fetch the CSV holding the barcodes
 mkdir -p "$CACHEDIR"
 wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
+
+# Count the items of the currency
+MONIESIZE="$(echo "$MONIES" |tr ';' '\n'|wc -l)"
 
 echo "Building screens..."
 pricelist
@@ -299,6 +318,12 @@ while true; do
 	;;
 	"TRANSFER")
 		badbarcode "Transferring from account to account not implemented yet."
+	;;
+	"SHOPLIST")
+		badbarcode "Shopping list not yet implemented. :-)"
+	;;
+	"HELP"|"help")
+		badbarcode "Somebody should write the help text"
 	;;
 	*)
         ## Test if known barcode
