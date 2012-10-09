@@ -21,6 +21,7 @@
 ME="$(basename $0)"
 TMPDIR="$(mktemp -d /tmp/$ME.XXXXXXXXXXXXXX)"
 CACHEDIR="/var/tmp/$ME"
+TRANSACTIONDIR="/var/lib/$ME"
 BARCODEFILE="${ME}-barcodes.csv"
 SALEFILE="$TMPDIR/currentsale"
 MAXX="$COLUMNS"
@@ -35,14 +36,11 @@ PRODUCT_FIELD_REMAINSTOCK='4'
 
 ############### FUNCTIONS ###############
 # Function to call when we bail out
-die ()
+die()
 {
-    echo "$ME: $1. Exit"
-    if [ "_$2" = "_" ]; then
-	exit 1
-	else
-	exit $2
-    fi
+    printf "%s: %s. Exit\n" "$ME" "$1"
+    test -z "$2" && exit 1
+    test -n "$2" && exit $2
 }
 
 # Erase a buffer file (1 parameter: buffer name)
@@ -64,7 +62,7 @@ gotoxy()
 {
     BUF="$TMPDIR/$3"
     test -z "$3" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
-    /bin/echo -ne "\033[${2};${1}H" >> $BUF
+    printf "\033[%s;%sH" "$2" "$1" >> $BUF
     test -z "$3" && cat $BUF && rm $BUF
 }
 
@@ -78,7 +76,7 @@ hline()
     test -z "$2" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
     HLINE="\033(0q\033(B"
     HLINE="-"
-    for i in $(seq 1 $1); do /bin/echo -ne "$HLINE" >> $BUF ; done
+    for i in $(seq 1 $1); do printf "$HLINE" >> $BUF ; done
     test -z "$2" && cat $BUF && rm $BUF
 }
 
@@ -90,10 +88,8 @@ vline()
 {
     BUF="$TMPDIR/$2"
     test -z "$2" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
-    HLINE="|\033[1B\33[1D"
-    for i in $(seq 1 $1); do  
-	/bin/echo -ne "$HLINE" >> $BUF
-    done
+    VLINE="|\033[1B\33[1D"
+    for i in $(seq 1 $1); do printf "$VLINE" >> $BUF ; done
     test -z "$2" && cat $BUF && rm $BUF
 }
 
@@ -104,7 +100,7 @@ outtext()
 {
     BUF="$TMPDIR/$2"
     test -z "$2" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
-    /bin/echo -ne "$1" >> $BUF
+    printf "$1" >> $BUF
     test -z "$2" && cat $BUF && rm $BUF
 }
 
@@ -158,6 +154,16 @@ getcsvdata()
     fi
 }
 
+computesaletotal()
+{
+    echo
+}
+
+computesubtotal()
+{
+    echo
+}
+
 # Automagically position text snippet on the screen based on an index, screen width and a length.
 # parameter 1: index
 # parameter 2: snippet maximum length
@@ -172,7 +178,7 @@ positionbyindex()
     XSLOT=$(( $MAXX / $2 ))
     # Determine the row index
     YSLOT=$(( ( $1 - 1) / $XSLOT ))
-    gotoxy $(( 1 + ( $2 * ( ($1 - 1) % $XSLOT ) ) )) $(( 4 + $YSLOT )) "$4"  ; /bin/echo -ne "$3" >> $BUF
+    gotoxy $(( 1 + ( $2 * ( ($1 - 1) % $XSLOT ) ) )) $(( 4 + $YSLOT )) "$4"  ; printf "$3" >> $BUF
     test -z "$4" && cat $BUF && rm $BUF
 }
 
@@ -221,6 +227,7 @@ blanksalescreen()
     gotoxy 1 $(( $MAXY - 2 )) blanksalescreen;  hline $MAXX blanksalescreen
     gotoxy $(( $MAXX - 15 )) $MAXY blanksalescreen; outtext "TOTAL:" blanksalescreen
 }
+
 
 updatesalescreen()
 {
@@ -275,8 +282,8 @@ test -z "$MAXPRICELINE" && MAXPRICELINE="39"
 # Optional delay to wait
 test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && sleep $WAITFORSTART
 # Fetch the CSV holding the barcodes
-mkdir -p "$CACHEDIR"
-wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
+mkdir -p "$CACHEDIR" || die "Cannot create the cache directory ($CACHEDIR)"
+#wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
 
 # Count the items of the currency
 MONIESIZE="$(echo "$MONIES" |tr ';' '\n'|wc -l)"
@@ -296,6 +303,8 @@ while true; do
     showbuffer badbarcode
     showbuffer prompt
     destroybuffer badbarcode
+    TODAYDIR="$CACHEDIR/$(date '+%Y%m%d')"
+    mkdir -p "$TODAYDIR" || die "Cannot create today's directory ($TODAYDIR)"
     read REPLY
     case "$REPLY" in
 	"CANCEL")
@@ -313,7 +322,7 @@ while true; do
 		test "$(cat "$SALEFILE"|wc -l)" = "0" && rm "$SALEFILE"
 	;;
 	"CASH")
-		badbarcode "There is no logging at the moment. :-)"
+		badbarcode "There is no logging at the moment. $SALETOTAL :-)"
 		rm "$SALEFILE"
 	;;
 	"TRANSFER")
@@ -321,6 +330,9 @@ while true; do
 	;;
 	"SHOPLIST")
 		badbarcode "Shopping list not yet implemented. :-)"
+	;;
+	"DONATE")
+		badbarcode "Donations will be implemented ASAP. ;-)"
 	;;
 	"HELP"|"help")
 		badbarcode "Somebody should write the help text"
