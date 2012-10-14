@@ -33,6 +33,7 @@ PRODUCT_FIELD_BARCODE='1'
 PRODUCT_FIELD_DESCRIPTION='2'
 PRODUCT_FIELD_PRICE='3'
 PRODUCT_FIELD_REMAINSTOCK='4'
+PRODUCT_FIELD_PRICE_NORMAL='6' # Any field number above is the different price for the event
 
 ############### FUNCTIONS ###############
 # Function to call when we bail out
@@ -154,6 +155,7 @@ getcsvdata()
     fi
 }
 
+# Compute the sale total usint the current barcode file and the salefile
 computesaletotal()
 {
     echo
@@ -163,6 +165,8 @@ computesubtotal()
 {
     echo
 }
+
+############### SCREEN FUNCTIONS ###############
 
 # Automagically position text snippet on the screen based on an index, screen width and a length.
 # parameter 1: index
@@ -182,24 +186,28 @@ positionbyindex()
     test -z "$4" && cat $BUF && rm $BUF
 }
 
-############### BUFFERS ###############
-
 # Show price list screen
+# Parameter 1: barcode file.
+# Parameter 2: event mode (empty=normal)
 pricelist()
 {
-    clear >> $TMPDIR/pricelist
-    PRHEADER="$ORGNAME price list"
-    gotoxy $(( ( $MAXX - $(echo "$PRHEADER"|wc -c) ) / 2 )) 2 pricelist; outtext "$PRHEADER" pricelist
+    if [ -f "$1" ]; then
+	clear
+	PRHEADER="$ORGNAME price list"
+	gotoxy $(( ( $MAXX - $(echo "$PRHEADER"|wc -c) ) / 2 )) 2 ; outtext "$PRHEADER"
 
-    for i in $( seq 1 $(cat "$CACHEDIR/$BARCODEFILE" |wc -l) ); do
-	# price string
-	ITEMPRICE="$(getcsvdata "$CACHEDIR/$BARCODEFILE" $i $PRODUCT_FIELD_PRICE) $CURRENCY"
-	# Calculate maximum description length
-	ITEMDESCLEN=$(( $MAXPRICELINE - $(echo $ITEMPRICE|wc -c) -2))
-	# Trim description
-	ITEMDESC="$(getcsvdata "$CACHEDIR/$BARCODEFILE" $i $PRODUCT_FIELD_DESCRIPTION | cut -c 1-$ITEMDESCLEN)"
-        positionbyindex $i $MAXPRICELINE "$(printf "%${ITEMDESCLEN}s %s" "$ITEMDESC" "$ITEMPRICE")" pricelist
-    done
+	for i in $( seq 1 $(cat "$CACHEDIR/$BARCODEFILE" |wc -l) ); do
+	    # price string
+	    ITEMPRICE="$(getcsvdata "$CACHEDIR/$BARCODEFILE" $i $PRODUCT_FIELD_PRICE) $CURRENCY"
+	    # Calculate maximum description length
+	    ITEMDESCLEN=$(( $MAXPRICELINE - $(echo $ITEMPRICE|wc -c) -2))
+	    # Trim description
+	    ITEMDESC="$(getcsvdata "$CACHEDIR/$BARCODEFILE" $i $PRODUCT_FIELD_DESCRIPTION | cut -c 1-$ITEMDESCLEN)"
+    	    positionbyindex $i $MAXPRICELINE "$(printf "%${ITEMDESCLEN}s %s" "$ITEMDESC" "$ITEMPRICE")"
+	done
+    else
+	die "pricelist(): File $1 doesn't exist"
+    fi
 }
 
 prompt()
@@ -228,7 +236,10 @@ blanksalescreen()
     gotoxy $(( $MAXX - 15 )) $MAXY blanksalescreen; outtext "TOTAL:" blanksalescreen
 }
 
-
+# Update the sale screen
+# parameter 1: sale file
+# parameter 2: barcode file
+# parameter 3: event mode (empty=normal)
 updatesalescreen()
 {
     if [ -f "$1" ]; then
@@ -277,34 +288,34 @@ test -n "$MONIES" || MONIES="0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;
 # when all else fail, default to 80x25 :-)
 test -z "$MAXX" && MAXX="80"
 test -z "$MAXY" && MAXY="25"
+mkdir -p "$CACHEDIR" || die "Cannot create the cache directory ($CACHEDIR)"
 # Maximum length of the price line
 test -z "$MAXPRICELINE" && MAXPRICELINE="39"
 # Optional delay to wait
 test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && sleep $WAITFORSTART
-# Fetch the CSV holding the barcodes
-mkdir -p "$CACHEDIR" || die "Cannot create the cache directory ($CACHEDIR)"
-#wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
-
 # Count the items of the currency
 MONIESIZE="$(echo "$MONIES" |tr ';' '\n'|wc -l)"
 
+# Fetch the CSV holding the barcodes
+wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
+
 echo "Building screens..."
-pricelist
 prompt
 blanksalescreen
 
 while true; do
     if [ -f $SALEFILE ]; then
 	showbuffer blanksalescreen
-	updatesalescreen $SALEFILE
+	updatesalescreen "$SALEFILE"
     else
-	showbuffer pricelist
+	pricelist "$CACHEDIR/$BARCODEFILE"
     fi
     showbuffer badbarcode
     showbuffer prompt
     destroybuffer badbarcode
-    TODAYDIR="$CACHEDIR/$(date '+%Y%m%d')"
-    mkdir -p "$TODAYDIR" || die "Cannot create today's directory ($TODAYDIR)"
+    # If a sale is in progress, block the date update
+    test -e "$SALEFILE" || TODAYDIR="$CACHEDIR/$(date '+%Y%m%d')"
+    test -d "$TODAYDIR" || mkdir -p "$TODAYDIR" || die "Cannot create today's directory ($TODAYDIR)"
     read REPLY
     case "$REPLY" in
 	"CANCEL")
@@ -333,6 +344,9 @@ while true; do
 	;;
 	"DONATE")
 		badbarcode "Donations will be implemented ASAP. ;-)"
+	;;
+	"EVENT")
+		badbarcode "Special Event mode not implemented yet"
 	;;
 	"HELP"|"help")
 		badbarcode "Somebody should write the help text"

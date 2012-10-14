@@ -1,0 +1,6 @@
+http://streaming-26c3-wmv.fem-net.de/saal1
+http://streaming-26c3-wmv.fem-net.de/saal2
+http://streaming-26c3-wmv.fem-net.de/saal3
+http://streaming-26c3-ice.fem-net.de:3000/saal1
+http://streaming-26c3-ice.fem-net.de:3000/saal2
+http://streaming-26c3-ice.fem-net.de:3000/saal3

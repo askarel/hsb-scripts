@@ -1,0 +1,7 @@
+
+streams - play a stream from a list
+
+This quick and dirty script is mainly used to easily switch between the talk
+rooms during the yearly Chaos Communication Congress
+
+Add the URLs to the streams in the file streams.txt, 1 URL per line

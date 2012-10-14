@@ -1,0 +1,19 @@
+#!/bin/sh
+
+ME=$(basename $0)
+STREAMS_FILE="$0.txt"
+
+test -f $STREAMS_FILE || echo "$STREAMS_FILE is missing"
+
+if [ "$1/" = "/" ]; then
+    echo "$ME: I need a stream number. Here is a list of valid streams:"
+    cat -n $STREAMS_FILE
+    exit 1
+fi
+
+STREAM=$(sed -n "$1p" $STREAMS_FILE)
+
+#mplayer -fs -bandwidth 700000 $STREAM
+mplayer -fs  $STREAM
+
+echo \"$STREAM\"
