@@ -156,9 +156,19 @@ getcsvdata()
 }
 
 # Compute the sale total usint the current barcode file and the salefile
+# parameter 1: sale file
+# parameter 2: barcode file
 computesaletotal()
 {
-    echo
+    if [ -f "$1" ] && [ -f "$2" ]; then
+	while read BARCDE
+	do
+	    test -z "$SALETOTL" && SALETOTL="0"
+	    ROW=$(findincsv "$2" "$BARCDE" $PRODUCT_FIELD_BARCODE)
+	    SALETOTL="$(awk "BEGIN{printf \"%.2f\n\", ( $SALETOTL + $(getcsvdata "$2" $ROW $PRODUCT_FIELD_PRICE) )}" )" #"
+	done < "$1"
+	printf "%s" "$SALETOTL"
+    fi
 }
 
 computesubtotal()
@@ -333,8 +343,20 @@ while true; do
 		test "$(cat "$SALEFILE"|wc -l)" = "0" && rm "$SALEFILE"
 	;;
 	"CASH")
-		badbarcode "There is no logging at the moment. $SALETOTAL :-)"
-		rm "$SALEFILE"
+		if [ -e $SALEFILE ]; then
+		    SALETOTAL="$(computesaletotal "$SALEFILE" "$CACHEDIR/$BARCODEFILE")"
+		    badbarcode "Please insert $SALETOTAL $CURRENCY in the cash box. :-)"
+		    echo "$SALETOTAL" >> "$CACHEDIR/CASHBOX"
+		    mv "$SALEFILE" "$TODAYDIR/$(date '+%s %N'|md5sum|cut -d ' ' -f 1)-$(md5sum $SALEFILE|cut -d ' ' -f 1).sale"
+		else
+		    while read CASH
+		    do
+			test -z "$CASH" && CASH="0"
+			test -z "$CASHCOUNT" && CASHCOUNT="0"
+			CASHCOUNT="$(awk "BEGIN{printf \"%.2f\n\", ($CASH + $CASHCOUNT)}" )" #"
+		    done < "$CACHEDIR/CASHBOX"
+		    badbarcode "There is $CASHCOUNT $CURRENCY in the cashbox."
+		fi
 	;;
 	"TRANSFER")
 		badbarcode "Transferring from account to account not implemented yet."
