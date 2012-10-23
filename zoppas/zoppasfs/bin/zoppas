@@ -349,6 +349,7 @@ while true; do
 		    echo "$SALETOTAL" >> "$CACHEDIR/CASHBOX"
 		    mv "$SALEFILE" "$TODAYDIR/$(date '+%s %N'|md5sum|cut -d ' ' -f 1)-$(md5sum $SALEFILE|cut -d ' ' -f 1).sale"
 		else
+		    unset CASHCOUNT
 		    while read CASH
 		    do
 			test -z "$CASH" && CASH="0"
