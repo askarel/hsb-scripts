@@ -252,6 +252,21 @@ blanksalescreen()
     gotoxy $(( $MAXX - 15 )) $MAXY blanksalescreen; outtext "TOTAL:" blanksalescreen
 }
 
+# Self explanatory. :-)
+helpscreen()
+{
+    clear
+    cat <<EOF
+		How to use the fridge ?
+
+- Buy stuff:	scan the barcodes of the products you want
+- To pay cash:	Scan the CASH barcode and put the money in the jar
+- Check cashbox balance: Scan the CASH barcode.
+
+EOF
+    gotoxy 1 24 ; read -p "Scan any barcode to quit. " DUMMY
+}
+
 # Update the sale screen
 # parameter 1: sale file
 # parameter 2: barcode file
@@ -265,8 +280,8 @@ updatesalescreen()
 	while read QUANTITY BARCODE
 	do
 	    POSITION=$(matchincsv "$CACHEDIR/$BARCODEFILE" "$BARCODE" $PRODUCT_FIELD_BARCODE)
-	    SUBTOTAL="$(awk "BEGIN{printf \"%.2f\n\", ( $(getcsvdata "$CACHEDIR/$BARCODEFILE" "$POSITION" $PRODUCT_FIELD_PRICE ) * $QUANTITY) }" )" #" Syntax highlighter choke on that.
-	    SALETOTAL="$(awk "BEGIN{printf \"%.2f\n\", ($SALETOTAL + $SUBTOTAL)}" )" #" Syntax highlighter choke on that.
+	    SUBTOTAL="$(calculate "$(getcsvdata "$CACHEDIR/$BARCODEFILE" "$POSITION" $PRODUCT_FIELD_PRICE ) * $QUANTITY" )" #" Syntax highlighter choke on that.
+	    SALETOTAL="$(calculate "$SALETOTAL + $SUBTOTAL" )"
 	    gotoxy 1 $YCOUNTER ; outtext "$BARCODE"
 	    gotoxy 15 $YCOUNTER ; outtext "$(getcsvdata "$CACHEDIR/$BARCODEFILE" "$POSITION" $PRODUCT_FIELD_DESCRIPTION) "
 	    gotoxy $(( $MAXX - 22 )) $YCOUNTER ; outtext "$(getcsvdata "$CACHEDIR/$BARCODEFILE" "$POSITION" $PRODUCT_FIELD_PRICE) "
@@ -352,10 +367,10 @@ while true; do
 		if [ -e $SALEFILE ]; then
 		    SALETOTAL="$(computesaletotal "$SALEFILE" "$CACHEDIR/$BARCODEFILE")"
 		    badbarcode "Please insert $SALETOTAL $CURRENCY in the cash box. :-)"
-		    echo "$SALETOTAL" >> "$CACHEDIR/CASHBOX"
+		    echo "$SALETOTAL" >> "$CACHEDIR/CASHBOX"	# Add money to the box
 		    mv "$SALEFILE" "$TODAYDIR/$(date '+%s %N'|md5sum|cut -d ' ' -f 1)-$(md5sum $SALEFILE|cut -d ' ' -f 1).sale"
-		else
-		    badbarcode "There is $(calculate "$(cat "$CACHEDIR/CASHBOX"|tr '\n' '+')0") $CURRENCY in the cashbox." #"
+		else # badbarcode() should really be named statusbar()
+		    badbarcode "There is $(calculate "$(cat "$CACHEDIR/CASHBOX"|tr '\n' '+')0") $CURRENCY in the local cashbox." #"
 		fi
 	;;
 	"TRANSFER")
@@ -371,7 +386,7 @@ while true; do
 		badbarcode "Special Event mode not implemented yet"
 	;;
 	"HELP"|"help")
-		badbarcode "Somebody should write the help text"
+		helpscreen
 	;;
 	*)
         ## Test if known barcode
