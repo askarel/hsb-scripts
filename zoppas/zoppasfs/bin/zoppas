@@ -105,6 +105,12 @@ outtext()
     test -z "$2" && cat $BUF && rm $BUF
 }
 
+# Solve the equation passed in parameter 1
+calculate()
+{
+    awk "BEGIN{printf \"%.2f\n\", ( $1 )}"
+}
+
 # Search an exact match in the CSV file.
 # parameter 1: file name
 # parameter 2: what to search
@@ -165,7 +171,7 @@ computesaletotal()
 	do
 	    test -z "$SALETOTL" && SALETOTL="0"
 	    ROW=$(findincsv "$2" "$BARCDE" $PRODUCT_FIELD_BARCODE)
-	    SALETOTL="$(awk "BEGIN{printf \"%.2f\n\", ( $SALETOTL + $(getcsvdata "$2" $ROW $PRODUCT_FIELD_PRICE) )}" )" #"
+	    SALETOTL=$(calculate "$SALETOTL + $(getcsvdata "$2" $ROW $PRODUCT_FIELD_PRICE)") #"
 	done < "$1"
 	printf "%s" "$SALETOTL"
     fi
@@ -349,14 +355,7 @@ while true; do
 		    echo "$SALETOTAL" >> "$CACHEDIR/CASHBOX"
 		    mv "$SALEFILE" "$TODAYDIR/$(date '+%s %N'|md5sum|cut -d ' ' -f 1)-$(md5sum $SALEFILE|cut -d ' ' -f 1).sale"
 		else
-		    unset CASHCOUNT
-		    while read CASH
-		    do
-			test -z "$CASH" && CASH="0"
-			test -z "$CASHCOUNT" && CASHCOUNT="0"
-			CASHCOUNT="$(awk "BEGIN{printf \"%.2f\n\", ($CASH + $CASHCOUNT)}" )" #"
-		    done < "$CACHEDIR/CASHBOX"
-		    badbarcode "There is $CASHCOUNT $CURRENCY in the cashbox."
+		    badbarcode "There is $(calculate "$(cat "$CACHEDIR/CASHBOX"|tr '\n' '+')0") $CURRENCY in the cashbox." #"
 		fi
 	;;
 	"TRANSFER")
