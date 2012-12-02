@@ -170,7 +170,7 @@ computesaletotal()
 	while read BARCDE
 	do
 	    test -z "$SALETOTL" && SALETOTL="0"
-	    ROW=$(findincsv "$2" "$BARCDE" $PRODUCT_FIELD_BARCODE)
+	    ROW=$(matchincsv "$2" "$BARCDE" $PRODUCT_FIELD_BARCODE)
 	    SALETOTL=$(calculate "$SALETOTL + $(getcsvdata "$2" $ROW $PRODUCT_FIELD_PRICE)") #"
 	done < "$1"
 	printf "%s" "$SALETOTL"
