@@ -2,6 +2,7 @@
 
 # The rimshot CGI script - Trolling HSBXL with style
 # (c) 2012 Frederic Pasteleurs <askarel@gmail.com>
+# CSS and minor improvements by ZipionLive
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -32,6 +33,7 @@ Content-type: text/html
 <HTML>
  <HEAD>
   <TITLE>Rimshot and other shit</TITLE>
+  <link rel="stylesheet" href="trollin.css" type="text/css" />
  </HEAD>
  <BODY>
   <H1>HSBXL TROLLING PAGE</H1>
@@ -39,9 +41,9 @@ EOM
 
 if [ -d "$DIR_AUDIOFILES" ]; then
     echo "  <FORM ACTION=\"$ME\" method=\"GET\">"
-    echo "   <P><INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$METHODNAME\"></INPUT></P>"
+    echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$METHODNAME\" CLASS=\"RANDOM soundBtn\"></INPUT>"
     for i in $( ls -1 "$DIR_AUDIOFILES" ); do
-	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$i\" NAME=\"$METHODNAME\"></INPUT>"
+	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$i\" NAME=\"$METHODNAME\" CLASS=\"$i soundBtn\"></INPUT>"
     done
     echo "  </FORM>"
 fi
