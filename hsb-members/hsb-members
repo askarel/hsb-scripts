@@ -123,6 +123,37 @@ for i in $(seq 1 ${#SQL_FIELD[@]}); do
 done
 }
 
+# Re-send the banking information
+resendbankinfos ()
+{
+    SQLRESULT=$(runsql "select count(structuredcomm) from hsbmembers where exitdate is null and emailaddress like \"$1\"; ") #" Syntax higlighter choke on that.
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    test "$SQLRESULT" != "1" && die "$1 not found within active members ($SQLRESULT)"
+    SQLRESULT=$(runsql "select firstname, structuredcomm, emailaddress from hsbmembers where exitdate is null and emailaddress like \"$1\";") #" Syntax higlighter choke on that.
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    echo "Hello $(echo "$SQLRESULT" | cut -f 1),
+
+You received this mail because you requested the needed informations to honour
+your membership of Hackerspace Brussels.
+
+Here are the needed informations: 
+bank account: ${BANKACCOUNT:0:4} ${BANKACCOUNT:4:4} ${BANKACCOUNT:8:4} ${BANKACCOUNT:12:4} ${BANKACCOUNT:16:4} ${BANKACCOUNT:20:4}
+Monthly amount: $MONTHLYFEE $CURRENCY
+Communication: $(echo "$SQLRESULT"|cut -f 2)
+
+You *MUST* use the communication string above: it allow us to automate the
+day by day follow up of the financial aspect of the association.
+
+Yearly payments are not supported yet.
+
+-- 
+Hackerspace Brussels
+
+This mail is sent automagically from a broken half-assed bash script. You
+can see the gory details here: https://github.com/askarel/hsb-members
+"| mail -s "HSBXL - information update" $(echo "$SQLRESULT"|cut -f 3) && echo "Email sent to $(echo "$SQLRESULT"|cut -f 3)"
+}
+
 # Add a new member to the database: build the query with the provided data
 addmember ()
 {
@@ -328,6 +359,10 @@ done
 	echo -n "$ME: dry run:  "
 	mkcomm "$2"
     ;;
+    resendinfos)
+	test -z "$2" && die "You must specify member e-mail address"
+	resendbankinfos "$2"
+    ;;
     migrate)
 	migratecsv2sql
     ;;
@@ -335,7 +370,7 @@ done
 	die "not implemented"
     ;;
     *)
-	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv]"
+	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos]"
 	exit 1
     ;;
 esac
