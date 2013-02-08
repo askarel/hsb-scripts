@@ -17,19 +17,19 @@
 #
 
 ACCOUNT="BE69979429775578"
-
+BANKFILE="./bank/$ACCOUNT-year-$1-full.csv"
+EMPTYRESULTFILE="$0.unpaid"
 test -z "$1" && echo "Please tell me what year on the command line" && exit 1
 
-BANKFILE="./bank/$ACCOUNT-year-$1-full.csv"
-
+test -e $EMPTYRESULTFILE && rm $EMPTYRESULTFILE && touch $EMPTYRESULTFILE
 test -e $BANKFILE || echo "$BANKFILE not found"
 test -e $BANKFILE || exit 1
 
-./hsb-members list-current| while read LINE; do
+./hsb-members list-current|tail -n +2 | while read LINE; do
 
 echo "-- $(echo $LINE| cut -d ',' -f 5) ($(echo $LINE| cut -d ',' -f 3-4), entered on $(echo $LINE| cut -d ',' -f 1))  ------------------------------------------------"
 cat $BANKFILE| grep "$(echo $LINE | cut -d ',' -f 2)"
-
+test "$(cat $BANKFILE| grep "$(echo $LINE | cut -d ',' -f 2)" | wc -l )" -eq "0" && echo "$LINE"|cut -d ',' -f 7 >> $EMPTYRESULTFILE
 
 done
 
