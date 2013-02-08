@@ -18,8 +18,8 @@
 
 ACCOUNT="BE69979429775578"
 BANKFILE="./bank/$ACCOUNT-year-$1-full.csv"
-EMPTYRESULTFILE="$0.unpaid"
 test -z "$1" && echo "Please tell me what year on the command line" && exit 1
+EMPTYRESULTFILE="$0-$1.unpaid"
 
 test -e $EMPTYRESULTFILE && rm $EMPTYRESULTFILE && touch $EMPTYRESULTFILE
 test -e $BANKFILE || echo "$BANKFILE not found"

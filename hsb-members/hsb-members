@@ -154,6 +154,48 @@ can see the gory details here: https://github.com/askarel/hsb-members
 "| mail -s "HSBXL - information update" $(echo "$SQLRESULT"|cut -f 3) && echo "Email sent to $(echo "$SQLRESULT"|cut -f 3)"
 }
 
+begformoney ()
+{
+    SQLRESULT=$(runsql "select count(structuredcomm) from hsbmembers where exitdate is null and emailaddress like \"$1\"; ") #" Syntax higlighter choke on that.
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    test "$SQLRESULT" != "1" && die "$1 not found within active members ($SQLRESULT)"
+    SQLRESULT=$(runsql "select firstname, structuredcomm, emailaddress from hsbmembers where exitdate is null and emailaddress like \"$1\";") #" Syntax higlighter choke on that.
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    echo "Hello $(echo "$SQLRESULT" | cut -f 1),
+
+Today we balanced the books and we found out that you did not bring your
+financial contribution to the expenses that occurs while operating a real
+world infrastructure.
+
+It could be any of those reasons:
+ - your bank automatically stopped the automatic transfer
+   without warning you,
+ - You forgot to make the transfer (D'oh !!)
+ - You don't want to be a member anymore
+
+Here are the needed informations: 
+bank account: ${BANKACCOUNT:0:4} ${BANKACCOUNT:4:4} ${BANKACCOUNT:8:4} ${BANKACCOUNT:12:4} ${BANKACCOUNT:16:4} ${BANKACCOUNT:20:4}
+Monthly amount: $MONTHLYFEE $CURRENCY
+Communication: $(echo "$SQLRESULT"|cut -f 2)
+
+You *MUST* use the communication string above: it allow us to automate the
+day by day follow up of the financial aspect of the association.
+
+Yearly payments are not supported yet.
+
+If you don't want to be a member, just reply to the mail, tell me so and i will
+not bother you anymore. Just bring us the key back. :-)
+
+-- 
+Hackerspace Brussels
+
+This mail is sent automagically from a broken half-assed bash script. You
+can see the gory details here: https://github.com/askarel/hsb-members
+"| mail -s "HSBXL - BooksBetterBeBalanced - About your membership" $(echo "$SQLRESULT"|cut -f 3) && echo "Email sent to $(echo "$SQLRESULT"|cut -f 3)"
+
+
+}
+
 # Add a new member to the database: build the query with the provided data
 addmember ()
 {
@@ -366,11 +408,16 @@ done
     migrate)
 	migratecsv2sql
     ;;
+    begformoney)
+	test -z "$2" && die "You must specify member e-mail address"
+	test -z "$3" && die "You must really mean it for $2 (Just say \"yes\" to make it happen)."
+	test "$3" = "yes" && begformoney "$2"
+    ;;
     importbankcsv)
 	die "not implemented"
     ;;
     *)
-	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos]"
+	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos|begformoney]"
 	exit 1
     ;;
 esac
