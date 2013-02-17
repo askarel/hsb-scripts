@@ -78,7 +78,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	;;
     "$CSSMETHOD")
 	CSSFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
-	test -n "$CSSFILE" && printf "Content-type: text/css\n\n" && cat "$( pickfile "$CSSDIR" "$CSSFILE" )"
+	test -n "$( pickfile "$DIR_AUDIOFILES" "$CSSFILE" )" && printf "Content-type: text/css\n\n" && cat "$( pickfile "$CSSDIR" "$CSSFILE" )"
 	;;
     "$RANDOMMETHOD")
 	showpage
