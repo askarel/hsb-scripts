@@ -20,8 +20,7 @@
 #
 
 DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
-DIR_AUDIOFILES="/home/frederic/src/hsb-scripts/rimshot-cgi/filez"
-# DIR_AUDIOFILES="./filez"
+DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
 PLAYMETHOD="PLAY"
