@@ -35,7 +35,7 @@ PRODUCT_FIELD_REMAINSTOCK='4'
 PRODUCT_FIELD_PRICE_NORMAL='6' # Any field number above is the different price for the event
 PRODUCT_FIELD_PRICE_BYTENIGHT='7' # Any field number above is the different price for the event
 
-PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_BYTENIGHT"
+PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_NORMAL"
 
 ############### FUNCTIONS ###############
 # Function to call when we bail out

@@ -19,21 +19,40 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-DIR_AUDIOFILES="/srv/mpd/music/RIMSHOTS"
-DIR_AUDIOFILES="./filez"
+DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
+DIR_AUDIOFILES="/home/frederic/src/hsb-scripts/rimshot-cgi/filez"
+# DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
-METHODNAME="PLAY"
+CSSDIR="$DIR_AUDIOFILES/.CSS"
+PLAYMETHOD="PLAY"
+CSSMETHOD="CSS"
+RANDOMMETHOD="RANDOM"
 PLAYPROG="paplay"
 
+# Pick a file from specified directory
+# Secure handling of user-defined input: avoid the abuse of the '../' trick.
+# Return a full path to a file if a match is found in directory.
+# Return nothing if file not found/directory empty
+# parameter 1: target directory
+# parameter 2: requested file
+pickfile()
+{
+    for i in $( ls -1 "$1"); do
+	test "$i" = "$2" && echo "$1/$i"
+    done
+}
+
+# Show the html page
+showpage()
+{
 cat << EOM
 Content-type: text/html
-
 
 <!DOCTYPE html>
 <HTML>
  <HEAD>
   <TITLE>Rimshot and other shit</TITLE>
-  <link rel="stylesheet" href="trollin.css" type="text/css" />
+  <link rel="stylesheet" href="$ME?CSS=trollin.css" type="text/css" />
  </HEAD>
  <BODY>
   <H1>HSBXL TROLLING PAGE</H1>
@@ -41,22 +60,32 @@ EOM
 
 if [ -d "$DIR_AUDIOFILES" ]; then
     echo "  <FORM ACTION=\"$ME\" method=\"GET\">"
-    echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$METHODNAME\" CLASS=\"RANDOM soundBtn\"></INPUT>"
+    echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$RANDOMMETHOD\" CLASS=\"RANDOM soundBtn\"></INPUT>"
     for i in $( ls -1 "$DIR_AUDIOFILES" ); do
-	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$i\" NAME=\"$METHODNAME\" CLASS=\"$i soundBtn\"></INPUT>"
+	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$i\" NAME=\"$PLAYMETHOD\" CLASS=\"$i soundBtn\"></INPUT>"
     done
     echo "  </FORM>"
 fi
 
-cat << EOM
- </BODY>
-</HTML>
-EOM
+printf " </BODY>\n</HTML>\n"
+}
 
-### Backend stuff
-if [ "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" = "$METHODNAME" ]; then
-    for i in $( ls -1 "$DIR_AUDIOFILES" ); do
-	test "$i" = "$( echo "$QUERY_STRING"|cut -d '=' -f 2 )" && $PLAYPROG "$DIR_AUDIOFILES/$i" &
-    done
-	test "$( echo "$QUERY_STRING"|cut -d '=' -f 2 )" = "RANDOM" && $PLAYPROG "$DIR_AUDIOFILES/$(ls -1 "$DIR_AUDIOFILES" |shuf -n 1)" &
-fi
+# content dispatcher
+case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
+    "$PLAYMETHOD")
+	showpage
+	SNDFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
+	test -n "$( pickfile "$DIR_AUDIOFILES" "$SNDFILE" )" && $PLAYPROG "$( pickfile "$DIR_AUDIOFILES" "$SNDFILE" )"
+	;;
+    "$CSSMETHOD")
+	CSSFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
+	test -n "$CSSFILE" && printf "Content-type: text/css\n\n" && cat "$( pickfile "$CSSDIR" "$CSSFILE" )"
+	;;
+    "$RANDOMMETHOD")
+	showpage
+	$PLAYPROG "$DIR_AUDIOFILES/$(ls -1 "$DIR_AUDIOFILES" |shuf -n 1)" &
+	;;
+    *)
+	showpage
+	;;
+esac
