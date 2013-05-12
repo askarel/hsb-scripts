@@ -20,6 +20,8 @@
 ME=$(basename $0)
 DB="$0.csv"
 CONFIGFILE="$0.conf"
+# The raw bank statements will be stored here
+BANKHISTORY=$(dirname $0)/bank
 
 # Build the prompt array (SQL)
 # Format of the structure: SQLINPUT[number]="fieldname|field description|RESULT"
@@ -82,6 +84,8 @@ echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop int
 }
 
 # Verify the IBAN account number. 
+# Input: what look like an IBAN number
+# output: a clean IBAN number with no space. Nothing if garbage.
 verifyiban ()
 {
     # Valid country prefixes with valid lengths. source: http://en.wikipedia.org/wiki/International_Bank_Account_Number
@@ -89,20 +93,26 @@ verifyiban ()
     IBANLENGTH="$IBANLENGTH|GE,22|DE,22|GI,23|GR,27|GL,18|GT,28|HU,28|IS,26|IE,22|IL,23|IT,27|KZ,20|KW,30|LV,21|LB,28|LI,21|LT,20"
     IBANLENGTH="$IBANLENGTH|LU,20|MK,19|MT,31|MR,27|MU,30|MC,27|MD,24|ME,22|NL,18|NO,15|PK,24|PS,29|PL,28|PT,25|RO,24|SM,27|SA,24"
     IBANLENGTH="$IBANLENGTH|RS,22|SK,24|SI,19|ES,24|SE,24|CH,21|TN,24|TR,26|AE,23|GB,22|VG,24"
-    # Remove all spaces from the string. They will be added later when needed.
-    IBAN=$(echo "$1"| sed -e 's/\ //g')
+    IBANTABLE="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    # Remove all spaces and junk from the string. They will be added later when needed.
+    IBAN=$(echo "$1"| sed -e 's/[^0-9A-Z]//gI')
     IBANCOUNTRY=${IBAN:0:2}
     IBANMODULO=${IBAN:2:2}
     IBANACCOUNT=${IBAN:4}
     echo "verifyiban (): IBAN is $IBAN, country is $IBANCOUNTRY, modulo is $IBANMODULO, account is $IBANACCOUNT"
 }
 
-# Verify belgian-style account number
+# Verify belgian-style account number. It has 12 digits separated by dashes.
+# The two last digits are the modulo 97 of the 10 first.
+# input: what look like a belgian account number
+# output: cleanly formatted belgian account number. Nothing if garbage
 verifybe ()
 {
-    MODULO=$(echo "$1" | cut -d '-' -f 3)
-    ACCOUNTNR=$(echo "$1" | cut -d '-' -f 1,2 | sed -e 's/-//')
-    test $MODULO -ne $(( $ACCOUNTNR % 97 )) && echo "false" || echo "true"
+    # Clean anything that do not look like a digit
+    CLEANBE="$(echo "$1"|sed -e 's/[^0-9]//gI')"
+    MODULO="${CLEANBE:10:2}"
+    ACCOUNTNR="${CLEANBE:0:10}"
+    test $MODULO -ne "$(( 10#$ACCOUNTNR % 97 ))" || echo "${CLEANBE:0:3}-${CLEANBE:3:7}-$MODULO"
 }
 
 listcurrentsql ()
@@ -308,6 +318,50 @@ else
 fi
 }
 
+# Get data from CSV file
+# parameter 1: file name
+# parameter 2: row number
+# parameter 3: column number (if empty, return the whole line)
+# output: chosen data
+function getcsvdata()
+{
+    if [ -f "$1" ]; then
+	F="$3"
+	test -z "$F" && F='1-'
+	cat "$1"|sed -n "${2}p"|cut -d ';' -f "$F"
+    else
+	die "getcsvdata(): File $1 doesn't exist"
+    fi
+}
+
+# Format and validate the datafile from Argenta bank
+# Parameter 1: file to import
+# outputs:	- formated valid data ready for db import
+#		- Copy of the file saved for future reference
+#		- Invalid data are discarded from output (garbage in, no garbage out)
+function argenta_import()
+{
+    if [ -f "$1" ]; then
+	FILEHASH=$(date '+%s')-$(shasum -b $1 | cut -d ' ' -f 1)
+	echo "$FILEHASH.csv"
+	# My bank account number is on line 1, cell 2.
+	MYACCOUNT="$(getcsvdata $1 1 2|sed -e 's/\ //g')"
+	# XXX: Validate my account here
+
+	mkdir -p "$BANKHISTORY/$MYACCOUNT"
+	# Activate when working
+	#cp "$1" "$BANKHISTORY/$MYACCOUNT/$FILEHASH.csv"
+	# Real data start at line 3. Line 2 is a text header.
+	for i in $(seq 3 $(cat "$1" |wc -l)); do
+	    echo -n "$MYACCOUNT;"
+	    getcsvdata "$1" "$i" "1,6,7,4,5,8,9"
+	done
+    else
+	die "argenta_import(): File $1 doesn't exist"
+    fi
+}
+
+
 ############### </FUNCTIONS> ###############
 
 ############### <SANITY CHECKS> ###############
@@ -331,6 +385,7 @@ test -n "$YEARLYFEE" || YEARLYFEE=$((12*$MONTHLYFEE))
 BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
 # If empty, use localhost
 test -n "$SQLHOST" || SQLHOST="127.0.0.1"
+mkdir -p "$BANKHISTORY" || die "Can't create csv archive directory"
 
 # Is the database usable ? Try listing the tables.
 SQLRESULT=$(runsql "show tables;")
@@ -395,7 +450,6 @@ case $1 in
 	listcurrentsql
     ;;
     add)
-#	csvaddmember
 	addmember
     ;;
     addsql)
@@ -429,6 +483,7 @@ done
 #	mkcomm "$2"
 #	verifybe "$2"
 	verifyiban "$2"
+#	argenta_import "$2"
     ;;
     resendinfos)
 	test -z "$2" && die "You must specify member e-mail address"
