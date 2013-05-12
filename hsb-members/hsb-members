@@ -81,6 +81,30 @@ esac
 echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop into blocks
 }
 
+# Verify the IBAN account number. 
+verifyiban ()
+{
+    # Valid country prefixes with valid lengths. source: http://en.wikipedia.org/wiki/International_Bank_Account_Number
+    IBANLENGTH="AL,28|AD,24|AT,20|AZ,28|BH,22|BE,16|BA,20|BR,29|BG,22|CR,21|HR,21|CY,28|CZ,24|DK,18|DO,28|EE,20|FO,18|FI,18|FR,27"
+    IBANLENGTH="$IBANLENGTH|GE,22|DE,22|GI,23|GR,27|GL,18|GT,28|HU,28|IS,26|IE,22|IL,23|IT,27|KZ,20|KW,30|LV,21|LB,28|LI,21|LT,20"
+    IBANLENGTH="$IBANLENGTH|LU,20|MK,19|MT,31|MR,27|MU,30|MC,27|MD,24|ME,22|NL,18|NO,15|PK,24|PS,29|PL,28|PT,25|RO,24|SM,27|SA,24"
+    IBANLENGTH="$IBANLENGTH|RS,22|SK,24|SI,19|ES,24|SE,24|CH,21|TN,24|TR,26|AE,23|GB,22|VG,24"
+    # Remove all spaces from the string. They will be added later when needed.
+    IBAN=$(echo "$1"| sed -e 's/\ //g')
+    IBANCOUNTRY=${IBAN:0:2}
+    IBANMODULO=${IBAN:2:2}
+    IBANACCOUNT=${IBAN:4}
+    echo "verifyiban (): IBAN is $IBAN, country is $IBANCOUNTRY, modulo is $IBANMODULO, account is $IBANACCOUNT"
+}
+
+# Verify belgian-style account number
+verifybe ()
+{
+    MODULO=$(echo "$1" | cut -d '-' -f 3)
+    ACCOUNTNR=$(echo "$1" | cut -d '-' -f 1,2 | sed -e 's/-//')
+    test $MODULO -ne $(( $ACCOUNTNR % 97 )) && echo "false" || echo "true"
+}
+
 listcurrentsql ()
 {
     SQLRESULT=$(runsql "select entrydate,structuredcomm,firstname,name,nickname,phonenumber,emailaddress from hsbmembers where exitdate is null;")
@@ -350,8 +374,8 @@ if [ $? != "0" ]; then
     SQLRESULT=$(runsql "create table bankstatements (id int not null auto_increment primary key,
 				    date_val date,
 				    date_account date,
-				    this_account char(30),
-				    other_account char (30),
+				    this_account char(40),
+				    other_account char (40),
 				    amount decimal (15,2) not null,
 				    currency char (5) not null,
 				    message char (60),
@@ -402,7 +426,9 @@ done
     ;;
     dry)
 	echo -n "$ME: dry run:  "
-	mkcomm "$2"
+#	mkcomm "$2"
+#	verifybe "$2"
+	verifyiban "$2"
     ;;
     resendinfos)
 	test -z "$2" && die "You must specify member e-mail address"
