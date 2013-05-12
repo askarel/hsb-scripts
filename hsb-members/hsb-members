@@ -297,7 +297,8 @@ test -n "$MAILFROM" || die "$CONFIGFILE: MAILFROM variable (sender e-mail addres
 test -n "$MONTHLYFEE" || die "$CONFIGFILE: MONTHLYFEE variable is empty"
 test -n "$SQLUSER" || die "$CONFIGFILE: SQLUSER variable is empty"
 test -n "$SQLPASS" || die "$CONFIGFILE: SQLPASS variable is empty"
-test -n "$SQLDB" || die "Database to use not specified"
+test -n "$SQLDB" || die "$CONFIGFILE: SQLDB: Database to use not specified"
+test -n "$ORGNAME" || die "$CONFIGFILE: ORGNAME: Organisation name is not set"
 # By delault we talk in euros
 test -n "$CURRENCY" || CURRENCY="EUR"
 # A year is (usually) 12 months. This is an override if needed
@@ -343,17 +344,19 @@ if [ $? != "0" ]; then
 fi
 
 # Does the bank statements table exist ? Try it by asking a description.
-SQLRESULT=$(runsql "desc $BANKACCOUNT;")
+SQLRESULT=$(runsql "desc bankstatements;")
 if [ $? != "0" ]; then
-    echo "Trying to create table $BANKACCOUNT..."
-    SQLRESULT=$(runsql "create table $BANKACCOUNT (paydate date,
-				    transactionid char(30) unique not null,
-				    ammount decimal (15,2) not null,
+    echo "Trying to create table bankstatements..."
+    SQLRESULT=$(runsql "create table bankstatements (id int not null auto_increment primary key,
+				    date_val date,
+				    date_account date,
+				    this_account char(30),
+				    other_account char (30),
+				    amount decimal (15,2) not null,
 				    currency char (5) not null,
-				    otheraccount char (30),
-				    otheraccount_owner char (30),
-				    communication1 char (30),
-				    communication2 char (30));")
+				    message char (60),
+				    other_account_name char (30),
+				    transactionhash char(30) unique not null);")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 fi
 
