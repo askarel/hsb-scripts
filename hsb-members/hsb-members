@@ -367,23 +367,35 @@ function getcsvdata()
 # outputs:	- formated valid data ready for db import
 #		- Copy of the file saved for future reference
 #		- Invalid data are discarded from output (garbage in, no garbage out)
+#		- Logfile along the data files
 function argenta_import()
 {
     if [ -f "$1" ]; then
 	FILEHASH=$(date '+%s')-$(sha1sum -b $1 | cut -d ' ' -f 1)
 	echo "$FILEHASH.csv"
-	# My bank account number is on line 1, cell 2.
-	MYACCOUNT="$(getcsvdata $1 1 2|sed -e 's/\ //g')"
-	# XXX: Validate my account here
-
-	mkdir -p "$BANKHISTORY/$MYACCOUNT"
-	# Activate when working
-	#cp "$1" "$BANKHISTORY/$MYACCOUNT/$FILEHASH.csv"
-	# Real data start at line 3. Line 2 is a text header.
-	for i in $(seq 3 $(cat "$1" |wc -l)); do
-	    echo -n "$MYACCOUNT;"
-	    getcsvdata "$1" "$i" "1,6,7,4,5,8,9"
-	done
+	# My bank account number is on line 1, cell 2. Make sure it is valid before going forward
+	MYACCOUNT="$(verifyiban "$(getcsvdata $1 1 2)")" #" Syntax highlighter choke on that
+	if [ -n "$MYACCOUNT" ]; then
+	    mkdir -p "$BANKHISTORY/$MYACCOUNT"
+	    # Activate when working
+	    #cp "$1" "$BANKHISTORY/$MYACCOUNT/$FILEHASH.csv"
+	    # Real data start at line 3. Line 2 is a text header.
+	    for i in $(seq 3 $(cat "$1" |wc -l)); do
+		CSVDATA=$(getcsvdata "$1" "$i" "1,2,4,5,6,7,8,9,10")
+		THESQL="INSERT INTO bankstatements (this_account, transactionhash, date_val, amount, currency, date_account, other_account, other_name, message) 
+			VALUES (
+			\"$MYACCOUNT\", 
+			\"$(echo -n "$CSVDATA"|sha1sum|cut -d ' ' -f 1)\", 
+			\"$(echo -n "$CSVDATA"| cut -d ';' -f 1)\", 
+			\"$(echo -n "$CSVDATA"| cut -d ';' -f 3)\", 
+			\"$(echo -n "$CSVDATA"| cut -d ';' -f 4)\", 
+			\"$(echo -n "$CSVDATA"| cut -d ';' -f 5)\", 
+			\"$(echo -n "$CSVDATA"| cut -d ';' -f 6)\", 
+			\"$(echo -n "$CSVDATA"| cut -d ';' -f 7)\", 
+			\"$(echo -n "$CSVDATA"| cut -d ';' -f 8)$(echo -n "$CSVDATA"| cut -d ';' -f 9)\");"
+		echo $THESQL
+	    done
+	fi
     else
 	die "argenta_import(): File $1 doesn't exist"
     fi
@@ -464,7 +476,7 @@ if [ $? != "0" ]; then
 				    currency char (5) not null,
 				    message char (60),
 				    other_account_name char (30),
-				    transactionhash char(30) unique not null);")
+				    transactionhash char(60) unique not null);")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 fi
 
@@ -511,8 +523,8 @@ done
 	echo -n "$ME: dry run:  "
 #	mkcomm "$2"
 #	verifybe "$2"
-	verifyiban "$2"
-#	argenta_import "$2"
+#	verifyiban "$2"
+	argenta_import "$2"
     ;;
     resendinfos)
 	test -z "$2" && die "You must specify member e-mail address"
