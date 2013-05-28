@@ -364,7 +364,7 @@ function getcsvdata()
 
 # Format and validate the datafile from Argenta bank
 # Parameter 1: file to import
-# outputs:	- formated valid data ready for db import
+# outputs:	- Valid data imported into db
 #		- Copy of the file saved for future reference
 #		- Invalid data are discarded from output (garbage in, no garbage out)
 #		- Logfile along the data files
@@ -380,21 +380,30 @@ function argenta_import()
 	    # Activate when working
 	    #cp "$1" "$BANKHISTORY/$MYACCOUNT/$FILEHASH.csv"
 	    # Real data start at line 3. Line 2 is a text header.
+	    LINECOUNTER=0
 	    for i in $(seq 3 $(cat "$1" |wc -l)); do
 		CSVDATA=$(getcsvdata "$1" "$i" "1,2,4,5,6,7,8,9,10")
-		THESQL="INSERT INTO bankstatements (this_account, transactionhash, date_val, amount, currency, date_account, other_account, other_name, message) 
+		OTHER_ACCOUNT=$(echo -n "$CSVDATA"| cut -d ';' -f 6)
+#		echo $OTHER_ACCOUNT
+		THESQL="INSERT INTO bankstatements (this_account, transactionhash, date_val, amount, currency, date_account, other_account, other_account_name, message) 
 			VALUES (
 			\"$MYACCOUNT\", 
-			\"$(echo -n "$CSVDATA"|sha1sum|cut -d ' ' -f 1)\", 
-			\"$(echo -n "$CSVDATA"| cut -d ';' -f 1)\", 
-			\"$(echo -n "$CSVDATA"| cut -d ';' -f 3)\", 
+			sha (\"$(echo -n "$CSVDATA"\")), 
+			str_to_date (\"$(echo -n "$CSVDATA"| cut -d ';' -f 1)\", \"%d-%m-%Y\"), 
+			\"$(echo -n "$CSVDATA"| cut -d ';' -f 3| sed -e 's/\.//g'| tr ',' '.')\", 
 			\"$(echo -n "$CSVDATA"| cut -d ';' -f 4)\", 
-			\"$(echo -n "$CSVDATA"| cut -d ';' -f 5)\", 
-			\"$(echo -n "$CSVDATA"| cut -d ';' -f 6)\", 
+			str_to_date (\"$(echo -n "$CSVDATA"| cut -d ';' -f 5)\", \"%d-%m-%Y\"), 
+			\"$OTHER_ACCOUNT\", 
 			\"$(echo -n "$CSVDATA"| cut -d ';' -f 7)\", 
 			\"$(echo -n "$CSVDATA"| cut -d ';' -f 8)$(echo -n "$CSVDATA"| cut -d ';' -f 9)\");"
-		echo $THESQL
+		SQLRESULT=$(runsql "$THESQL")
+		if [ $? = "0" ]; then
+			LINECOUNTER=$(( $LINECOUNTER + 1))
+			else
+			echo "Failed to import line: $CSVDATA, reason: $SQLRESULT"
+		fi
 	    done
+	echo "$LINECOUNTER/$(cat "$1" |wc -l) imported. 2 header lines skipped."
 	fi
     else
 	die "argenta_import(): File $1 doesn't exist"
