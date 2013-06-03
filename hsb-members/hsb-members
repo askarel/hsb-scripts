@@ -371,14 +371,15 @@ function getcsvdata()
 function argenta_import()
 {
     if [ -f "$1" ]; then
-	FILEHASH=$(date '+%s')-$(sha1sum -b $1 | cut -d ' ' -f 1)
-	echo "$FILEHASH.csv"
+	CSVFILEHASH="$(sha1sum -b $1 | cut -d ' ' -f 1)"
+	LOGFILE="$(date '+%s')-$CSVFILEHASH.log"
+	echo "$CSVFILEHASH.csv"
 	# My bank account number is on line 1, cell 2. Make sure it is valid before going forward
 	MYACCOUNT="$(verifyiban "$(getcsvdata $1 1 2)")" #" Syntax highlighter choke on that
 	if [ -n "$MYACCOUNT" ]; then
 	    mkdir -p "$BANKHISTORY/$MYACCOUNT"
 	    # Activate when working
-	    #cp "$1" "$BANKHISTORY/$MYACCOUNT/$FILEHASH.csv"
+	    #cp "$1" "$BANKHISTORY/$MYACCOUNT/$CSVFILEHASH.csv"
 	    # Real data start at line 3. Line 2 is a text header.
 	    LINECOUNTER=0
 	    for i in $(seq 3 $(cat "$1" |wc -l)); do
@@ -388,7 +389,7 @@ function argenta_import()
 		THESQL="INSERT INTO bankstatements (this_account, transactionhash, date_val, amount, currency, date_account, other_account, other_account_name, message) 
 			VALUES (
 			\"$MYACCOUNT\", 
-			sha (\"$(echo -n "$CSVDATA"\")), 
+			unhex (sha (\"$(echo -n "$CSVDATA"\"))), 
 			str_to_date (\"$(echo -n "$CSVDATA"| cut -d ';' -f 1)\", \"%d-%m-%Y\"), 
 			\"$(echo -n "$CSVDATA"| cut -d ';' -f 3| sed -e 's/\.//g'| tr ',' '.')\", 
 			\"$(echo -n "$CSVDATA"| cut -d ';' -f 4)\", 
@@ -485,7 +486,7 @@ if [ $? != "0" ]; then
 				    currency char (5) not null,
 				    message char (60),
 				    other_account_name char (30),
-				    transactionhash char(60) unique not null);")
+				    transactionhash binary(20) unique not null);")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 fi
 
