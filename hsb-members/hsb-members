@@ -372,18 +372,24 @@ function argenta_import()
 {
     if [ -f "$1" ]; then
 	CSVFILEHASH="$(sha1sum -b $1 | cut -d ' ' -f 1)"
-	LOGFILE="$(date '+%s')-$CSVFILEHASH.log"
-	echo "$CSVFILEHASH.csv"
 	# My bank account number is on line 1, cell 2. Make sure it is valid before going forward
 	MYACCOUNT="$(verifyiban "$(getcsvdata $1 1 2)")" #" Syntax highlighter choke on that
 	if [ -n "$MYACCOUNT" ]; then
-	    mkdir -p "$BANKHISTORY/$MYACCOUNT"
+	    ACCOUNTDIR="$BANKHISTORY/$MYACCOUNT"
+	    LOGFILE="$ACCOUNTDIR/$(date '+%s')-$CSVFILEHASH.log"
+	    TRANSACTIONCOPYFILE="$ACCOUNTDIR/$CSVFILEHASH.csv"
+	    mkdir -p "$ACCOUNTDIR"
 	    # Activate when working
-	    #cp "$1" "$BANKHISTORY/$MYACCOUNT/$CSVFILEHASH.csv"
+	    if [ -e "$TRANSACTIONCOPYFILE" ]; then
+		echo "$ME: WARNING: file already imported. Expect lots of errors if you decide to continue. Type 'yes' if it's OK"
+		read LOTSOFWARNINGS
+		test "$LOTSOFWARNINGS" = "yes" || die "aborted by user"
+	    fi
+	    cp "$1" "$TRANSACTIONCOPYFILE"
 	    # Real data start at line 3. Line 2 is a text header.
 	    LINECOUNTER=0
-	    for i in $(seq 3 $(cat "$1" |wc -l)); do
-		CSVDATA=$(getcsvdata "$1" "$i" "1,2,4,5,6,7,8,9,10")
+	    for i in $(seq 3 $(cat "$TRANSACTIONCOPYFILE" |wc -l)); do
+		CSVDATA=$(getcsvdata "$TRANSACTIONCOPYFILE" "$i" "1,2,4,5,6,7,8,9,10")
 		OTHER_ACCOUNT=$(echo -n "$CSVDATA"| cut -d ';' -f 6)
 #		echo $OTHER_ACCOUNT
 		THESQL="INSERT INTO bankstatements (this_account, transactionhash, date_val, amount, currency, date_account, other_account, other_account_name, message) 
@@ -401,10 +407,11 @@ function argenta_import()
 		if [ $? = "0" ]; then
 			LINECOUNTER=$(( $LINECOUNTER + 1))
 			else
-			echo "Failed to import line: $CSVDATA, reason: $SQLRESULT"
+			echo "$TRANSACTIONCOPYFILE: Failed to import line: $CSVDATA, reason: $SQLRESULT" >> $LOGFILE
 		fi
 	    done
-	echo "$LINECOUNTER/$(cat "$1" |wc -l) imported. 2 header lines skipped."
+	echo "$TRANSACTIONCOPYFILE: $LINECOUNTER/$(cat "$TRANSACTIONCOPYFILE" |wc -l) imported. 2 header lines skipped." >> $LOGFILE
+	echo "$TRANSACTIONCOPYFILE: $LINECOUNTER/$(cat "$TRANSACTIONCOPYFILE" |wc -l) imported. 2 header lines skipped."
 	fi
     else
 	die "argenta_import(): File $1 doesn't exist"
@@ -549,7 +556,15 @@ done
 	test "$3" = "yes" && begformoney "$2"
     ;;
     importbankcsv)
-	die "not implemented"
+	case $2 in
+	    argenta)
+		argenta_import $3
+	    ;;
+	    *)
+		echo "Syntax: $ME importbankcsv bankname bankfile"
+		echo " Valid banknames: ARGENTA"
+	    ;;
+	esac
     ;;
     *)
 	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos|begformoney]"
