@@ -376,7 +376,7 @@ function argenta_import()
 	MYACCOUNT="$(verifyiban "$(getcsvdata $1 1 2)")" #" Syntax highlighter choke on that
 	if [ -n "$MYACCOUNT" ]; then
 	    ACCOUNTDIR="$BANKHISTORY/$MYACCOUNT"
-	    LOGFILE="$ACCOUNTDIR/$(date '+%s')-$CSVFILEHASH.log"
+	    LOGFILE="$ACCOUNTDIR/$CSVFILEHASH-$(date '+%s').log"
 	    TRANSACTIONCOPYFILE="$ACCOUNTDIR/$CSVFILEHASH.csv"
 	    mkdir -p "$ACCOUNTDIR"
 	    # Activate when working
