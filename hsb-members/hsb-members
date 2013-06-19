@@ -541,7 +541,7 @@ done
 #	mkcomm "$2"
 #	verifybe "$2"
 #	verifyiban "$2"
-	argenta_import "$2"
+#	argenta_import "$2"
     ;;
     resendinfos)
 	test -z "$2" && die "You must specify member e-mail address"
@@ -560,14 +560,21 @@ done
 	    argenta)
 		argenta_import $3
 	    ;;
+	    belfius)
+		echo "Not yet implemented (very messy internals)"
+	    ;;
 	    *)
 		echo "Syntax: $ME importbankcsv bankname bankfile"
-		echo " Valid banknames: ARGENTA"
+		echo " Valid banknames: argenta, belfius"
 	    ;;
 	esac
     ;;
+    memberpayment)
+	test -z "$2" && die "Syntax: $ME memberpayment emailaddress year (Use * for all members, leav last parameter empty for current year)"
+	echo "Coming next"
+    ;;
     *)
-	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos|begformoney]"
+	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos|begformoney|memberpayment]"
 	exit 1
     ;;
 esac
