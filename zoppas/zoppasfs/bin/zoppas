@@ -27,6 +27,9 @@ SALEFILE="$TMPDIR/currentsale"
 MAXX="$COLUMNS"
 MAXY="$LINES"
 CSVSEPARATOR=';'
+# How many items on the bottom bar
+BOTTOMBARITEMS=5
+BOTTOMCODES=""
 
 # products fields description
 PRODUCT_FIELD_BARCODE='1'
@@ -301,13 +304,57 @@ badbarcode()
 }
 
 # Prepare the command barcodes
-bottombar()
+setbottombar()
 {
+    destroybuffer bottombar
     gotoxy 1 $(( $MAXY - 1)) bottombar; hline $MAXX bottombar
-    BARITEMS=5
-    for i in $(seq 1 $(( $BARITEMS -1 )) ); do
-	gotoxy $(( ($MAXX / $BARITEMS) * $i )) $MAXY bottombar; outtext "|" bottombar
+    for i in $(seq 1 $(( $BOTTOMBARITEMS -1 )) ); do
+	gotoxy $(( ($MAXX / $BOTTOMBARITEMS) * $i )) $MAXY bottombar; outtext "|" bottombar
     done
+    BOTTOMCODES=""
+    for i in $(seq 1 $# ); do
+	BOTTOMCODES="$BOTTOMCODES,$(echo "$1"|cut -d '|' -f 1)"
+	gotoxy $(( ($MAXX / $BOTTOMBARITEMS) * ($i-1) +1 )) $MAXY bottombar; outtext "$(echo "$1"|cut -d '|' -f 2)" bottombar
+	shift
+    done
+}
+
+# Decode the bottom bar options.
+# Parameter: input barcode
+# output: if option barcode, translate it
+#	  if not an option, send input back unmodified
+# Configure it with function setbottombar()
+decodebottombar()
+{
+    case "$1" in
+	"OPT:1")
+	    echo "$BOTTOMCODES"| cut -d ',' -f 2
+	    ;;
+	"OPT:2")
+	    echo "$BOTTOMCODES"| cut -d ',' -f 3
+	    ;;
+	"OPT:3")
+	    echo "$BOTTOMCODES"| cut -d ',' -f 4
+	    ;;
+	"OPT:4")
+	    echo "$BOTTOMCODES"| cut -d ',' -f 5
+	    ;;
+	"OPT:5")
+	    echo "$BOTTOMCODES"| cut -d ',' -f 6
+	    ;;
+	"OPT:6")
+	    echo "$BOTTOMCODES"| cut -d ',' -f 7
+	    ;;
+	"OPT:7")
+	    echo "$BOTTOMCODES"| cut -d ',' -f 8
+	    ;;
+	"OPT:8")
+	    echo "$BOTTOMCODES"| cut -d ',' -f 9
+	    ;;
+	*) # Not an option ? Transparently fall through.
+	    echo "$1"
+	    ;;
+    esac
 }
 
 ############### CODE ###############
@@ -345,14 +392,15 @@ wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloadi
 echo "Building screens..."
 prompt
 blanksalescreen
-bottombar
 
 while true; do
     if [ -f $SALEFILE ]; then
 	showbuffer blanksalescreen
 	updatesalescreen "$SALEFILE"
+	setbottombar "CASH|PAY CASH" "UNSCAN" "CANCEL" "DONATE"
     else
 	pricelist "$CACHEDIR/$BARCODEFILE"
+	setbottombar "CASH|Show cash" "EVENT|Event mode" "DONATE" "TRANSFER" "WITHDRAW"
     fi
     showbuffer badbarcode
     showbuffer bottombar
@@ -362,6 +410,7 @@ while true; do
     test -e "$SALEFILE" || TODAYDIR="$CACHEDIR/$(date '+%Y%m%d')"
     test -d "$TODAYDIR" || mkdir -p "$TODAYDIR" || die "Cannot create today's directory ($TODAYDIR)"
     read REPLY
+    REPLY=$(decodebottombar "$REPLY")
     case "$REPLY" in
 	"CANCEL")
 		rm $SALEFILE
