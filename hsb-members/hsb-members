@@ -72,7 +72,7 @@ runsql ()
 # DDDDDDDDDD: Any number you like. This is the only parameter needed.
 # SS: Above number mod 97. Set to 97 if zero.
 # Banks love obsolete^Wproven technologies. :-)
-mkcomm ()
+function mkcomm()
 {
 COMMSTR="$1"
 COMMSTR="${COMMSTR:0:10}"		# Trim string length to 10
@@ -81,7 +81,6 @@ case $COMM_MODULO in			# Padding and/or correction
     "0") COMM_MODULO="97" ;;
     [1-9]) COMM_MODULO="0$COMM_MODULO" ;;
 esac
-#echo "$COMMSTR$COMM_MODULO" #Debug
 echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop into blocks
 }
 
@@ -89,7 +88,7 @@ echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop int
 # Input: what look like an IBAN number
 # output: a clean IBAN number with no space. Nothing if garbage.
 # Documentation: http://en.wikipedia.org/wiki/International_Bank_Account_Number
-verifyiban ()
+function verifyiban()
 {
     # Do not remove front space: seq is 1-based, bash strings are zero-based.
     IBANTABLE=" ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -116,7 +115,7 @@ verifyiban ()
 # The two last digits are the modulo 97 of the 10 first.
 # input: what look like a belgian account number
 # output: cleanly formatted belgian account number. Nothing if garbage
-verifybe ()
+function verifybe()
 {
     # Clean anything that do not look like a digit
     CLEANBE="$(echo "$1"|sed -e 's/[^0-9]//gI')"
@@ -125,28 +124,28 @@ verifybe ()
     test $MODULO -ne "$(( 10#$ACCOUNTNR % 97 ))" || echo "${CLEANBE:0:3}-${CLEANBE:3:7}-$MODULO"
 }
 
-listcurrentsql ()
+function listcurrentsql()
 {
     SQLRESULT=$(runsql "select entrydate,structuredcomm,firstname,name,nickname,phonenumber,emailaddress from hsbmembers where exitdate is null;")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
     echo "$SQLRESULT"|tr "\t" ','
 }
 
-listcancelledsql ()
+function listcancelledsql()
 {
     SQLRESULT=$(runsql "select entrydate,structuredcomm,firstname,name,nickname,phonenumber,emailaddress,exitdate from hsbmembers where exitdate is not null;")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
     echo "$SQLRESULT"|tr "\t" ','
 }
 
-countcurrentsql ()
+function countcurrentsql()
 {
     SQLRESULT=$(runsql "select count(structuredcomm) from hsbmembers where exitdate is null;") #" Syntax higlighter choke on that.
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
     echo "There are currently $SQLRESULT members in the database."
 }
 
-deletemembersql ()
+function deletemembersql()
 {
     SQLRESULT=$(runsql "select count(structuredcomm) from hsbmembers where exitdate is null and emailaddress like \"$1\"; ") #" Syntax higlighter choke on that.
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
@@ -157,8 +156,17 @@ deletemembersql ()
 
 }
 
+function checkmemberpayment()
+{
+    SQLRESULT=$(runsql "select structuredcomm from hsbmembers where exitdate is null; ")
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    for i in $SQLRESULT; do
+	echo "------ $(runsql "select firstname, name, entrydate, emailaddress from hsbmembers where structuredcomm like '$i'; ") ------"
+    done
+}
+
 # User interface - data is appended as a third field on the prompt
-inputdata ()
+function inputdata()
 {
 for i in $(seq 1 ${#SQL_FIELD[@]}); do
     echo -n "[$i/${#SQL_FIELD[@]}] $(echo -n "${SQL_FIELD[$i]}"|cut -d '|' -f 2) [$(echo -n "${SQL_FIELD[$i]}"|cut -d '|' -f 3)]: "
@@ -168,7 +176,7 @@ done
 }
 
 # Re-send the banking information
-resendbankinfos ()
+function resendbankinfos()
 {
     SQLRESULT=$(runsql "select count(structuredcomm) from hsbmembers where exitdate is null and emailaddress like \"$1\"; ") #" Syntax higlighter choke on that.
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
@@ -198,7 +206,7 @@ can see the gory details here: https://github.com/askarel/hsb-members
 "| mail -s "HSBXL - information update" $(echo "$SQLRESULT"|cut -f 3) && echo "Email sent to $(echo "$SQLRESULT"|cut -f 3)"
 }
 
-begformoney ()
+function begformoney()
 {
     SQLRESULT=$(runsql "select count(structuredcomm) from hsbmembers where exitdate is null and emailaddress like \"$1\"; ") #" Syntax higlighter choke on that.
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
@@ -241,7 +249,7 @@ can see the gory details here: https://github.com/askarel/hsb-members
 }
 
 # Add a new member to the database: build the query with the provided data
-addmember ()
+function addmember()
 {
     inputdata
     THESQL="insert into hsbmembers (entrydate, structuredcomm"
@@ -290,13 +298,13 @@ can see the gory details here: https://github.com/askarel/hsb-members
 "| mail -s "HSBXL - Welcome aboard" $(echo $SQLRESULT|cut -d ',' -f 3) && echo "mail sent to $(echo $SQLRESULT|cut -d ',' -f 3)"
 }
 
-editmember ()
+function editmember()
 {
 echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
 }
 
 # Format one line of the CSV into SQL
-formlinetosql ()
+function formlinetosql()
 {
 for i in $( seq  8 )
 do
@@ -311,7 +319,7 @@ done
 
 # Migrate data from the csv file to the SQL database.
 # Must be run once. Old backup files are kept.
-migratecsv2sql ()
+function migratecsv2sql()
 {
 if [ -f $DB ]; then
     while read line
@@ -538,10 +546,6 @@ done
     ;;
     dry)
 	echo -n "$ME: dry run:  "
-#	mkcomm "$2"
-#	verifybe "$2"
-#	verifyiban "$2"
-#	argenta_import "$2"
     ;;
     resendinfos)
 	test -z "$2" && die "You must specify member e-mail address"
@@ -570,8 +574,11 @@ done
 	esac
     ;;
     memberpayment)
-	test -z "$2" && die "Syntax: $ME memberpayment emailaddress year (Use * for all members, leav last parameter empty for current year)"
-	echo "Coming next"
+	test -z "$2" && die "Syntax: $ME memberpayment emailaddress year (Use * for all members, leave last parameter empty for current year)"
+	CHECKYEAR="$3"
+	test -z "$CHECKYEAR" && CHECKYEAR="$(date '+%Y')"
+	checkmemberpayment "$2" "$CHECKYEAR"
+	echo "Coming next ($CHECKYEAR)"
     ;;
     *)
 	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos|begformoney|memberpayment]"
