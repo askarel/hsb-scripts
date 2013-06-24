@@ -22,8 +22,6 @@ DB="$0.csv"
 CONFIGFILE="$0.conf"
 # The raw bank statements will be stored here
 BANKHISTORY="$(dirname $0)/bank"
-# The IBAN database
-IBANTXT="$(dirname $0)/iban.txt"
 
 # Build the prompt array (SQL)
 # Format of the structure: SQLINPUT[number]="fieldname|field description|RESULT"
@@ -97,15 +95,16 @@ function verifyiban()
     IBANCOUNTRY=${IBAN:0:2}
     IBANMODULO=${IBAN:2:2}
     IBANACCOUNT=${IBAN:4}
-    IBANINDEX=$(matchincsv "$IBANTXT" "$IBANCOUNTRY"  1)
+    IBANLENGTH=$(runsql "select validlength from validiban where country like '$IBANCOUNTRY';")
     # Is it in IBAN database ?
-    if [ -n "$IBANINDEX" ]; then
+    if [ -n "$IBANLENGTH" ]; then
 	# Is it the correct length ?
-	if [ "$(getcsvdata "$IBANTXT" $IBANINDEX 2)" -eq "$(echo -n "$IBAN" | wc -c)" ]; then
+	if [ "$IBANLENGTH" -eq "$(echo -n "$IBAN" | wc -c)" ]; then
 	    # Build sed script to transform letters in numbers (A=10, B=11,... Z=35)
 	    for i in $(seq $(echo -n $IBANTABLE |wc -c)); do
 		SEDSCRIPT="s/${IBANTABLE:$i:1}/$(( $i +9 ))/gI;$SEDSCRIPT"
 	    done
+	    ### BUG: Arithmetic overflow when letters are used
 	    test $(( 10#$(echo "$IBANACCOUNT$IBANCOUNTRY$IBANMODULO" |sed -e "$SEDSCRIPT") % 97 )) -eq 1 && echo "$IBAN"
 	fi
     fi
@@ -451,7 +450,6 @@ BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
 # If empty, use localhost
 test -n "$SQLHOST" || SQLHOST="127.0.0.1"
 mkdir -p "$BANKHISTORY" || die "Can't create csv archive directory"
-test -f "$IBANTXT" || die "Can't access file $IBANTXT"
 
 # Is the database usable ? Try listing the tables.
 SQLRESULT=$(runsql "show tables;")
@@ -505,6 +503,28 @@ if [ $? != "0" ]; then
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 fi
 
+# IBAN informations: do they exist ? Create them if not.
+SQLRESULT=$(runsql "desc validiban;")
+if [ $? != "0" ]; then
+    echo "Trying to create table validiban..."
+    SQLRESULT=$(runsql "create table validiban (id int not null auto_increment primary key,
+				    country char(2) unique not null,
+				    validlength int not null);")
+    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+    SQLRESULT=$(runsql "INSERT INTO validiban (country, validlength) VALUES ('AL', 28),
+			('AD', 24),('AT', 20),('AZ', 28),('BH', 22),('BE', 16),('BA', 20),
+			('BR', 29),('BG', 22),('CR', 21),('HR', 21),('CY', 28),('CZ', 24),
+			('DK', 18),('DO', 28),('EE', 20),('FO', 18),('FI', 18),('FR', 27),
+			('GE', 22),('DE', 22),('GI', 23),('GR', 27),('GL', 18),('GT', 28),
+			('HU', 28),('IS', 26),('IE', 22),('IL', 23),('IT', 27),('KZ', 20),
+			('KW', 30),('LV', 21),('LB', 28),('LI', 21),('LT', 20),('LU', 20),
+			('MK', 19),('MT', 31),('MR', 27),('MU', 30),('MC', 27),('MD', 24),
+			('ME', 22),('NL', 18),('NO', 15),('PK', 24),('PS', 29),('PL', 28),
+			('PT', 25),('RO', 24),('SM', 27),('SA', 24),('RS', 22),('SK', 24),
+			('SI', 19),('ES', 24),('SE', 24),('CH', 21),('TN', 24),('TR', 26),
+			('AE', 23),('GB', 22),('VG', 24);") #" Syntax highlighter choke on that 
+fi
+
 ############### </SANITY CHECKS> ###############
 
 test -f $DB && migratecsv2sql
@@ -546,6 +566,7 @@ done
     ;;
     dry)
 	echo -n "$ME: dry run:  "
+	verifyiban "$2"
     ;;
     resendinfos)
 	test -z "$2" && die "You must specify member e-mail address"
