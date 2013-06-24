@@ -104,8 +104,8 @@ function verifyiban()
 	    for i in $(seq $(echo -n $IBANTABLE |wc -c)); do
 		SEDSCRIPT="s/${IBANTABLE:$i:1}/$(( $i +9 ))/gI;$SEDSCRIPT"
 	    done
-	    ### BUG: Arithmetic overflow when letters are used
-	    test $(( 10#$(echo "$IBANACCOUNT$IBANCOUNTRY$IBANMODULO" |sed -e "$SEDSCRIPT") % 97 )) -eq 1 && echo "$IBAN"
+	    # Fuck me.
+	    test "$(runsql "select $(echo "$IBANACCOUNT$IBANCOUNTRY$IBANMODULO" |sed -e "$SEDSCRIPT") % 97")" -eq 1 && echo "$IBAN" #"
 	fi
     fi
 }
