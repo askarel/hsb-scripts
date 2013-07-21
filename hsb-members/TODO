@@ -1,4 +1,3 @@
-- Bank CSV parsing/duplicate resistance (basiccally dump the .csv into a directory and let the script sort it out)
 - Day by day overview of membership payment
 - automatic reminder (CSV download/membership payment)
 - Mail when membership is cancelled

@@ -1,0 +1,15 @@
+
+Hackerspace Brussels - Space management scripts
+
+This is the natural evolution of hsb-members.
+
+The hsb-members script is taking over more roles and is progressively evolving
+to a database application.
+
+To reflect the evolution, the hsb-members will be progressively gutted from
+functionalities, to become a simple frontend to the database.
+
+Some new scripts will be written to add a web interface.
+
+Because this application will manage a lot of practical things in the space,
+it is like a concierge in a building, this is why it bear the same name.

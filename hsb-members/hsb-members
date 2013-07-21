@@ -18,7 +18,6 @@
 #
 
 ME=$(basename $0)
-DB="$0.csv"
 CONFIGFILE="$0.conf"
 # The raw bank statements will be stored here
 BANKHISTORY="$(dirname $0)/bank"
@@ -42,9 +41,6 @@ SQL_FIELD[13]="snailstreet|                  Street name"
 SQL_FIELD[14]="snailnumber|                  House/building number"
 SQL_FIELD[15]="snailbox|                  Mailbox number (leave empty if N/A)"
 
-# Field descriptions for migrating away from the csv file.
-CSVFIELDS="entrydate,structuredcomm,firstname,name,nickname,phonenumber,emailaddress,exitdate"
-
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
 die ()
@@ -57,12 +53,24 @@ die ()
     fi
 }
 
-# run a SQL command, data returned is tab-separated 
+# run a SQL command.
+# input: SQL request
+# output: tab-separated data
 # exit code 0: request successful
 runsql ()
 {
     test -z "$1" && die "Empty SQL request"
     mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names -e "$1" 2>&1
+}
+
+# run a SQL file.
+# input: file containing SQL requests to execute
+# output: tab-separated data
+# exit code 0: request successful
+runsqlfile ()
+{
+    test -f "$1" || die "File $1 does not exist"
+    cat "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names 2>&1
 }
 
 # Generate the 'Communication' field for the virement
@@ -307,39 +315,6 @@ function editmember()
 echo "$ME: Not implemented: Use a text editor or a spreadsheet program with some common sense. :-)"
 }
 
-# Format one line of the CSV into SQL
-function formlinetosql()
-{
-for i in $( seq  8 )
-do
-    if [ -z "$(echo $1 |cut -d ',' -f $i)" ];
-	then
-		echo -n "NULL,"
-	else
-		echo -n "\"$(echo $1 |cut -d ',' -f $i)\","
-    fi
-done
-}
-
-# Migrate data from the csv file to the SQL database.
-# Must be run once. Old backup files are kept.
-function migratecsv2sql()
-{
-if [ -f $DB ]; then
-    while read line
-    do
-	echo "Importing $(echo $line|cut -d ',' -f 2)..."
-	runsql "insert into hsbmembers ($CSVFIELDS,why_member) values (
-	$(formlinetosql "$line")\"migrated from CSV\");"
-    done < $DB
-    test -f "$DB.bak.bak" && rm "$DB.bak.bak"
-    test -f "$DB.bak" && mv "$DB.bak" "$DB.bak.bak"
-    mv "$DB" "$DB.bak"
-else
-    die "No migration needed"
-fi
-}
-
 # Search an exact match in the CSV file.
 # parameter 1: file name
 # parameter 2: what to search
@@ -532,8 +507,6 @@ fi
 
 ############### </SANITY CHECKS> ###############
 
-test -f $DB && migratecsv2sql
-
 # Run script
 case $1 in
     list-current)
@@ -572,16 +545,11 @@ done
     dry)
 	echo -n "$ME: dry run:  "
 	verifyiban "$2"
-	for i in $( ( set -o posix; set) ); do
-	    echo "variable $(echo $i|cut -d '=' -f 1) is $(echo $i|cut -d '=' -f 2)"
-	done
+	runsqlfile "../concierge/sql/ibandata.sql"
     ;;
     resendinfos)
 	test -z "$2" && die "You must specify member e-mail address"
 	resendbankinfos "$2"
-    ;;
-    migrate)
-	migratecsv2sql
     ;;
     begformoney)
 	test -z "$2" && die "You must specify member e-mail address"
@@ -619,7 +587,7 @@ done
 	fi
     ;;
     *)
-	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos|begformoney|memberpayment]"
+	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|importbankcsv|resendinfos|begformoney|memberpayment]"
 	exit 1
     ;;
 esac
