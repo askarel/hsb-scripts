@@ -155,13 +155,15 @@ function deletemembersql()
 
 }
 
+# Get the list of payments for a specific member.
+# Input: member email address
+# Output: a list of transactions
 function checkmemberpayment()
 {
-    SQLRESULT=$(runsql "select structuredcomm from hsbmembers where exitdate is null; ")
+    SQLRESULT=$(runsql "select firstname, name, entrydate, emailaddress from hsbmembers where emailaddress like '$1' and exitdate is null; ")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
-    for i in $SQLRESULT; do
-	echo "------ $(runsql "select firstname, name, entrydate, emailaddress from hsbmembers where structuredcomm like '$i'; ") ------"
-    done
+	echo "------ $SQLRESULT ------"
+    runsql "select date_val, other_account, message, amount, currency, other_account_name, hex (transactionhash) from bankstatements where message like (select structuredcomm from hsbmembers where emailaddress like '$1' and exitdate is null);"
 }
 
 # User interface - data is appended as a third field on the prompt
@@ -498,7 +500,7 @@ if [ $? != "0" ]; then
 				    amount decimal (15,2) not null,
 				    currency char (5) not null,
 				    message char (60),
-				    other_account_name char (30),
+				    other_account_name char (50),
 				    transactionhash binary(20) unique not null);")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 fi
@@ -567,6 +569,9 @@ done
     dry)
 	echo -n "$ME: dry run:  "
 	verifyiban "$2"
+	for i in $( ( set -o posix; set) ); do
+	    echo "variable $(echo $i|cut -d '=' -f 1) is $(echo $i|cut -d '=' -f 2)"
+	done
     ;;
     resendinfos)
 	test -z "$2" && die "You must specify member e-mail address"
@@ -595,11 +600,18 @@ done
 	esac
     ;;
     memberpayment)
-	test -z "$2" && die "Syntax: $ME memberpayment emailaddress year (Use * for all members, leave last parameter empty for current year)"
+	test -z "$2" && die "Syntax: $ME memberpayment emailaddress year (Use 'all' for all members, leave last parameter empty for current year)"
 	CHECKYEAR="$3"
 	test -z "$CHECKYEAR" && CHECKYEAR="$(date '+%Y')"
-	checkmemberpayment "$2" "$CHECKYEAR"
-	echo "Coming next ($CHECKYEAR)"
+	if [ "$2" = "all" ]; then
+	    SQLRESULT=$(runsql "select emailaddress from hsbmembers where exitdate is null; ")
+	    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+	    for i in $SQLRESULT; do
+		checkmemberpayment "$i" "$CHECKYEAR"
+	    done
+	else
+	    checkmemberpayment "$2" "$CHECKYEAR"
+	fi
     ;;
     *)
 	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|migrate|importbankcsv|resendinfos|begformoney|memberpayment]"

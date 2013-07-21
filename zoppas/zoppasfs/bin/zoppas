@@ -387,7 +387,7 @@ test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && 
 MONIESIZE="$(echo "$MONIES" |tr ';' '\n'|wc -l)"
 
 # Fetch the CSV holding the barcodes
-wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
+#wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
 
 echo "Building screens..."
 prompt
