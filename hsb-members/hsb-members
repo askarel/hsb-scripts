@@ -156,14 +156,17 @@ function deletemembersql()
 }
 
 # Get the list of payments for a specific member.
-# Input: member email address
+# Input 1: member email address
+# Input 2: year to check
 # Output: a list of transactions
 function checkmemberpayment()
 {
     SQLRESULT=$(runsql "select firstname, name, entrydate, emailaddress from hsbmembers where emailaddress like '$1' and exitdate is null; ")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 	echo "------ $SQLRESULT ------"
-    runsql "select date_val, other_account, message, amount, currency, other_account_name, hex (transactionhash) from bankstatements where message like (select structuredcomm from hsbmembers where emailaddress like '$1' and exitdate is null);"
+    SQLRESULT=$(runsql "select date_val, other_account, message, amount, currency, other_account_name, hex (transactionhash) from bankstatements where message like (select structuredcomm from hsbmembers where emailaddress like '$1' and exitdate is null) and date_val > '$2-01-01' order by date_val;") #"
+    test -z "$SQLRESULT" && echo $1 >> "$0-$2.unpaid" # List the freeloading offenders
+    echo "$SQLRESULT"
 }
 
 # User interface - data is appended as a third field on the prompt
@@ -603,6 +606,8 @@ done
 	test -z "$2" && die "Syntax: $ME memberpayment emailaddress year (Use 'all' for all members, leave last parameter empty for current year)"
 	CHECKYEAR="$3"
 	test -z "$CHECKYEAR" && CHECKYEAR="$(date '+%Y')"
+	# Remove the freeloading offenders file
+	rm "$0-$2.unpaid"
 	if [ "$2" = "all" ]; then
 	    SQLRESULT=$(runsql "select emailaddress from hsbmembers where exitdate is null; ")
 	    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
