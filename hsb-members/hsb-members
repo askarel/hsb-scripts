@@ -607,7 +607,7 @@ done
 	CHECKYEAR="$3"
 	test -z "$CHECKYEAR" && CHECKYEAR="$(date '+%Y')"
 	# Remove the freeloading offenders file
-	rm "$0-$2.unpaid"
+	rm "$0-$CHECKYEAR.unpaid"
 	if [ "$2" = "all" ]; then
 	    SQLRESULT=$(runsql "select emailaddress from hsbmembers where exitdate is null; ")
 	    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
