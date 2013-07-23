@@ -585,8 +585,21 @@ done
 	    checkmemberpayment "$2" "$CHECKYEAR"
 	fi
     ;;
+    fixbankfuckup)
+	# Check sanity of parameters before fouling up the database
+	test $# = 3 || die "Syntax: $ME fixbankfuckup transactionhash structuredcomm"
+	BANKMSG=$(runsql "select message from bankstatements where transactionhash = 0x$2; ") #"
+	test $? -ne "0" && die "There was a database error: The server says $BANKMSG"
+	test -z "$BANKMSG" && die "Transaction 0x$2 not found in database"
+	STRUCTURED=$(runsql "select structuredcomm from hsbmembers where structuredcomm like '$3'; ") #"
+	test $? -ne "0" && die "There was a database error: The server says $STRUCTURED"
+	test -z "$STRUCTURED" && die "Structured communication $3 not found in database"
+	SQLRESULT=$(runsql "update bankstatements set fix_fuckup_msg='$STRUCTURED' where transactionhash = 0x$2; ")
+	test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+	echo "Added transaction 0x$2 with message '$BANKMSG' to $STRUCTURED"
+    ;;
     *)
-	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|importbankcsv|resendinfos|begformoney|memberpayment]"
+	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|importbankcsv|resendinfos|begformoney|memberpayment|fixbankfuckup]"
 	exit 1
     ;;
 esac
