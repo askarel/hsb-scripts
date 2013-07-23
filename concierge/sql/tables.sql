@@ -52,7 +52,9 @@ create table if not exists bankstatements (id int not null auto_increment primar
 				    currency char (5) not null,
 				    message char (60),
 				    other_account_name char (50),
-				    transactionhash binary(20) unique not null);
+				    transactionhash binary(20) unique not null,
+				    fix_fuckup_msg char (60)
+				    );
 
 create table if not exists validiban (id int not null auto_increment primary key,
 				    country char(2) unique not null,

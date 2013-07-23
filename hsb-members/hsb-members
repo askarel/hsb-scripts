@@ -421,7 +421,7 @@ test -n "$SQLUSER" || die "$CONFIGFILE: SQLUSER variable is empty"
 test -n "$SQLPASS" || die "$CONFIGFILE: SQLPASS variable is empty"
 test -n "$SQLDB" || die "$CONFIGFILE: SQLDB: Database to use not specified"
 test -n "$ORGNAME" || die "$CONFIGFILE: ORGNAME: Organisation name is not set"
-# By delault we talk in euros
+# By default we talk in euros
 test -n "$CURRENCY" || CURRENCY="EUR"
 # A year is (usually) 12 months. This is an override if needed
 test -n "$YEARLYFEE" || YEARLYFEE=$((12*$MONTHLYFEE))
@@ -479,7 +479,9 @@ if [ $? != "0" ]; then
 				    currency char (5) not null,
 				    message char (60),
 				    other_account_name char (50),
-				    transactionhash binary(20) unique not null);")
+				    transactionhash binary(20) unique not null,
+				    fix_fuckup_msg char (60)
+				    );")
     test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 fi
 
@@ -514,9 +516,6 @@ case $1 in
 	listcurrentsql
     ;;
     add)
-	addmember
-    ;;
-    addsql)
 	addmember
     ;;
     editsql)
