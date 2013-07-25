@@ -590,9 +590,10 @@ done
     fixbankfuckup)
 	# Check sanity of parameters before fouling up the database
 	test $# = 3 || die "Syntax: $ME fixbankfuckup transactionhash structuredcomm"
-	BANKMSG=$(runsql "select message from bankstatements where transactionhash = 0x$2; ") #"
+	BANKMSG=$(runsql "select currency, message from bankstatements where transactionhash = 0x$2; ") #"
 	test $? -ne "0" && die "There was a database error: The server says $BANKMSG"
 	test -z "$BANKMSG" && die "Transaction 0x$2 not found in database"
+	BANKMSG="$(echo "$BANKMSG"| cut -f 2)"
 	STRUCTURED=$(runsql "select structuredcomm from hsbmembers where structuredcomm like '$3'; ") #"
 	test $? -ne "0" && die "There was a database error: The server says $STRUCTURED"
 	test -z "$STRUCTURED" && die "Structured communication $3 not found in database"
