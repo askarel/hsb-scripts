@@ -21,6 +21,8 @@ ME=$(basename $0)
 CONFIGFILE="$0.conf"
 # The raw bank statements will be stored here
 BANKHISTORY="$(dirname $0)/bank"
+# Default path for the SQL files
+SQLDIR="$(dirname $0)/../concierge/sql/"
 
 # Build the prompt array (SQL)
 # Format of the structure: SQLINPUT[number]="fieldname|field description|RESULT"
@@ -432,82 +434,19 @@ BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
 # If empty, use localhost
 test -n "$SQLHOST" || SQLHOST="127.0.0.1"
 mkdir -p "$BANKHISTORY" || die "Can't create csv archive directory"
+test -d "$SQLDIR" || die "SQL files repository not found. Current path: $SQLDIR"
 
 # Is the database usable ? Try listing the tables.
 SQLRESULT=$(runsql "show tables;")
 test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
-# Does the main table exist ? Try it by asking a description.
-SQLRESULT=$(runsql "desc hsbmembers;")
-if [ $? != "0" ]; then
-    echo "Trying to create table hsbmembers..."
-    SQLRESULT=$(runsql "create table hsbmembers (id int not null auto_increment primary key, 
-				    entrydate date not null, 
-				    structuredcomm char(21) unique not null, 
-				    firstname char(30) not null, 
-				    name char(30) not null, 
-				    nickname char(30), 
-				    phonenumber char(15), 
-				    emailaddress char(60) not null, 
-				    exitdate date, 
-				    passwordhash char(60) not null default 'mouh', 
-				    flags bigint not null default 0, 
-				    birthdate date, 
-				    birthcity char(30), 
-				    birthcountry char(20), 
-				    nationalregistry char(15), 
-				    snailcommune char(20), 
-				    snailpostcode char (10), 
-				    snailstreet char(30), 
-				    snailnumber char(10), 
-				    snailbox char(6), 
-				    openpgpkeyid char(20), 
-				    activateddate date, 
-				    mail_flags bigint not null default 0, 
-				    why_member text not null
-				    );")
-    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
-fi
 
-# Does the bank statements table exist ? Try it by asking a description.
-SQLRESULT=$(runsql "desc bankstatements;")
-if [ $? != "0" ]; then
-    echo "Trying to create table bankstatements..."
-    SQLRESULT=$(runsql "create table bankstatements (id int not null auto_increment primary key,
-				    date_val date,
-				    date_account date,
-				    this_account char(40),
-				    other_account char (40),
-				    amount decimal (15,2) not null,
-				    currency char (5) not null,
-				    message char (60),
-				    other_account_name char (50),
-				    transactionhash binary(20) unique not null,
-				    fix_fuckup_msg char (60)
-				    );")
-    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
-fi
+# Attempt to create the tables
+SQLRESULT="$(runsqlfile "$SQLDIR/tables.sql")"
+test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 
-# IBAN informations: do they exist ? Create them if not.
-SQLRESULT=$(runsql "desc validiban;")
-if [ $? != "0" ]; then
-    echo "Trying to create table validiban..."
-    SQLRESULT=$(runsql "create table validiban (id int not null auto_increment primary key,
-				    country char(2) unique not null,
-				    validlength int not null);")
-    test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
-    SQLRESULT=$(runsql "INSERT INTO validiban (country, validlength) VALUES ('AL', 28),
-			('AD', 24),('AT', 20),('AZ', 28),('BH', 22),('BE', 16),('BA', 20),
-			('BR', 29),('BG', 22),('CR', 21),('HR', 21),('CY', 28),('CZ', 24),
-			('DK', 18),('DO', 28),('EE', 20),('FO', 18),('FI', 18),('FR', 27),
-			('GE', 22),('DE', 22),('GI', 23),('GR', 27),('GL', 18),('GT', 28),
-			('HU', 28),('IS', 26),('IE', 22),('IL', 23),('IT', 27),('KZ', 20),
-			('KW', 30),('LV', 21),('LB', 28),('LI', 21),('LT', 20),('LU', 20),
-			('MK', 19),('MT', 31),('MR', 27),('MU', 30),('MC', 27),('MD', 24),
-			('ME', 22),('NL', 18),('NO', 15),('PK', 24),('PS', 29),('PL', 28),
-			('PT', 25),('RO', 24),('SM', 27),('SA', 24),('RS', 22),('SK', 24),
-			('SI', 19),('ES', 24),('SE', 24),('CH', 21),('TN', 24),('TR', 26),
-			('AE', 23),('GB', 22),('VG', 24);") #" Syntax highlighter choke on that 
-fi
+# XXX: Should be done at install time
+# Insert the IBAN DATA
+runsqlfile "$SQLDIR/ibandata.sql"
 
 ############### </SANITY CHECKS> ###############
 
