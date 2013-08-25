@@ -540,8 +540,28 @@ done
 	test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 	echo "Added transaction 0x$2 with message '$BANKMSG' to $STRUCTURED"
     ;;
+    cron)
+	case "$2" in
+	    register)
+		echo "$ME: Installing into daily crontab..."
+		;;
+	    unregister)
+		echo "$ME: Removing daily crontab..."
+		;;
+	    run)
+		echo "$ME: Running daily crontab..."
+		;;
+	    *)
+		echo "Usage: $ME cron [option]"
+		echo "Valid options:"
+		echo " register 	Register this script into the crontab"
+		echo " unregister	Remove script from crontab"
+		echo " run		Run the cron job"
+	    ;;
+	esac
+	;;
     *)
-	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|importbankcsv|resendinfos|begformoney|memberpayment|fixbankfuckup]"
+	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|importbankcsv|resendinfos|begformoney|memberpayment|fixbankfuckup|cron]"
 	exit 1
     ;;
 esac
