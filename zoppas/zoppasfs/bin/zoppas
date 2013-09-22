@@ -38,7 +38,7 @@ PRODUCT_FIELD_REMAINSTOCK='4'
 PRODUCT_FIELD_PRICE_NORMAL='6' # Any field number above is the different price for the event
 PRODUCT_FIELD_PRICE_BYTENIGHT='7' # Any field number above is the different price for the event
 
-PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_NORMAL"
+PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_BYTENIGHT"
 
 ############### FUNCTIONS ###############
 # Function to call when we bail out
@@ -231,10 +231,12 @@ pricelist()
     fi
 }
 
+# Show the prompt.
+# Parameter 1: prepend some text
 prompt()
 {
-    PROMPT="Scan/type a barcode >>>"
-    gotoxy 1 $(( $MAXY -3 )) prompt; outtext "\033[K$PROMPT" prompt
+    PROMPT="$1 >>>"
+    gotoxy 1 $(( $MAXY -3 )); outtext "\033[K$PROMPT"
 }
 
 blanksalescreen()
@@ -308,6 +310,7 @@ setbottombar()
 {
     destroybuffer bottombar
     gotoxy 1 $(( $MAXY - 1)) bottombar; hline $MAXX bottombar
+    gotoxy 1 $MAXY bottombar; for i in $(seq $MAXX); do CLEARBAR="$CLEARBAR "; done; outtext "$CLEARBAR" bottombar
     for i in $(seq 1 $(( $BOTTOMBARITEMS -1 )) ); do
 	gotoxy $(( ($MAXX / $BOTTOMBARITEMS) * $i )) $MAXY bottombar; outtext "|" bottombar
     done
@@ -387,10 +390,9 @@ test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && 
 MONIESIZE="$(echo "$MONIES" |tr ';' '\n'|wc -l)"
 
 # Fetch the CSV holding the barcodes
-#wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
+wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
 
 echo "Building screens..."
-prompt
 blanksalescreen
 
 while true; do
@@ -404,7 +406,7 @@ while true; do
     fi
     showbuffer badbarcode
     showbuffer bottombar
-    showbuffer prompt
+    prompt "Scan/type a barcode"
     destroybuffer badbarcode
     # If a sale is in progress, block the date update
     test -e "$SALEFILE" || TODAYDIR="$CACHEDIR/$(date '+%Y%m%d')"
@@ -446,7 +448,12 @@ while true; do
 		badbarcode "Donations will be implemented ASAP. ;-)"
 	;;
 	"EVENT")
-		badbarcode "Special Event mode not implemented yet"
+		setbottombar "NORMAL" "SPECIAL"
+		showbuffer badbarcode
+		showbuffer bottombar
+		prompt "Select event mode:"
+		read SPECIALEVENT
+		badbarcode "Selected.            "
 	;;
 	"HELP"|"help")
 		helpscreen
