@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SERVERPUSH="root@gate:/srv/tftp/zoppas/"
+SERVERPUSH="root@gate.hsbxl.be:/srv/tftp/zoppas/"
 
 if [ "$(pwd)" = "/" ]; then
     echo "I will not read from there !!"

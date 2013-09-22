@@ -38,7 +38,7 @@ PRODUCT_FIELD_REMAINSTOCK='4'
 PRODUCT_FIELD_PRICE_NORMAL='6' # Any field number above is the different price for the event
 PRODUCT_FIELD_PRICE_BYTENIGHT='7' # Any field number above is the different price for the event
 
-PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_BYTENIGHT"
+PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_NORMAL"
 
 ############### FUNCTIONS ###############
 # Function to call when we bail out
@@ -302,15 +302,19 @@ updatesalescreen()
 
 badbarcode()
 {
+    destroybuffer badbarcode
     gotoxy 1 $(( $MAXY - 2 )) badbarcode; outtext "\033[K$1" badbarcode
 }
 
 # Prepare the command barcodes
+# 1 parameter per bottom bar item
+# Structure: command|text. A simple string if the text *is* the command.
 setbottombar()
 {
     destroybuffer bottombar
-    gotoxy 1 $(( $MAXY - 1)) bottombar; hline $MAXX bottombar
-    gotoxy 1 $MAXY bottombar; for i in $(seq $MAXX); do CLEARBAR="$CLEARBAR "; done; outtext "$CLEARBAR" bottombar
+    gotoxy 1 $(( $MAXY - 1)) bottombar; hline $(($MAXX - 1 )) bottombar
+    for i in $(seq 3 $MAXX); do CLEARBAR="$CLEARBAR "; done;
+#    gotoxy 1 $MAXY bottombar;  outtext "$CLEARBAR" bottombar; gotoxy 1 $MAXY
     for i in $(seq 1 $(( $BOTTOMBARITEMS -1 )) ); do
 	gotoxy $(( ($MAXX / $BOTTOMBARITEMS) * $i )) $MAXY bottombar; outtext "|" bottombar
     done
@@ -453,6 +457,7 @@ while true; do
 	        if [ -f $SALEFILE ]; then
 		    badbarcode "Bad context !"
 		else
+		    clear
 		    setbottombar "NORMAL" "SPECIAL"
 		    badbarcode ""
 		    showbuffer badbarcode
