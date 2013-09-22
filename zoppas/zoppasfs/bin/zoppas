@@ -271,7 +271,7 @@ helpscreen()
 - Check cashbox balance: Scan the CASH barcode.
 
 EOF
-    gotoxy 1 24 ; read -p "Scan any barcode to quit. " DUMMY
+    prompt "Scan any barcode to quit."; read DUMMY
 }
 
 # Update the sale screen
@@ -302,7 +302,7 @@ updatesalescreen()
 
 badbarcode()
 {
-    gotoxy 1 $(( $MAXY - 2 )) badbarcode; outtext "$1" badbarcode
+    gotoxy 1 $(( $MAXY - 2 )) badbarcode; outtext "\033[K$1" badbarcode
 }
 
 # Prepare the command barcodes
@@ -400,13 +400,15 @@ while true; do
 	showbuffer blanksalescreen
 	updatesalescreen "$SALEFILE"
 	setbottombar "CASH|PAY CASH" "UNSCAN" "CANCEL" "DONATE"
+        MYPROMPT="Scan another product, or a code below."
     else
 	pricelist "$CACHEDIR/$BARCODEFILE"
 	setbottombar "CASH|Show cash" "EVENT|Event mode" "DONATE" "TRANSFER" "WITHDRAW"
+        MYPROMPT="Scan/type a barcode"
     fi
     showbuffer badbarcode
     showbuffer bottombar
-    prompt "Scan/type a barcode"
+    prompt "$MYPROMPT"
     destroybuffer badbarcode
     # If a sale is in progress, block the date update
     test -e "$SALEFILE" || TODAYDIR="$CACHEDIR/$(date '+%Y%m%d')"
@@ -448,12 +450,17 @@ while true; do
 		badbarcode "Donations will be implemented ASAP. ;-)"
 	;;
 	"EVENT")
-		setbottombar "NORMAL" "SPECIAL"
-		showbuffer badbarcode
-		showbuffer bottombar
-		prompt "Select event mode:"
-		read SPECIALEVENT
-		badbarcode "Selected.            "
+	        if [ -f $SALEFILE ]; then
+		    badbarcode "Bad context !"
+		else
+		    setbottombar "NORMAL" "SPECIAL"
+		    badbarcode ""
+		    showbuffer badbarcode
+		    showbuffer bottombar
+		    prompt "Select event mode:"
+		    read SPECIALEVENT
+		    badbarcode "Selected."
+		fi
 	;;
 	"HELP"|"help")
 		helpscreen
