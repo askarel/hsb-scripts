@@ -2,7 +2,9 @@
 
 # The rimshot CGI script - Trolling HSBXL with style
 # (c) 2012 Frederic Pasteleurs <askarel@gmail.com>
+#
 # CSS and minor improvements by ZipionLive
+# Space-in-filename bug fix by Tom Behets
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,7 +22,7 @@
 #
 
 DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
-#DIR_AUDIOFILES="./filez"
+DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
 PLAYMETHOD="PLAY"
@@ -37,7 +39,7 @@ PLAYPROG="paplay"
 pickfile()
 {
     ls -1 "$1" | while read line; do
-	test "$line" = "$2" && echo "$1/$line"
+	test "$line" = "$(echo "$2"| sed -e 's/+/ /')" && echo "$1/$line"
     done
 }
 
@@ -61,7 +63,7 @@ if [ -d "$DIR_AUDIOFILES" ]; then
     echo "  <FORM ACTION=\"$ME\" method=\"GET\">"
     echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$RANDOMMETHOD\" CLASS=\"RANDOM soundBtn\"></INPUT>"
     ls -1 "$DIR_AUDIOFILES" | while read line ; do
-	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$line\" NAME=\"$PLAYMETHOD\" CLASS=\"$line soundBtn\"></INPUT>"
+	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$line\" NAME=\"$PLAYMETHOD\" CLASS=\"$(echo "$line"| sed -e 's/ /+/') soundBtn\"></INPUT>"
     done
     echo "  </FORM>"
 fi
