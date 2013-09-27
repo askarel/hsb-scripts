@@ -33,6 +33,8 @@ SQL_FIELD[4]="phonenumber|Phone number"
 SQL_FIELD[5]="emailaddress|E-mail address"
 SQL_FIELD[6]="why_member|Please explain why you want to be a member (free text)"
 # end of mandatory inputs. The rest is optional
+# This next block is not needed by the application and should be stored as a JSON object.
+# The inputdata function should first be made table-agnostic and cleaned up.
 SQL_FIELD[7]="birthdate|About you: Your birth date (YYYY-MM-DD)"
 SQL_FIELD[8]="birthcity|           City were you born"
 SQL_FIELD[9]="birthcountry|           In which country"
@@ -90,6 +92,13 @@ case $COMM_MODULO in			# Padding and/or correction
     [1-9]) COMM_MODULO="0$COMM_MODULO" ;;
 esac
 echo "+++${COMMSTR:0:3}/${COMMSTR:3:4}/${COMMSTR:7:3}$COMM_MODULO+++" # Chop into blocks
+}
+
+# Return the string properly quoted and escaped. TO USE WHILE BUILDING THE QUERY !!
+function sqlescape()
+{
+    ESCAPECHARS="'\"\\"
+    echo "$1"
 }
 
 # Verify the IBAN account number. 

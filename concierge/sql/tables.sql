@@ -40,7 +40,8 @@ create table if not exists hsbmembers (id int not null auto_increment primary ke
 				    openpgpkeyid char(20), 
 				    activateddate date, 
 				    mail_flags bigint not null default 0, 
-				    why_member text not null
+				    why_member text not null,
+				    json_data text
 				    );
 
 create table if not exists bankstatements (id int not null auto_increment primary key,
