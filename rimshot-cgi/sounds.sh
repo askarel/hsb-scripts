@@ -19,7 +19,7 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-DIR_AUDIOFILES="/Users/betz/Desktop"
+DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
 #DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
@@ -27,9 +27,6 @@ PLAYMETHOD="PLAY"
 CSSMETHOD="CSS"
 RANDOMMETHOD="RANDOM"
 PLAYPROG="paplay"
-
-SAVEIFS=$IFS
-IFS=$(echo -en "\n\b")
 
 # Pick a file from specified directory
 # Secure handling of user-defined input: avoid the abuse of the '../' trick.
@@ -91,5 +88,3 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	showpage
 	;;
 esac
-
-IFS = $SAVEIFS
