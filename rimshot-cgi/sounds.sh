@@ -19,8 +19,8 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
-DIR_AUDIOFILES="./filez"
+DIR_AUDIOFILES="/Users/betz/Desktop"
+#DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
 PLAYMETHOD="PLAY"
@@ -39,8 +39,8 @@ IFS=$(echo -en "\n\b")
 # parameter 2: requested file
 pickfile()
 {
-    for f in *; do
-	test "$f" = "$2" && echo "$1/$f"
+    ls -1 "$1" | while read line; do
+	test "$line" = "$2" && echo "$1/$line"
     done
 }
 
@@ -63,11 +63,9 @@ EOM
 if [ -d "$DIR_AUDIOFILES" ]; then
     echo "  <FORM ACTION=\"$ME\" method=\"GET\">"
     echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$RANDOMMETHOD\" CLASS=\"RANDOM soundBtn\"></INPUT>"
-
-    for f in *; do 
-    	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$f\" NAME=\"$PLAYMETHOD\" CLASS=\"$f soundBtn\"></INPUT>" 
-	done
-
+    ls -1 "$DIR_AUDIOFILES" | while read line ; do
+	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$line\" NAME=\"$PLAYMETHOD\" CLASS=\"$line soundBtn\"></INPUT>"
+    done
     echo "  </FORM>"
 fi
 
@@ -94,6 +92,4 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	;;
 esac
 
-
-IFS=$SAVEIFS
-
+IFS = $SAVEIFS
