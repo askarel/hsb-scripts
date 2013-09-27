@@ -28,6 +28,9 @@ CSSMETHOD="CSS"
 RANDOMMETHOD="RANDOM"
 PLAYPROG="paplay"
 
+SAVEIFS=$IFS
+IFS=$(echo -en "\n\b")
+
 # Pick a file from specified directory
 # Secure handling of user-defined input: avoid the abuse of the '../' trick.
 # Return a full path to a file if a match is found in directory.
@@ -36,8 +39,8 @@ PLAYPROG="paplay"
 # parameter 2: requested file
 pickfile()
 {
-    for i in $( ls -1 "$1"); do
-	test "$i" = "$2" && echo "$1/$i"
+    for f in *; do
+	test "$f" = "$2" && echo "$1/$f"
     done
 }
 
@@ -60,9 +63,11 @@ EOM
 if [ -d "$DIR_AUDIOFILES" ]; then
     echo "  <FORM ACTION=\"$ME\" method=\"GET\">"
     echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$RANDOMMETHOD\" CLASS=\"RANDOM soundBtn\"></INPUT>"
-    for i in $( ls -1 "$DIR_AUDIOFILES" ); do
-	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$i\" NAME=\"$PLAYMETHOD\" CLASS=\"$i soundBtn\"></INPUT>"
-    done
+
+    for f in *; do 
+    	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$f\" NAME=\"$PLAYMETHOD\" CLASS=\"$f soundBtn\"></INPUT>" 
+	done
+
     echo "  </FORM>"
 fi
 
@@ -88,3 +93,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	showpage
 	;;
 esac
+
+
+IFS=$SAVEIFS
+
