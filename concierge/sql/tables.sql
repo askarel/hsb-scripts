@@ -29,19 +29,12 @@ create table if not exists hsbmembers (id int not null auto_increment primary ke
 				    passwordhash char(60) not null default 'mouh', 
 				    flags bigint not null default 0, 
 				    birthdate date, 
-				    birthcity char(30), 
-				    birthcountry char(20), 
-				    nationalregistry char(15), 
-				    snailcommune char(20), 
-				    snailpostcode char (10), 
-				    snailstreet char(30), 
-				    snailnumber char(10), 
-				    snailbox char(6), 
 				    openpgpkeyid char(20), 
 				    activateddate date, 
 				    mail_flags bigint not null default 0, 
 				    why_member text not null,
-				    json_data text
+				    json_data text,
+				    sshpubkeys text
 				    );
 
 create table if not exists bankstatements (id int not null auto_increment primary key,
