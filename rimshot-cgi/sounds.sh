@@ -25,10 +25,39 @@ DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
 DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
+HASHDBFILE=".$ME.troll"
 PLAYMETHOD="PLAY"
 CSSMETHOD="CSS"
 RANDOMMETHOD="RANDOM"
 PLAYPROG="paplay"
+
+# Create a database of hashed file names and directory names if it is missing
+# or if there is a change in the filesystem. Ignores any file/directory beginning with a dot.
+# Parameter 1: root of the directory to hash
+# File structure: tag (f|d) hash filename
+mkhashdb()
+{
+    test -f "$1/$HASHDBFILE" || touch "$1/$HASHDBFILE" || (echo "$ME: Can't create $1/$HASHDBFILE"; exit)
+    if [ $( (find $1 -xtype f \( -iname "*" ! -iname ".*" \) -print ; find $1 -xtype d \( -iname "*" ! -iname ".*" \) -print)|wc -l) != $(cat "$1/$HASHDBFILE"|wc -l) ]; then
+	rm "$1/$HASHDBFILE"
+	find $1 -xtype f \( -iname "*" ! -iname ".*" \) -print | while read LINE ; do
+	    printf "%s %s %s\n" "f" "$(echo -n "$LINE"|md5sum|cut -d ' ' -f 1)" "$LINE" >> "$1/$HASHDBFILE"
+	done
+	find $1 -xtype d \( -iname "*" ! -iname ".*" \) -print | while read LINE ; do
+	    printf "%s %s %s\n" "d" "$(echo -n "$LINE"|md5sum|cut -d ' ' -f 1)" "$LINE" >> "$1/$HASHDBFILE"
+	done
+    fi
+}
+
+# Pick a file using the filename hash
+# Return full path to the file if in database.
+# Return nothing if there is no match
+# parameter 1: target directory
+# parameter 2: requested file hash
+pickfilehash()
+{
+ echo
+}
 
 # Pick a file from specified directory
 # Secure handling of user-defined input: avoid the abuse of the '../' trick.
@@ -44,6 +73,7 @@ pickfile()
 }
 
 # Show the html page
+# parameter 1: target directory
 showpage()
 {
 cat << EOM
@@ -59,10 +89,12 @@ Content-type: text/html
   <H1>HSBXL TROLLING PAGE</H1>
 EOM
 
-if [ -d "$DIR_AUDIOFILES" ]; then
+mkhashdb "$1"
+
+if [ -d "$1" ]; then
     echo "  <FORM ACTION=\"$ME\" method=\"GET\">"
     echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$RANDOMMETHOD\" CLASS=\"RANDOM soundBtn\"></INPUT>"
-    ls -1 "$DIR_AUDIOFILES" | while read line ; do
+    ls -1 "$1" | while read line ; do
 	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$line\" NAME=\"$PLAYMETHOD\" CLASS=\"$(echo "$line"| sed -e 's/ /+/') soundBtn\"></INPUT>"
     done
     echo "  </FORM>"
@@ -74,7 +106,7 @@ printf " </BODY>\n</HTML>\n"
 # content dispatcher
 case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
     "$PLAYMETHOD")
-	showpage
+	showpage "$DIR_AUDIOFILES"
 	SNDFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
 	test -n "$( pickfile "$DIR_AUDIOFILES" "$SNDFILE" )" && $PLAYPROG "$( pickfile "$DIR_AUDIOFILES" "$SNDFILE" )"
 	;;
@@ -83,10 +115,10 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	test -n "$( pickfile "$CSSDIR" "$CSSFILE" )" && printf "Content-type: text/css\n\n" && cat "$( pickfile "$CSSDIR" "$CSSFILE" )"
 	;;
     "$RANDOMMETHOD")
-	showpage
+	showpage "$DIR_AUDIOFILES"
 	$PLAYPROG "$DIR_AUDIOFILES/$(ls -1 "$DIR_AUDIOFILES" |shuf -n 1)" &
 	;;
     *)
-	showpage
+	showpage "$DIR_AUDIOFILES"
 	;;
 esac

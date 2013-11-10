@@ -11,3 +11,5 @@ PLAYPROG to the player of your choice. The variable DIR_AUDIOFILES must be set
 to the directory holding the files you want to play. To add more buttons to the
 page, just add more files to the directory.
 
+KNOWN BUG: the script has issues with filenames containing a plus sign (+) and spaces.
+
