@@ -34,17 +34,14 @@ PLAYPROG="paplay"
 # Create a database of hashed file names and directory names if it is missing
 # or if there is a change in the filesystem. Ignores any file/directory beginning with a dot.
 # Parameter 1: root of the directory to hash
-# File structure: tag (f|d) hash filename
+# File structure: hash filename
 mkhashdb()
 {
     test -f "$1/$HASHDBFILE" || touch "$1/$HASHDBFILE" || (echo "$ME: Can't create $1/$HASHDBFILE"; exit)
-    if [ $( (find $1 -xtype f \( -iname "*" ! -iname ".*" \) -print ; find $1 -xtype d \( -iname "*" ! -iname ".*" \) -print)|wc -l) != $(cat "$1/$HASHDBFILE"|wc -l) ]; then
+    if [ $( (find $1 \( -xtype f -o -xtype d \) \( -iname "*" ! -iname ".*" \) -print )|wc -l) != $(cat "$1/$HASHDBFILE"|wc -l) ]; then
 	rm "$1/$HASHDBFILE"
-	find $1 -xtype f \( -iname "*" ! -iname ".*" \) -print | while read LINE ; do
-	    printf "%s %s %s\n" "f" "$(echo -n "$LINE"|md5sum|cut -d ' ' -f 1)" "$LINE" >> "$1/$HASHDBFILE"
-	done
-	find $1 -xtype d \( -iname "*" ! -iname ".*" \) -print | while read LINE ; do
-	    printf "%s %s %s\n" "d" "$(echo -n "$LINE"|md5sum|cut -d ' ' -f 1)" "$LINE" >> "$1/$HASHDBFILE"
+	(find $1 \( -xtype f -o -xtype d \) \( -iname "*" ! -iname ".*" \) -print ) | while read LINE ; do
+	    printf "%s %s\n" "$(echo -n "$LINE"|md5sum|cut -d ' ' -f 1)" "$LINE" >> "$1/$HASHDBFILE"
 	done
     fi
 }
@@ -56,7 +53,7 @@ mkhashdb()
 # parameter 2: requested file hash
 pickfilehash()
 {
- echo
+ grep "$2" "$1/$HASHDBFILE" | cut -d ' ' -f 2-
 }
 
 # Pick a file from specified directory
