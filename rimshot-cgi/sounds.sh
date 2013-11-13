@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # The rimshot CGI script - Trolling HSBXL with style
 # (c) 2012 Frederic Pasteleurs <askarel@gmail.com>
@@ -39,7 +39,7 @@ mkhashdb()
 {
     test -f "$1/$HASHDBFILE" || touch "$1/$HASHDBFILE" || (echo "$ME: Can't create $1/$HASHDBFILE"; exit)
     if [ $( (find $1 \( -xtype f -o -xtype d \) \( -iname "*" ! -iname ".*" \) -print )|wc -l) != $(cat "$1/$HASHDBFILE"|wc -l) ]; then
-	rm "$1/$HASHDBFILE"
+	rm -f "$1/$HASHDBFILE"
 	(find $1 \( -xtype f -o -xtype d \) \( -iname "*" ! -iname ".*" \) -print ) | while read LINE ; do
 	    printf "%s %s\n" "$(echo -n "$LINE"|md5sum|cut -d ' ' -f 1)" "$LINE" >> "$1/$HASHDBFILE"
 	done
@@ -93,6 +93,8 @@ if [ -d "$1" ]; then
     echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$RANDOMMETHOD\" CLASS=\"RANDOM soundBtn\"></INPUT>"
     ls -1 "$1" | while read line ; do
 	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$line\" NAME=\"$PLAYMETHOD\" CLASS=\"$(echo "$line"| sed -e 's/ /+/') soundBtn\"></INPUT>"
+#    cat "$1/$HASHDBFILE"| while read hash name ; do
+#	test -f "$name" && echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$(basename $name)\" NAME=\"$PLAYMETHOD\" CLASS=\"$hash soundBtn\" ID=\"$hash\"></INPUT>"
     done
     echo "  </FORM>"
 fi
@@ -105,7 +107,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
     "$PLAYMETHOD")
 	showpage "$DIR_AUDIOFILES"
 	SNDFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
-	test -n "$( pickfile "$DIR_AUDIOFILES" "$SNDFILE" )" && $PLAYPROG "$( pickfile "$DIR_AUDIOFILES" "$SNDFILE" )"
+	test -n "$( pickfilehash "$DIR_AUDIOFILES" "$SNDFILE" )" && $PLAYPROG "$( pickfilehash "$DIR_AUDIOFILES" "$SNDFILE" )"
 	;;
     "$CSSMETHOD")
 	CSSFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
