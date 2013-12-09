@@ -442,7 +442,7 @@ while true; do
 		    badbarcode "Please insert $SALETOTAL $CURRENCY in the cash box. :-)"
 		    echo "$SALETOTAL" >> "$CACHEDIR/CASHBOX"	# Add money to the box
 		    mv "$SALEFILE" "$TODAYDIR/$(date '+%s %N'|md5sum|cut -d ' ' -f 1)-$(md5sum $SALEFILE|cut -d ' ' -f 1).sale"
-		    test -n "$CASHCOMMAND" && $CASHCOMMAND
+		    test -n "$CASHCOMMAND" && $CASHCOMMAND &
 		else # badbarcode() should really be named statusbar()
 		    badbarcode "There is $(calculate "$(cat "$CACHEDIR/CASHBOX"|tr '\n' '+')0") $CURRENCY in the local cashbox." #"
 		fi
