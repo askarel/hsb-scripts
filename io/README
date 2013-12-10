@@ -1,0 +1,23 @@
+
+io - The I/O interface for the front door
+
+This is the driver and the brain behind the front door controller, with some example scripts
+Made for the Raspberry Pi
+
+Shell scripts:
+74ls673.sh        - Use a shift register on a Raspberry Pi connected to the GPIO
+                    lines, Uses 3 lines, provides 16 outputs
+
+74150.sh          - Read an input multiplexer. Read 16 inputs, uses 5 GPIO lines
+
+74150+74673.sh    - Combination of the two: read 16 inputs, provides 12 outputs,
+                    uses 4 GPIO lines
+
+Pascal sources:
+pigpio.pas        - Library to access the Raspberry Pi GPIO using memory mapped I/O: 
+                    Used with kind permission from the original author, Gábor Szöllösi
+		    Original URL: http://elinux.org/RPi_Low-level_peripherals
+
+blackknightio.pas - Main program: reimplementation of 74150+74673.sh as compiled code - WiP
+
+
