@@ -24,7 +24,7 @@ program blackknightio;
 
 // This is a quick hack to check if everything works
 
-uses PiGpio, sysutils, crt;
+uses PiGpio, sysutils, crt, keyboard, strutils;
 
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
 
@@ -32,7 +32,6 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
         DATAPIN=25;
         READOUTPIN=4; // Output of 74150
-        HEX: ARRAY [0..15] of char=('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
         bits:array [0..1] of char=('0', '1');
         // Available outputs on 74LS673. Outputs Q0 to Q3 are connected to the address inputs of the 74150
         Q15=1; Q14=2; Q13=4; Q12=8; Q11=16; Q10=32; Q9=64; Q8=128; Q7=256; Q6=512; Q5=1024; Q4=2048;
@@ -62,15 +61,18 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         LIGHTS_ON_SENSE=IN6;
         DOOR_CLOSED_SWITCH=IN5;
         MAIL_DETECTION=IN4;     // Of course we'll have physical mail notification. :-)
+        IS_CLOSED=false;
+        IS_OPEN=true;
 
-        DBGOUT: TDbgArray=('not used', 'not used', 'not used', 'not used', 'buzzer', 'battery', 'mag1', 'mag2', 'strike',
-                                'light', 'bell inh.', 'not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
-        DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1','MAG2','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
-                                'IN 2','IN 1','PANIC','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
+        DBGOUT: TDbgArray=('Q15 not used', 'Q14 not used', 'Q13 not used', 'Q12 not used', 'buzzer', 'battery', 'mag1 power', 'mag2 power', 'strike',
+                                'light', 'bell inh.', 'Q4 not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
+        DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
+                                'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
 
 
 VAR     GPIO_Driver: TIODriver;
         GpF: TIOPort;
+        QUIT: boolean;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
 
@@ -79,6 +81,13 @@ function graycode (inp: longint): longint;
 begin
  graycode:=(inp shr 1) xor inp;
 end;
+
+function checkbits (inputword, bitfield: word): boolean;
+begin
+
+end;
+
+///////////// DEBUG FUNCTIONS /////////////
 
 // Transform the input number into a bitfield string
 function bitify (inword: longint; size: byte): string;
@@ -90,18 +99,53 @@ begin
  bitify:=s;
 end;
 
-function checkbits (inputword, bitfield: word): boolean;
+function debug_alterinput(inword: word): word;
+var cmdstr, cmd, bit, key: string;
+    bitnumber, errcode: byte;
+    K: TKeyEvent;
 begin
-
+ K:=PollKeyEvent; // Check for keyboard input
+ cmdstr:='';
+ if k<>0 then // Key pressed ?
+  begin
+   write ('Alter input >>> ');
+   repeat
+    k:=TranslateKeyEvent (GetKeyEvent);
+    key:= KeyEventToString (k);
+    write (key);
+    if key <> #13 then cmdstr:=cmdstr + Key;
+   until key = #13; // ENTER pressed
+   cmdstr:=trim (delspace1 (cmdstr));
+//   case extractword (1, cmdstr, [' ']) of // Internal error 200211262
+   cmd:=extractword (1, cmdstr, [' ']); // Working around compiler bug
+   case cmd of
+    'quit': QUIT:=true;
+    'setbit':
+      begin
+       val (extractword (2, cmdstr, [' ']), bitnumber, errcode);
+       bit:=extractword (3, cmdstr, [' ']);
+       if (errcode = 0) and (bitnumber >= 0) and (bitnumber <= 15) then
+        case bit of // We have good data !
+         '1':inword:=(1 shl bitnumber) or inword;
+         '0':inword:=(not (1 shl bitnumber)) and inword;
+        else writeln ('Value for bit ', bitnumber, ' should be 0 or 1, not ', bit, '.       ');
+        end
+       else writeln ('''', extractword (2, cmdstr, [' ']), ''' is not a valid bit.          ');
+      end;
+   else writeln (cmdstr, ': invalid command.');
+   end;
+  end;
+  debug_alterinput:=inword;
 end;
 
-// Decompose a word into bitfields
+// Decompose a word into bitfields with description
 procedure debug_showword (inputword: word; screenshift: byte; description: TDbgArray );
 var i: byte;
 begin
  for i:=0 to 15 do
   begin
-   gotoxy (1 + screenshift, i + 1); write ( bits[(inputword shr i) and 1], ' ', description[i], '               ');
+   description[i][0]:=char (15);// Trim length
+   gotoxy (1 + screenshift, i + 1); write ( bits[(inputword shr i) and 1], ' ', description[i]);
 //   sleep (20);
   end;
   writeln;
@@ -149,6 +193,9 @@ end;
 var  ii: byte;
      inputs, outputs: word;
 begin
+ initkeyboard;
+ outputs:=0;
+ QUIT:=false;
  case paramstr (1) of
   'start':
    begin
@@ -162,7 +209,6 @@ begin
    GpF.setpinmode (STROBEPIN, OUTPUT);
    GpF.setpinmode (DATAPIN, OUTPUT);
    GpF.setpinmode (READOUTPIN, INPUT);
-   outputs:=0;
 
    repeat
    inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
@@ -178,17 +224,18 @@ begin
 //   inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
     for ii:=0 to 11 do
      begin
+      inputs:=debug_alterinput (inputs);
       debug_showword (1 shl ii, 0, DBGOUT);
-      debug_showword (input, 25, DBGIN);
-      writeln ('cycle up  : ', HEX[ii], ', Write: ', bitify ( (1 shl ii), 16), '.');
+      debug_showword (inputs, 25, DBGIN);
+      writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bitify ( (1 shl ii), 16), '.');
      end;
     for ii:=11 downto 0 do
      begin
       debug_showword (1 shl ii, 0, DBGOUT);
-      debug_showword (input, 25, DBGIN);
-      writeln ('cycle down: ', HEX[ii], ', Write: ', bitify ( (1 shl ii), 16), '.');
+      debug_showword (inputs, 25, DBGIN);
+      writeln ('cycle down: ', hexstr(ii, 2), ', Write: ', bitify ( (1 shl ii), 16), '.');
      end;
-    until keypressed;
+    until QUIT;
    end;
 
    'testpattern':
@@ -207,11 +254,11 @@ begin
    inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
     for ii:=0 to 11 do
      begin
-      writeln ('cycle up  : ', HEX[ii], ', Write: ', bitify ( (1 shl ii), 16), ', read: ', bitify (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, (1 shl ii)), 16), '.');
+      writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bitify ( (1 shl ii), 16), ', read: ', bitify (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, (1 shl ii)), 16), '.');
      end;
     for ii:=11 downto 0 do
      begin
-      writeln ('cycle down: ', HEX[ii], ', Write: ', bitify ( (1 shl ii), 16), ', read: ', bitify (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, (1 shl ii)), 16), '.');
+      writeln ('cycle down: ', hexstr (ii, 2), ', Write: ', bitify ( (1 shl ii), 16), ', read: ', bitify (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, (1 shl ii)), 16), '.');
      end;
     until false;
    end;
@@ -222,4 +269,6 @@ begin
     halt (1);
    end;
  end;
+
+ donekeyboard;
 end.
