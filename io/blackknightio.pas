@@ -23,16 +23,29 @@ program blackknightio;
 }
 
 // This is a quick hack to check if everything works
+{
+ TODO:
+ - Daemon mode
+   * start/stop
+   * Program name: /proc/<pid>/comm = basename (paramstr (0))
+
+}
 
 uses PiGpio, sysutils, crt, keyboard, strutils;
 
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
+        TRegisterbits=bitpacked array [0..15] of boolean; // Like a word: a 16 bits bitfield
+        TSHMVariables=RECORD // What items should be exposed for IPC.
+                Input, output: TRegisterbits;
+                QUIT: boolean;
+                end;
 
 CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
         DATAPIN=25;
         READOUTPIN=4; // Output of 74150
-        bits:array [0..1] of char=('0', '1');
+        bits:array [false..true] of char=('0', '1');
+
         // Available outputs on 74LS673. Outputs Q0 to Q3 are connected to the address inputs of the 74150
         Q15=1; Q14=2; Q13=4; Q12=8; Q11=16; Q10=32; Q9=64; Q8=128; Q7=256; Q6=512; Q5=1024; Q4=2048;
         // Use more meaningful descriptions of the outputs in the code
@@ -63,9 +76,10 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         MAIL_DETECTION=IN4;     // Of course we'll have physical mail notification. :-)
         IS_CLOSED=false;
         IS_OPEN=true;
-
+        DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
+        DBGOUTSTATESTR: Array [false..true] of string[5]=('On', 'Off');
         DBGOUT: TDbgArray=('Q15 not used', 'Q14 not used', 'Q13 not used', 'Q12 not used', 'buzzer', 'battery', 'mag1 power', 'mag2 power', 'strike',
-                                'light', 'bell inh.', 'Q4 not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
+                                'light', 'bell inhib.', 'Q4 not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
         DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
 
@@ -82,15 +96,31 @@ begin
  graycode:=(inp shr 1) xor inp;
 end;
 
-function checkbits (inputword, bitfield: word): boolean;
+function word2bits (inputword: word): TRegisterbits;
 begin
-
+ word2bits:=TRegisterbits (inputword); // TRegisterbits is a word-sized array of bits
 end;
 
-///////////// DEBUG FUNCTIONS /////////////
+function bits2word (inputbits: TRegisterbits): word;
+begin
+ bits2word:=word (inputbits);
+end;
 
+function bits2str (inputbits: TRegisterbits): string;
+var i: byte;
+    s: string;
+begin
+ s:='';
+ for i:=(bitsizeof (TRegisterbits)-1) downto 0 do s:=s+bits[inputbits[i]];
+ bits2str:=s;
+end;
+
+
+///////////// DEBUG FUNCTIONS /////////////
+{
 // Transform the input number into a bitfield string
 function bitify (inword: longint; size: byte): string;
+const bits:array[0..1] of char=('0','1');
 var i: byte;
     s: string;
 begin
@@ -98,8 +128,10 @@ begin
  for i:=(size - 1) downto 0 do s:=s+bits[(inword shr i) and 1];
  bitify:=s;
 end;
+ }
 
-function debug_alterinput(inword: word): word;
+// This is an ugly mess that should be removed.
+function debug_alterinput(inbits: TRegisterbits): TRegisterbits;
 var cmdstr, cmd, bit, key: string;
     bitnumber, errcode: byte;
     K: TKeyEvent;
@@ -126,8 +158,8 @@ begin
        bit:=extractword (3, cmdstr, [' ']);
        if (errcode = 0) and (bitnumber >= 0) and (bitnumber <= 15) then
         case bit of // We have good data !
-         '1':inword:=(1 shl bitnumber) or inword;
-         '0':inword:=(not (1 shl bitnumber)) and inword;
+         '1':inbits[bitnumber]:=true;
+         '0':inbits[bitnumber]:=false;
         else writeln ('Value for bit ', bitnumber, ' should be 0 or 1, not ', bit, '.       ');
         end
        else writeln ('''', extractword (2, cmdstr, [' ']), ''' is not a valid bit.          ');
@@ -135,17 +167,17 @@ begin
    else writeln (cmdstr, ': invalid command.');
    end;
   end;
-  debug_alterinput:=inword;
+  debug_alterinput:=inbits;
 end;
 
 // Decompose a word into bitfields with description
-procedure debug_showword (inputword: word; screenshift: byte; description: TDbgArray );
+procedure debug_showword (inputbits: TRegisterbits; screenshift: byte; description: TDbgArray );
 var i: byte;
 begin
  for i:=0 to 15 do
   begin
    description[i][0]:=char (15);// Trim length
-   gotoxy (1 + screenshift, i + 1); write ( bits[(inputword shr i) and 1], ' ', description[i]);
+   gotoxy (1 + screenshift, i + 1); write ( bits[inputbits[i]], ' ', description[i]);
 //   sleep (20);
   end;
   writeln;
@@ -154,52 +186,51 @@ end;
 ///////////// CHIP HANDLING FUNCTIONS /////////////
 
 // Send out a word to the 74LS673
-procedure write74673 (clockpin, datapin, strobepin: byte; data: word);
+procedure write74673 (clockpin, datapin, strobepin: byte; data: TRegisterbits);
 var i: byte;
 begin
  for i:=0 to 15 do
  begin
   GpF.SetBit (clockpin);
-  if ((data shr i) and 1) = 1 then GpF.SetBit (datapin)
-        else GpF.Clearbit (datapin);
+  if data[i] then GpF.SetBit (datapin) else GpF.Clearbit (datapin);
   GpF.ClearBit (clockpin);
  end;
- GpF.SetBit (datapin); // Is that line needed ?
+// GpF.SetBit (datapin); // Is that line needed ?
  GpF.SetBit (strobepin);
  GpF.Clearbit (strobepin);
 end;
 
 // Do an I/O cycle on the board
-function io_673_150 (clockpin, datapin, strobepin, readout: byte; data:word): word;
+function io_673_150 (clockpin, datapin, strobepin, readout: byte; data:word): TRegisterbits;
 var i: byte;
     gpioword: word;
 begin
  gpioword:=0;
  for i:=0 to 15 do
   begin
-   write74673 (clockpin, datapin, strobepin, (data and $0fff) or (graycode (i) shl $0c) );
+   write74673 (clockpin, datapin, strobepin, word2bits ((data and $0fff) or (graycode (i) shl $0c)) );
    sleep (1);
    gpioword:=(gpioword or (ord (GpF.GetBit (readout)) shl graycode(i) ) );
   end;
- io_673_150:=gpioword;
+ io_673_150:=word2bits (gpioword);
 end;
 
-procedure lock_brain (inputs, outputs: word);
+procedure lock_brain (var inputs, outputs: word);
 begin
 
 end;
 
 ///////////// MAIN BLOCK /////////////
 var  ii: byte;
-     inputs, outputs: word;
+     inputs, outputs: TRegisterbits;
 begin
  initkeyboard;
- outputs:=0;
+ outputs:=word2bits (0);
  QUIT:=false;
  case paramstr (1) of
   'start':
    begin
-   if not GPIO_Driver.MapIo then
+   if not GPIO_Driver.MapIo then { No GPIO ? }
     begin
      writeln('Error mapping gpio registry');
      halt (1);
@@ -211,7 +242,7 @@ begin
    GpF.setpinmode (READOUTPIN, INPUT);
 
    repeat
-   inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
+   inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, bits2word (outputs));
 
    until false;
    end;
@@ -225,15 +256,15 @@ begin
     for ii:=0 to 11 do
      begin
       inputs:=debug_alterinput (inputs);
-      debug_showword (1 shl ii, 0, DBGOUT);
+      debug_showword (word2bits (1 shl ii), 0, DBGOUT);
       debug_showword (inputs, 25, DBGIN);
-      writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bitify ( (1 shl ii), 16), '.');
+      writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), '.');
      end;
     for ii:=11 downto 0 do
      begin
-      debug_showword (1 shl ii, 0, DBGOUT);
+      debug_showword (word2bits (1 shl ii), 0, DBGOUT);
       debug_showword (inputs, 25, DBGIN);
-      writeln ('cycle down: ', hexstr(ii, 2), ', Write: ', bitify ( (1 shl ii), 16), '.');
+      writeln ('cycle down: ', hexstr(ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), '.');
      end;
     until QUIT;
    end;
@@ -251,14 +282,14 @@ begin
    GpF.setpinmode (DATAPIN, OUTPUT);
    GpF.setpinmode (READOUTPIN, INPUT);
    repeat
-   inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
+   inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, bits2word (outputs));
     for ii:=0 to 11 do
      begin
-      writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bitify ( (1 shl ii), 16), ', read: ', bitify (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, (1 shl ii)), 16), '.');
+      writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), ', read: ', bits2str (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, (1 shl ii))), '.');
      end;
     for ii:=11 downto 0 do
      begin
-      writeln ('cycle down: ', hexstr (ii, 2), ', Write: ', bitify ( (1 shl ii), 16), ', read: ', bitify (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, (1 shl ii)), 16), '.');
+      writeln ('cycle down: ', hexstr (ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), ', read: ', bits2str (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, (1 shl ii))), '.');
      end;
     until false;
    end;
@@ -269,6 +300,8 @@ begin
     halt (1);
    end;
  end;
+// writeln;writeln;
+// writeln (bitsizeof (TRegisterbits), '    ', bits2str (word2bits ( I4)), '    ', boolean (0));
 
  donekeyboard;
 end.
