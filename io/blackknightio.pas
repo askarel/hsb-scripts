@@ -211,6 +211,7 @@ var  ii: byte;
      progname:string;
      inputs, outputs, oldin, oldout: TRegisterbits;
      SHMdata: TSHMVariables;
+     SHMPointer: pointer;
      state: TLotsofbits;
 
 begin
@@ -220,18 +221,20 @@ begin
  oldout:=word2bits (12345);
  progname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@progname[1]), ord ('t'));
- shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
  QUIT:=false;
 
  case paramstr (1) of
   'start':
    begin
+    shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
     if shmid = -1 then
      begin
-      writeln (paramstr (0),' already running as PID ', SHMData.PIDOfmain);
+      writeln (paramstr (0),': not starting: already running.');
       halt (1);
      end;
-{
+    SHMPointer:=shmat (shmid, nil, 0);
+
+     {
    if not GPIO_Driver.MapIo then // No GPIO ?
     begin
      writeln('Error mapping gpio registry');
@@ -253,11 +256,15 @@ begin
 
    'test':
    begin
+    shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
     if shmid = -1 then
      begin
-      writeln (paramstr (0),' already running as PID ', SHMData.PIDOfmain);
+      writeln (paramstr (0),': not starting: already running.');
       halt (1);
      end;
+    SHMPointer:=shmat (shmid, nil, 0);
+
+
     initkeyboard;
     clrscr;
     repeat
