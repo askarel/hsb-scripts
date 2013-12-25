@@ -31,16 +31,15 @@ program blackknightio;
 
 }
 
-uses PiGpio, sysutils, crt, keyboard, strutils, ipc;
+uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc;
 
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TRegisterbits=bitpacked array [0..15] of boolean; // Like a word: a 16 bits bitfield
         TLotsofbits=bitpacked array [0..63] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
         TSHMVariables=RECORD // What items should be exposed for IPC.
+                PIDofmain:TPid;
                 Input, output: TRegisterbits;
-                Config:TLotsofbits;
-                QUIT: boolean;
-                Opendoor: boolean;
+                state, Config, command:TLotsofbits;
                 Opendoormsg:string;
                 end;
 
@@ -48,6 +47,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
         DATAPIN=25;
         READOUTPIN=4; // Output of 74150
+
         bits:array [false..true] of char=('0', '1');
         // Hardware bug: i got the address lines reversed while building the board.
         // Using a lookup table to mirror the address bits
@@ -89,6 +89,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                 'light', 'bell inhib.', 'Q4 not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
         DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
+        // offsets in status bitfield
+        S_MAGLOCK1=0; S_MAGLOCK2=1; S_TRIPWIRE_LOOP=2; S_TAMPER_SWITCH=3; S_MAILBOX=4;
 
 
 VAR     GPIO_Driver: TIODriver;
@@ -122,10 +124,8 @@ begin
  bits2str:=s;
 end;
 
-
 ///////////// DEBUG FUNCTIONS /////////////
 
-// This is an ugly mess that should be removed.
 function debug_alterinput(inbits: TRegisterbits): TRegisterbits;
 var key: string;
     K: TKeyEvent;
@@ -160,7 +160,7 @@ begin
 end;
 
 // Decompose a word into bitfields with description
-procedure debug_showword (inputbits: TRegisterbits; screenshift: byte; description: TDbgArray );
+procedure debug_showbits (inputbits: TRegisterbits; screenshift: byte; description: TDbgArray );
 var i: byte;
 begin
  for i:=0 to 15 do
@@ -206,15 +206,31 @@ end;
 
 ///////////// MAIN BLOCK /////////////
 var  ii: byte;
-     inputs, outputs: TRegisterbits;
+     shmkey:TKey;
+     shmid: longint;
+     progname:string;
+     inputs, outputs, oldin, oldout: TRegisterbits;
+     SHMdata: TSHMVariables;
+     state: TLotsofbits;
 
 begin
+ fillchar (SHMdata, sizeof (SHMData), 0);
  outputs:=word2bits (0);
+ oldin:=word2bits (12345);
+ oldout:=word2bits (12345);
+ progname:=paramstr (0) + #0;
+ shmkey:=ftok (pchar (@progname[1]), ord ('t'));
+ shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
  QUIT:=false;
+
  case paramstr (1) of
   'start':
    begin
-
+    if shmid = -1 then
+     begin
+      writeln (paramstr (0),' already running as PID ', SHMData.PIDOfmain);
+      halt (1);
+     end;
 {
    if not GPIO_Driver.MapIo then // No GPIO ?
     begin
@@ -232,10 +248,16 @@ begin
 
    until false;
 }
+    shmctl (shmid, IPC_RMID, nil);
    end;
 
    'test':
    begin
+    if shmid = -1 then
+     begin
+      writeln (paramstr (0),' already running as PID ', SHMData.PIDOfmain);
+      halt (1);
+     end;
     initkeyboard;
     clrscr;
     repeat
@@ -243,18 +265,21 @@ begin
      for ii:=0 to 11 do
       begin
        inputs:=debug_alterinput (inputs);
-       debug_showword (word2bits (1 shl ii), 0, DBGOUT);
-       debug_showword (inputs, 25, DBGIN);
+       debug_showbits (word2bits (1 shl ii), 0, DBGOUT);
+       debug_showbits (inputs, 25, DBGIN);
        writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), '.');
       end;
      for ii:=11 downto 0 do
      begin
-      debug_showword (word2bits (1 shl ii), 0, DBGOUT);
-      debug_showword (inputs, 25, DBGIN);
+      debug_showbits (word2bits (1 shl ii), 0, DBGOUT);
+      debug_showbits (inputs, 25, DBGIN);
       writeln ('cycle down: ', hexstr(ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), '.');
      end;
+     oldout:=outputs;
+     oldin:=inputs;
     until QUIT;
     donekeyboard;
+    shmctl (shmid, IPC_RMID, nil);
    end;
 
    'testpattern':
