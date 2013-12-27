@@ -23,13 +23,6 @@ program blackknightio;
 }
 
 // This is a quick hack to check if everything works
-{
- TODO:
- - Daemon mode
-   * start/stop
-   * Program name: /proc/<pid>/comm = basename (paramstr (0))
-
-}
 
 uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc;
 
@@ -38,9 +31,9 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TLotsofbits=bitpacked array [0..63] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
         TSHMVariables=RECORD // What items should be exposed for IPC.
                 PIDofmain:TPid;
-                Input, output: TRegisterbits;
+                Inputs, outputs: TRegisterbits;
                 state, Config, command:TLotsofbits;
-                Opendoormsg:string;
+                SHMMsg:string;
                 end;
 
 CONST   CLOCKPIN=7;  // 74LS673 pins
@@ -89,15 +82,33 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                 'light', 'bell inhib.', 'Q4 not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
         DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
-        // offsets in status bitfield
-        S_MAGLOCK1=0; S_MAGLOCK2=1; S_TRIPWIRE_LOOP=2; S_TAMPER_SWITCH=3; S_MAILBOX=4;
+        // offsets in status/config bitfields
+        SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_TAMPER_SWITCH=3; SC_MAILBOX=4;
+        // Status report only
+        S_DEMOMODE=63;
+        // Commands
+        CMD_QUIT=0; CMD_OPEN=1;
 
 
 VAR     GPIO_Driver: TIODriver;
         GpF: TIOPort;
-        QUIT: boolean;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
+
+// Overload the <> operator to handle the bitfields
+// This is not working
+operator <> (b1, b2: TRegisterbits) b: boolean;
+var i: byte;
+begin
+ for i :=0 to sizeof (TRegisterbits)-1 do
+  if b1[i] = b2[i] then
+    b:=false
+   else
+    begin
+    b:=true;
+    break;
+   end;
+end;
 
 // Return gray-encoded input
 function graycode (inp: longint): longint;
@@ -152,7 +163,6 @@ begin
     'd': if inbits[13] then inbits[13]:=false else inbits[13]:=true;
     'e': if inbits[14] then inbits[14]:=false else inbits[14]:=true;
     'f': if inbits[15] then inbits[15]:=false else inbits[15]:=true;
-    'q': QUIT:=true;
     else writeln ('Invalid key: ',key);
    end;
   end;
@@ -166,7 +176,7 @@ begin
  for i:=0 to 15 do
   begin
    description[i][0]:=char (15);// Trim length
-   gotoxy (1 + screenshift, i + 1); write ( bits[inputbits[i]], ' ', description[i]);
+   gotoxy (1 + screenshift, i + 2); write ( bits[inputbits[i]], ' ', description[i]);
 //   sleep (20);
   end;
   writeln;
@@ -205,25 +215,45 @@ begin
 end;
 
 ///////////// MAIN BLOCK /////////////
-var  ii: byte;
-     shmkey:TKey;
+var  shmkey: TKey;
      shmid: longint;
      progname:string;
      inputs, outputs, oldin, oldout: TRegisterbits;
-     SHMdata: TSHMVariables;
-     SHMPointer: pointer;
-     state: TLotsofbits;
+     SHMPointer: ^TSHMVariables;
+     demomode, QUIT: boolean;
+
+     ii:byte; invert: boolean; // CODE TO REMOVE
 
 begin
- fillchar (SHMdata, sizeof (SHMData), 0);
  outputs:=word2bits (0);
  oldin:=word2bits (12345);
  oldout:=word2bits (12345);
  progname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@progname[1]), ord ('t'));
  QUIT:=false;
+ invert:=false; ii:=0; // CODE TO REMOVE
 
  case paramstr (1) of
+  'stop':
+   begin
+    shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
+    if shmid = -1 then
+     begin
+      shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
+      // Add test for shmget error here ?
+      SHMPointer:=shmat (shmid, nil, 0);
+      writeln (paramstr (0),': Stopping running instance with PID ', SHMPointer^.PIDOfMain);
+      SHMPointer^.command[CMD_QUIT]:=true;
+      if paramstr (2) = '' then SHMPointer^.SHMMsg:='<no message provided>'
+                           else SHMPointer^.SHMMsg:=paramstr (2);
+     end
+    else
+     begin // We may have just created an instance. Killing it.
+      writeln (paramstr (0),': not started.');
+      shmctl (shmid, IPC_RMID, nil);
+      halt (1);
+     end;
+   end;
   'start':
    begin
     shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
@@ -233,86 +263,83 @@ begin
       halt (1);
      end;
     SHMPointer:=shmat (shmid, nil, 0);
+    fillchar (SHMPointer^, sizeof (TSHMVariables), 0);
+    SHMPointer^.PIDOfMain:=fpGetPid;
+    if GPIO_Driver.MapIo then
+     begin
+      demomode:=false;
+      GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
+      GpF.SetPinMode (CLOCKPIN, OUTPUT);
+      GpF.setpinmode (STROBEPIN, OUTPUT);
+      GpF.setpinmode (DATAPIN, OUTPUT);
+      GpF.setpinmode (READOUTPIN, INPUT);
+     end
+     else
+      begin
+       gotoxy (1,1); writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
+       demomode:=true;
+       SHMPointer^.state[S_DEMOMODE]:=true;
+       initkeyboard;
+      end;
+    repeat
+     if demomode then inputs:=debug_alterinput (inputs)
+                 else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
 
-     {
-   if not GPIO_Driver.MapIo then // No GPIO ?
-    begin
-     writeln('Error mapping gpio registry');
-     halt (1);
-    end;
-   GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
-   GpF.SetPinMode (CLOCKPIN, OUTPUT);
-   GpF.setpinmode (STROBEPIN, OUTPUT);
-   GpF.setpinmode (DATAPIN, OUTPUT);
-   GpF.setpinmode (READOUTPIN, INPUT);
+     if SHMPointer^.command[CMD_OPEN] then writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
+     //Add lock logic here
 
-   repeat
-   inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
+     sleep (10);    // This block should be removed
+     write ('.', ii);
+     outputs:=word2bits (1 shl ii);
+     if not invert then
+      begin
+       ii:=ii+1;
+       if ii >= 11 then invert:=true;;
+      end
+      else
+      begin
+       ii:=ii-1;
+       if ii <= 0 then invert:=false;
+      end;
 
-   until false;
-}
+     if bits2word (oldout) <> bits2word (outputs) then debug_showbits (outputs, 0, DBGOUT);
+     if bits2word (oldin) <> bits2word (inputs) then debug_showbits (inputs, 25, DBGIN);
+     SHMPointer^.inputs:=inputs;
+     SHMPointer^.outputs:=outputs;
+     QUIT:=SHMPointer^.command[CMD_QUIT];
+     oldout:=outputs;
+     oldin:=inputs;
+    until QUIT;
+    if SHMPointer^.shmmsg <> '' then writeln ('Quitting for reason: ',SHMPointer^.shmmsg);
+    if demomode then donekeyboard;
     shmctl (shmid, IPC_RMID, nil);
    end;
 
    'test':
-   begin
+    begin
+    end;
+
+   'open':
+    begin
     shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
     if shmid = -1 then
      begin
-      writeln (paramstr (0),': not starting: already running.');
+      shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
+      // Add test for shmget error here ?
+      SHMPointer:=shmat (shmid, nil, 0);
+      writeln (paramstr (0),': Asking running instance with PID ', SHMPointer^.PIDOfMain, ' to open the door...');
+      SHMPointer^.command[CMD_OPEN]:=true;
+      if paramstr (2) = '' then SHMPointer^.SHMMsg:='<no message provided>'
+                           else SHMPointer^.SHMMsg:=paramstr (2);
+     end
+    else
+     begin // We may have just created an instance. Killing it.
+      writeln (paramstr (0),': not started.');
+      shmctl (shmid, IPC_RMID, nil);
       halt (1);
      end;
-    SHMPointer:=shmat (shmid, nil, 0);
 
-
-    initkeyboard;
-    clrscr;
-    repeat
-//   inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
-     for ii:=0 to 11 do
-      begin
-       inputs:=debug_alterinput (inputs);
-       debug_showbits (word2bits (1 shl ii), 0, DBGOUT);
-       debug_showbits (inputs, 25, DBGIN);
-       writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), '.');
-      end;
-     for ii:=11 downto 0 do
-     begin
-      debug_showbits (word2bits (1 shl ii), 0, DBGOUT);
-      debug_showbits (inputs, 25, DBGIN);
-      writeln ('cycle down: ', hexstr(ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), '.');
-     end;
-     oldout:=outputs;
-     oldin:=inputs;
-    until QUIT;
-    donekeyboard;
-    shmctl (shmid, IPC_RMID, nil);
-   end;
-
-   'testpattern':
-   begin
-   if not GPIO_Driver.MapIo then
-    begin
-     writeln('Error mapping gpio registry');
-     halt (1);
     end;
-   GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
-   GpF.SetPinMode (CLOCKPIN, OUTPUT);
-   GpF.setpinmode (STROBEPIN, OUTPUT);
-   GpF.setpinmode (DATAPIN, OUTPUT);
-   GpF.setpinmode (READOUTPIN, INPUT);
-   repeat
-   inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
-    for ii:=0 to 11 do
-     begin
-      writeln ('cycle up  : ', hexstr (ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), ', read: ', bits2str (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, word2bits (1 shl ii))), '.');
-     end;
-    for ii:=11 downto 0 do
-     begin
-      writeln ('cycle down: ', hexstr (ii, 2), ', Write: ', bits2str ( word2bits (1 shl ii)), ', read: ', bits2str (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, word2bits (1 shl ii))), '.');
-     end;
-    until false;
-   end;
 
    '':
    begin
