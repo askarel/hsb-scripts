@@ -32,7 +32,8 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TSHMVariables=RECORD // What items should be exposed for IPC.
                 PIDofmain:TPid;
                 Inputs, outputs: TRegisterbits;
-                state, Config, command:TLotsofbits;
+                state, Config :TLotsofbits;
+                Command: string;
                 SHMMsg:string;
                 end;
 
@@ -83,12 +84,14 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
-        SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_TAMPER_SWITCH=3; SC_MAILBOX=4;
+        SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5;
         // Status report only
         S_DEMOMODE=63;
         // Commands
         CMD_QUIT=0; CMD_OPEN=1;
 
+        // Static config
+//        STATIC_CONFIG: TLotsOfBits=(true, false, true, true, true, true, false);
 
 VAR     GPIO_Driver: TIODriver;
         GpF: TIOPort;
@@ -135,6 +138,30 @@ begin
  bits2str:=s;
 end;
 
+// Need some work
+procedure sendcommand (shmkey: TKey; cmd, comment: string);
+var  shmid: longint;
+     SHMPointer: ^TSHMVariables;
+begin
+ shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
+    if shmid = -1 then
+     begin
+      shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
+      // Add test for shmget error here ?
+      SHMPointer:=shmat (shmid, nil, 0);
+      writeln (paramstr (0),': Sending command ', cmd, ' to PID ', SHMPointer^.PIDOfMain);
+      SHMPointer^.command:=cmd;
+      if comment = '' then SHMPointer^.SHMMsg:='<no message provided>'
+                      else SHMPointer^.SHMMsg:=comment;
+     end
+    else
+     begin // We may have just created an instance. Killing it.
+      writeln (paramstr (0),': not started.');
+      shmctl (shmid, IPC_RMID, nil);
+      halt (1);
+     end;
+end;
+
 ///////////// DEBUG FUNCTIONS /////////////
 
 function debug_alterinput(inbits: TRegisterbits): TRegisterbits;
@@ -166,6 +193,7 @@ begin
     else writeln ('Invalid key: ',key);
    end;
   end;
+ sleep (1); // Emulate the real deal
  debug_alterinput:=inbits;
 end;
 
@@ -208,7 +236,7 @@ begin
  for i:=0 to 15 do
   begin
    write74673 (clockpin, datapin, strobepin, word2bits ((bits2word (data) and $0fff) or (BITMIRROR[graycode (i)] shl $0c)) );
-   sleep (1);
+   sleep (1); // Give the electronics time for propagation
    gpioword:=(gpioword or (ord (GpF.GetBit (readout)) shl graycode(i) ) );
   end;
  io_673_150:=word2bits (gpioword);
@@ -220,6 +248,7 @@ var  shmkey: TKey;
      progname:string;
      inputs, outputs, oldin, oldout: TRegisterbits;
      SHMPointer: ^TSHMVariables;
+     CurrentState, Config: TLotsOfBits;
      demomode, QUIT: boolean;
 
      ii:byte; invert: boolean; // CODE TO REMOVE
@@ -228,6 +257,12 @@ begin
  outputs:=word2bits (0);
  oldin:=word2bits (12345);
  oldout:=word2bits (12345);
+ Config[SC_MAGLOCK1]:=true; // Maglock 1 installed
+ Config[SC_MAGLOCK2]:=false; // Maglock 2 not installed
+ Config[SC_TRIPWIRE_LOOP]:=true; // Tripwire loop installed
+ Config[SC_TAMPER_SWITCH]:=true; // Tamper switch installed
+ Config[SC_MAILBOX]:=true; // Mailbox monitor switch installed
+ Config[SC_BUZZER]:=true; // Let it make noise
  progname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@progname[1]), ord ('t'));
  QUIT:=false;
@@ -235,25 +270,10 @@ begin
 
  case paramstr (1) of
   'stop':
-   begin
-    shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
-    if shmid = -1 then
-     begin
-      shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
-      // Add test for shmget error here ?
-      SHMPointer:=shmat (shmid, nil, 0);
-      writeln (paramstr (0),': Stopping running instance with PID ', SHMPointer^.PIDOfMain);
-      SHMPointer^.command[CMD_QUIT]:=true;
-      if paramstr (2) = '' then SHMPointer^.SHMMsg:='<no message provided>'
-                           else SHMPointer^.SHMMsg:=paramstr (2);
-     end
-    else
-     begin // We may have just created an instance. Killing it.
-      writeln (paramstr (0),': not started.');
-      shmctl (shmid, IPC_RMID, nil);
-      halt (1);
-     end;
-   end;
+    sendcommand (shmkey, 'stop', paramstr (2));
+  'open':
+    sendcommand (shmkey, 'open', paramstr (2));
+
   'start':
    begin
     shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
@@ -265,6 +285,7 @@ begin
     SHMPointer:=shmat (shmid, nil, 0);
     fillchar (SHMPointer^, sizeof (TSHMVariables), 0);
     SHMPointer^.PIDOfMain:=fpGetPid;
+    clrscr;
     if GPIO_Driver.MapIo then
      begin
       demomode:=false;
@@ -278,6 +299,7 @@ begin
       begin
        gotoxy (1,1); writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
        demomode:=true;
+       inputs:=word2bits (65535); // Open contact = 1
        SHMPointer^.state[S_DEMOMODE]:=true;
        initkeyboard;
       end;
@@ -285,8 +307,9 @@ begin
      if demomode then inputs:=debug_alterinput (inputs)
                  else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
 
-     if SHMPointer^.command[CMD_OPEN] then writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
+     if SHMPointer^.command = 'open' then writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
      //Add lock logic here
+
 
      sleep (10);    // This block should be removed
      write ('.', ii);
@@ -304,9 +327,11 @@ begin
 
      if bits2word (oldout) <> bits2word (outputs) then debug_showbits (outputs, 0, DBGOUT);
      if bits2word (oldin) <> bits2word (inputs) then debug_showbits (inputs, 25, DBGIN);
+     // Return current state to the shm buffer
      SHMPointer^.inputs:=inputs;
      SHMPointer^.outputs:=outputs;
-     QUIT:=SHMPointer^.command[CMD_QUIT];
+     SHMPointer^.state:=CurrentState;
+     if SHMPointer^.command = 'stop' then QUIT:=true else QUIT:=false;
      oldout:=outputs;
      oldin:=inputs;
     until QUIT;
@@ -319,26 +344,11 @@ begin
     begin
     end;
 
-   'open':
+   'forget':
     begin
-    shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
-    if shmid = -1 then
-     begin
-      shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
-      // Add test for shmget error here ?
-      SHMPointer:=shmat (shmid, nil, 0);
-      writeln (paramstr (0),': Asking running instance with PID ', SHMPointer^.PIDOfMain, ' to open the door...');
-      SHMPointer^.command[CMD_OPEN]:=true;
-      if paramstr (2) = '' then SHMPointer^.SHMMsg:='<no message provided>'
-                           else SHMPointer^.SHMMsg:=paramstr (2);
-     end
-    else
-     begin // We may have just created an instance. Killing it.
-      writeln (paramstr (0),': not started.');
-      shmctl (shmid, IPC_RMID, nil);
-      halt (1);
-     end;
-
+     writeln ('Forgetting everything about my running processes (NOT RECOMMENDED)');
+     shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
+     shmctl (shmid, IPC_RMID, nil);
     end;
 
    '':
