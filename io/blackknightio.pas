@@ -86,32 +86,98 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         // offsets in status/config bitfields
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5;
         // Status report only
-        S_DEMOMODE=63;
-        // Commands
-        CMD_QUIT=0; CMD_OPEN=1;
+        S_DEMOMODE=63; S_TUESDAY=62;
+
+        MessagesSTR: array [1..16] of string=(
+                'Door is unlocked',
+                'Door is open',
+                'Door is closed',
+                'Door is locked by maglock 1',
+                'Door is locked by maglock 2',
+                'Unlocking maglock 1',
+                'Unlocking maglock 2',
+                'Unlocking door strike',
+                'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN',
+                'TAMPER ALERT: THE CONTROL BOX IS BEING OPENED',
+                'You got mail',
+                'Warning: Maglock 1 is on but the shoe is not there',
+                'Warning: Maglock 2 is on but the shoe is not there',
+                'Hallway light is on',
+                'PANIC BUTTON PRESSED: MAGLOCKS PHYSICALLY DISCONNECTED',
+                'Tuesday mode: Ring doorbell to enter'
+                );
 
         // Static config
-//        STATIC_CONFIG: TLotsOfBits=(true, false, true, true, true, true, false);
+        STATIC_CONFIG: TLotsOfBits=(true,  // SC_MAGLOCK1 (Maglock 1 installed)
+                                    false, // SC_MAGLOCK2 (Maglock 2 not installed)
+                                    true,  // SC_TRIPWIRE_LOOP (Tripwire installed)
+                                    true,  // SC_TAMPER_SWITCH (Tamper switch installed)
+                                    true,  // SC_MAILBOX (Mail detection installed)
+                                    true,  // SC_BUZZER (Let it make some noise)
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false,
+                                    false, // Unused
+                                    false  // Unused
+                                    );
 
 VAR     GPIO_Driver: TIODriver;
         GpF: TIOPort;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
-
-// Overload the <> operator to handle the bitfields
-// This is not working
-operator <> (b1, b2: TRegisterbits) b: boolean;
-var i: byte;
-begin
- for i :=0 to sizeof (TRegisterbits)-1 do
-  if b1[i] = b2[i] then
-    b:=false
-   else
-    begin
-    b:=true;
-    break;
-   end;
-end;
 
 // Return gray-encoded input
 function graycode (inp: longint): longint;
@@ -138,8 +204,8 @@ begin
  bits2str:=s;
 end;
 
-// Need some work
-procedure sendcommand (shmkey: TKey; cmd, comment: string);
+// For IPC stuff (sending commands)
+Procedure sendcommand (shmkey: TKey; cmd, comment: string);
 var  shmid: longint;
      SHMPointer: ^TSHMVariables;
 begin
@@ -160,6 +226,28 @@ begin
       shmctl (shmid, IPC_RMID, nil);
       halt (1);
      end;
+end;
+
+function busy_delay (var waittime: word; timetowait: word): boolean;
+begin
+ case waittime of
+  0:busy_delay:=true; // Time's up !!
+  65535:              // Reset timer
+   begin
+    waittime:=timetowait;
+    busy_delay:=false;
+   end;
+  else                // Tick...
+   begin
+    waittime:=waittime -1;
+    busy_delay:=false;
+   end;
+ end;
+end;
+
+procedure busy_delay_reset (var waittime: word);
+begin
+ waittime:=65535;
 end;
 
 ///////////// DEBUG FUNCTIONS /////////////
@@ -193,7 +281,7 @@ begin
     else writeln ('Invalid key: ',key);
    end;
   end;
- sleep (1); // Emulate the real deal
+ sleep (16); // Emulate the real deal
  debug_alterinput:=inbits;
 end;
 
@@ -248,8 +336,9 @@ var  shmkey: TKey;
      progname:string;
      inputs, outputs, oldin, oldout: TRegisterbits;
      SHMPointer: ^TSHMVariables;
-     CurrentState, Config: TLotsOfBits;
-     demomode, QUIT: boolean;
+     CurrentState: TLotsOfBits;
+     demomode: boolean;
+     open_wait: word;
 
      ii:byte; invert: boolean; // CODE TO REMOVE
 
@@ -257,15 +346,10 @@ begin
  outputs:=word2bits (0);
  oldin:=word2bits (12345);
  oldout:=word2bits (12345);
- Config[SC_MAGLOCK1]:=true; // Maglock 1 installed
- Config[SC_MAGLOCK2]:=false; // Maglock 2 not installed
- Config[SC_TRIPWIRE_LOOP]:=true; // Tripwire loop installed
- Config[SC_TAMPER_SWITCH]:=true; // Tamper switch installed
- Config[SC_MAILBOX]:=true; // Mailbox monitor switch installed
- Config[SC_BUZZER]:=true; // Let it make noise
+ busy_delay_reset (open_wait);
+
  progname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@progname[1]), ord ('t'));
- QUIT:=false;
  invert:=false; ii:=0; // CODE TO REMOVE
 
  case paramstr (1) of
@@ -300,19 +384,33 @@ begin
        gotoxy (1,1); writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
        demomode:=true;
        inputs:=word2bits (65535); // Open contact = 1
-       SHMPointer^.state[S_DEMOMODE]:=true;
        initkeyboard;
       end;
-    repeat
+    SHMPointer^.state[S_DEMOMODE]:=demomode;
+
+    repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
      if demomode then inputs:=debug_alterinput (inputs)
                  else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
 
-     if SHMPointer^.command = 'open' then writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
-     //Add lock logic here
+     if SHMPointer^.command = 'open' then
+      begin
+       if not busy_delay (open_wait, round (5000/16)) then
+        begin
+         writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
+        end
+        else
+        begin
+         writeln ('relocking door.');
+         busy_delay_reset (open_wait);
+         SHMPointer^.command:='';
+        end;
+      end
+      else
+      begin
 
 
-     sleep (10);    // This block should be removed
-     write ('.', ii);
+
+      write ('.', ii);
      outputs:=word2bits (1 shl ii);
      if not invert then
       begin
@@ -325,16 +423,20 @@ begin
        if ii <= 0 then invert:=false;
       end;
 
+      end;
+
+
+
      if bits2word (oldout) <> bits2word (outputs) then debug_showbits (outputs, 0, DBGOUT);
      if bits2word (oldin) <> bits2word (inputs) then debug_showbits (inputs, 25, DBGIN);
      // Return current state to the shm buffer
      SHMPointer^.inputs:=inputs;
      SHMPointer^.outputs:=outputs;
      SHMPointer^.state:=CurrentState;
-     if SHMPointer^.command = 'stop' then QUIT:=true else QUIT:=false;
+     SHMPointer^.Config:=STATIC_CONFIG;
      oldout:=outputs;
      oldin:=inputs;
-    until QUIT;
+    until SHMPointer^.command = 'stop';
     if SHMPointer^.shmmsg <> '' then writeln ('Quitting for reason: ',SHMPointer^.shmmsg);
     if demomode then donekeyboard;
     shmctl (shmid, IPC_RMID, nil);
