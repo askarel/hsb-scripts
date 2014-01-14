@@ -47,11 +47,15 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         // Using a lookup table to mirror the address bits
         BITMIRROR: array[0..15] of byte=(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15);
 
+        // Various timers, in milliseconds
+        COPENWAIT=5000;
+
+
         // Available outputs on 74LS673. Outputs Q0 to Q3 are connected to the address inputs of the 74150
         Q15=0; Q14=1; Q13=2; Q12=3; Q11=4; Q10=5; Q9=6; Q8=7; Q7=8; Q6=9; Q5=10; Q4=11;
         // Use more meaningful descriptions of the outputs in the code
         // Outputs Q4, Q12, Q13, Q14 and Q15 are not used for the moment. Status LED maybe ?
-        BUZZER_OUPUT_TRANSISTOR=Q11;
+        BUZZER_OUTPUT=Q11;
         BATTERY_RELAY=Q10;
         MAGLOCK1_RELAY=Q9;
         MAGLOCK2_RELAY=Q8;
@@ -234,7 +238,7 @@ begin
   0:busy_delay:=true; // Time's up !!
   65535:              // Reset timer
    begin
-    waittime:=timetowait;
+    waittime:=timetowait shr 4;
     busy_delay:=false;
    end;
   else                // Tick...
@@ -287,15 +291,16 @@ end;
 
 // Decompose a word into bitfields with description
 procedure debug_showbits (inputbits: TRegisterbits; screenshift: byte; description: TDbgArray );
-var i: byte;
+var i, oldx, oldy: byte;
 begin
+ oldx:=wherex; oldy:=wherey;
  for i:=0 to 15 do
   begin
    description[i][0]:=char (15);// Trim length
-   gotoxy (1 + screenshift, i + 2); write ( bits[inputbits[i]], ' ', description[i]);
-//   sleep (20);
+   gotoxy (1 + screenshift, i + 1); write ( bits[inputbits[i]], ' ', description[i]);
   end;
-  writeln;
+  gotoxy (oldx, oldy);
+//  writeln;
 end;
 
 ///////////// CHIP HANDLING FUNCTIONS /////////////
@@ -381,22 +386,28 @@ begin
      end
      else
       begin
-       gotoxy (1,1); writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
+       gotoxy (1,17); writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
        demomode:=true;
        inputs:=word2bits (65535); // Open contact = 1
        initkeyboard;
       end;
     SHMPointer^.state[S_DEMOMODE]:=demomode;
+    gotoxy (1,18);
 
     repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
      if demomode then inputs:=debug_alterinput (inputs)
                  else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
 
+// Do lock logic shit !!
      if SHMPointer^.command = 'open' then
       begin
-       if not busy_delay (open_wait, round (5000/16)) then
+       if not busy_delay (open_wait, COPENWAIT) then
         begin
-         writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
+//         writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
+         outputs[MAGLOCK1_RELAY]:=false;
+         outputs[MAGLOCK2_RELAY]:=false;
+         outputs[DOOR_STRIKE_RELAY]:=true;
+         outputs[BUZZER_OUTPUT]:=true;
         end
         else
         begin
@@ -407,28 +418,15 @@ begin
       end
       else
       begin
+       if STATIC_CONFIG[SC_MAGLOCK1] then outputs[MAGLOCK1_RELAY]:=true;
+       if STATIC_CONFIG[SC_MAGLOCK2] then outputs[MAGLOCK2_RELAY]:=true;
+       outputs[DOOR_STRIKE_RELAY]:=false;
+       outputs[BUZZER_OUTPUT]:=false;
+     end;
 
-
-
-      write ('.', ii);
-     outputs:=word2bits (1 shl ii);
-     if not invert then
-      begin
-       ii:=ii+1;
-       if ii >= 11 then invert:=true;;
-      end
-      else
-      begin
-       ii:=ii-1;
-       if ii <= 0 then invert:=false;
-      end;
-
-      end;
-
-
-
+// End of lock logic shit. Do some housekeeping
      if bits2word (oldout) <> bits2word (outputs) then debug_showbits (outputs, 0, DBGOUT);
-     if bits2word (oldin) <> bits2word (inputs) then debug_showbits (inputs, 25, DBGIN);
+     if bits2word (oldin) <> bits2word (inputs) then debug_showbits (inputs, 17, DBGIN);
      // Return current state to the shm buffer
      SHMPointer^.inputs:=inputs;
      SHMPointer^.outputs:=outputs;
@@ -437,9 +435,12 @@ begin
      oldout:=outputs;
      oldin:=inputs;
     until SHMPointer^.command = 'stop';
+    outputs:=word2bits (0);
     if SHMPointer^.shmmsg <> '' then writeln ('Quitting for reason: ',SHMPointer^.shmmsg);
     if demomode then donekeyboard;
     shmctl (shmid, IPC_RMID, nil);
+    if not demomode then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs)
+                    else debug_showbits (outputs, 0, DBGOUT);
    end;
 
    'test':
