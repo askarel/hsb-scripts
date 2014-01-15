@@ -36,6 +36,7 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                 Command: string;
                 SHMMsg:string;
                 end;
+        TConfigTextArray=ARRAY [0..63] of string[20];
 
 CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
@@ -66,6 +67,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         I15=15; I14=14; I13=13; I12=12; I11=11; I10=10; I9=9; I8=8; I7=7; I6=6; I5=5; I4=4; I3=3; I2=2; I1=1; I0=0;
         // Use more meaningful descriptions of the inputs in the code
         // Inputs OPTO4, IN3, IN2 and IN1 are not used for the moment.
+        // The numbers below correspond to the numbers printed on the screw terminals
         IN11=I0; IN10=I1; IN9=I2; IN8=I3; IN7=I4; IN6=I5; IN5=I6; IN4=I7; IN3=I8; IN2=I9; IN1=I10; OPTO1=I12; OPTO2=I13; OPTO3=I14; OPTO4=I15;
         PANIC_SENSE=I11;
         DOORBELL1=OPTO1;
@@ -83,6 +85,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         IS_OPEN=true;
         DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
         DBGOUTSTATESTR: Array [false..true] of string[5]=('On', 'Off');
+        CFGSTATESTR: Array [false..true] of string[8]=('Disabled','Enabled');
         DBGOUT: TDbgArray=('Q15 not used', 'Q14 not used', 'Q13 not used', 'Q12 not used', 'buzzer', 'battery', 'mag1 power', 'mag2 power', 'strike',
                                 'light', 'bell inhib.', 'Q4 not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
         DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
@@ -112,6 +115,17 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                 );
 
         // Static config
+        STATIC_CONFIG_STR: TConfigTextArray=('Maglock 1',
+                                             'Maglock 2',
+                                             'Tripwire loop',
+                                             'Box tamper',
+                                             'Mail notification',
+                                             'buzzer',
+                                             '',
+                                             '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '', '',
+                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
+                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '');
+
         STATIC_CONFIG: TLotsOfBits=(true,  // SC_MAGLOCK1 (Maglock 1 installed)
                                     false, // SC_MAGLOCK2 (Maglock 2 not installed)
                                     true,  // SC_TRIPWIRE_LOOP (Tripwire installed)
@@ -254,6 +268,16 @@ begin
  waittime:=65535;
 end;
 
+// Needed functions: event logging and buzzer handling
+
+
+
+procedure dump_config (bits: TLotsofbits; textdetail:TConfigTextArray );
+var i: byte;
+begin
+ for i:=0 to 63 do if textdetail[i] <> '' then writeln ('Config option ', i, ': ', textdetail[i], ': ', CFGSTATESTR[bits[i]]);
+end;
+
 ///////////// DEBUG FUNCTIONS /////////////
 
 function debug_alterinput(inbits: TRegisterbits): TRegisterbits;
@@ -345,8 +369,6 @@ var  shmkey: TKey;
      demomode: boolean;
      open_wait: word;
 
-     ii:byte; invert: boolean; // CODE TO REMOVE
-
 begin
  outputs:=word2bits (0);
  oldin:=word2bits (12345);
@@ -355,7 +377,6 @@ begin
 
  progname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@progname[1]), ord ('t'));
- invert:=false; ii:=0; // CODE TO REMOVE
 
  case paramstr (1) of
   'stop':
@@ -433,31 +454,36 @@ begin
      // End of lock logic shit.
 
      // Tamper processing
-     if inputs[TRIPWIRE_LOOP] = IS_OPEN and STATIC_CONFIG[SC_TRIPWIRE_LOOP] then
-      begin
-       writeln ('TRIPWIRE BROKEN');
-      end
-      else
-      begin
-       writeln ('tripwire ok');
-      end;
-     if inputs[BOX_TAMPER_SWITCH] = IS_OPEN and STATIC_CONFIG[SC_BOX_TAMPER_SWITCH] then
-      begin
-       writeln ('CONTROL BOX BREACHED');
-      end
-      else
-      begin
-       writeln ('control box closed');
-      end;
+     if STATIC_CONFIG[SC_TRIPWIRE_LOOP] then
+      if inputs[TRIPWIRE_LOOP] = IS_OPEN then
+       begin
+        writeln ('TRIPWIRE BROKEN');
+       end
+       else
+       begin
+        writeln ('tripwire ok');
+       end;
+
+     if STATIC_CONFIG[SC_BOX_TAMPER_SWITCH] then
+      if inputs[BOX_TAMPER_SWITCH] = IS_OPEN then
+       begin
+        writeln ('CONTROL BOX BREACHED');
+       end
+       else
+       begin
+        writeln ('control box closed');
+       end;
+
      // Check mail
-     if inputs[MAILBOX] = IS_CLOSED and STATIC_CONFIG[SC_MAILBOX] then
-      begin
-       writeln ('You have mail.');
-      end
-      else
-      begin
-       writeln ('No mail.');
-      end;
+     if STATIC_CONFIG[SC_MAILBOX] then
+      if inputs[MAILBOX] = IS_CLOSED then
+       begin
+        writeln ('You have mail.');
+       end
+       else
+       begin
+        writeln ('No mail.');
+       end;
 
      // Do some housekeeping
      if bits2word (oldout) <> bits2word (outputs) then debug_showbits (outputs, 0, DBGOUT);
@@ -471,11 +497,11 @@ begin
      oldin:=inputs;
     until SHMPointer^.command = 'stop';
     outputs:=word2bits (0);
+    debug_showbits (outputs, 0, DBGOUT);
     if SHMPointer^.shmmsg <> '' then writeln ('Quitting for reason: ',SHMPointer^.shmmsg);
-    if demomode then donekeyboard;
+    if demomode then donekeyboard
+                else write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
     shmctl (shmid, IPC_RMID, nil);
-    if not demomode then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs)
-                    else debug_showbits (outputs, 0, DBGOUT);
    end;
 
    'test':
@@ -487,6 +513,11 @@ begin
      writeln ('Forgetting everything about my running processes (NOT RECOMMENDED)');
      shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
      shmctl (shmid, IPC_RMID, nil);
+    end;
+
+   'diag':
+    begin
+     dump_config (STATIC_CONFIG, STATIC_CONFIG_STR);
     end;
 
    '':
