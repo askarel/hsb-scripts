@@ -47,7 +47,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         // Using a lookup table to mirror the address bits
         BITMIRROR: array[0..15] of byte=(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15);
 
-        // Various timers, in milliseconds
+        // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
         COPENWAIT=5000;
 
 
@@ -78,7 +78,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DOORHANDLE=IN7;
         LIGHTS_ON_SENSE=IN6;
         DOOR_CLOSED_SWITCH=IN5;
-        MAIL_DETECTION=IN4;     // Of course we'll have physical mail notification. :-)
+        MAILBOX=IN4;     // Of course we'll have physical mail notification. :-)
         IS_CLOSED=false;
         IS_OPEN=true;
         DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
@@ -88,7 +88,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
-        SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5;
+        SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5;
         // Status report only
         S_DEMOMODE=63; S_TUESDAY=62;
 
@@ -115,7 +115,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         STATIC_CONFIG: TLotsOfBits=(true,  // SC_MAGLOCK1 (Maglock 1 installed)
                                     false, // SC_MAGLOCK2 (Maglock 2 not installed)
                                     true,  // SC_TRIPWIRE_LOOP (Tripwire installed)
-                                    true,  // SC_TAMPER_SWITCH (Tamper switch installed)
+                                    true,  // SC_BOX_TAMPER_SWITCH (Tamper switch installed)
                                     true,  // SC_MAILBOX (Mail detection installed)
                                     true,  // SC_BUZZER (Let it make some noise)
                                     false,
@@ -398,33 +398,68 @@ begin
      if demomode then inputs:=debug_alterinput (inputs)
                  else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
 
-// Do lock logic shit !!
-     if SHMPointer^.command = 'open' then
-      begin
-       if not busy_delay (open_wait, COPENWAIT) then
-        begin
-//         writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
-         outputs[MAGLOCK1_RELAY]:=false;
-         outputs[MAGLOCK2_RELAY]:=false;
-         outputs[DOOR_STRIKE_RELAY]:=true;
-         outputs[BUZZER_OUTPUT]:=true;
-        end
-        else
-        begin
-         writeln ('relocking door.');
-         busy_delay_reset (open_wait);
-         SHMPointer^.command:='';
-        end;
+     // Do lock logic shit !!
+     if inputs[PANIC_SENSE] = IS_OPEN then
+      begin // PANIC MODE (topmost priority)
+       writeln ('PANIC');
       end
       else
       begin
-       if STATIC_CONFIG[SC_MAGLOCK1] then outputs[MAGLOCK1_RELAY]:=true;
-       if STATIC_CONFIG[SC_MAGLOCK2] then outputs[MAGLOCK2_RELAY]:=true;
-       outputs[DOOR_STRIKE_RELAY]:=false;
-       outputs[BUZZER_OUTPUT]:=false;
-     end;
+       if SHMPointer^.command = 'open' then
+        begin
+         if not busy_delay (open_wait, COPENWAIT) then
+          begin
+//           writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
+           outputs[MAGLOCK1_RELAY]:=false;
+           outputs[MAGLOCK2_RELAY]:=false;
+           outputs[DOOR_STRIKE_RELAY]:=true;
+           outputs[BUZZER_OUTPUT]:=true;
+          end
+          else
+          begin
+           writeln ('relocking door.');
+           busy_delay_reset (open_wait);
+           SHMPointer^.command:='';
+          end;
+        end
+        else
+        begin
+         if STATIC_CONFIG[SC_MAGLOCK1] then outputs[MAGLOCK1_RELAY]:=true;
+         if STATIC_CONFIG[SC_MAGLOCK2] then outputs[MAGLOCK2_RELAY]:=true;
+         outputs[DOOR_STRIKE_RELAY]:=false;
+         outputs[BUZZER_OUTPUT]:=false;
+       end;
+      end;
+     // End of lock logic shit.
 
-// End of lock logic shit. Do some housekeeping
+     // Tamper processing
+     if inputs[TRIPWIRE_LOOP] = IS_OPEN and STATIC_CONFIG[SC_TRIPWIRE_LOOP] then
+      begin
+       writeln ('TRIPWIRE BROKEN');
+      end
+      else
+      begin
+       writeln ('tripwire ok');
+      end;
+     if inputs[BOX_TAMPER_SWITCH] = IS_OPEN and STATIC_CONFIG[SC_BOX_TAMPER_SWITCH] then
+      begin
+       writeln ('CONTROL BOX BREACHED');
+      end
+      else
+      begin
+       writeln ('control box closed');
+      end;
+     // Check mail
+     if inputs[MAILBOX] = IS_CLOSED and STATIC_CONFIG[SC_MAILBOX] then
+      begin
+       writeln ('You have mail.');
+      end
+      else
+      begin
+       writeln ('No mail.');
+      end;
+
+     // Do some housekeeping
      if bits2word (oldout) <> bits2word (outputs) then debug_showbits (outputs, 0, DBGOUT);
      if bits2word (oldin) <> bits2word (inputs) then debug_showbits (inputs, 17, DBGIN);
      // Return current state to the shm buffer
