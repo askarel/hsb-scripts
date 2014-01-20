@@ -63,25 +63,27 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
 
         LOG_MSG_STOP=0; LOG_MSG_START=1; LOG_MSG_BOXTAMPER=2; LOG_MSG_TRIPWIRE=3; LOG_MSG_PANIC=4; LOG_MSG_HALLWAYLIGHT=5; LOG_MSG_MAIL=6;
         LOG_MSG_TUESDAY=7; LOG_MSG_MAG1LOCKED=8; LOG_MSG_MAG2LOCKED=9; LOG_MSG_DOORLEAFSWITCH=10; LOG_MSG_MAGLOCK1ON=11; LOG_MSG_MAGLOCK2ON=12;
-        LOG_MSG_STRIKEON=13; LOG_MSG_DOORISLOCKED=14; LOG_MSG_CMDLINEOPEN=15; LOG_MSG_SWITCHOPEN=16;
+        LOG_MSG_STRIKEON=13; LOG_MSG_DOORISLOCKED=14; LOG_MSG_CMDLINEOPEN=15; LOG_MSG_SWITCHOPEN=16; LOG_MSG_HANDLE=17; LOG_MSG_HANDLELIGHT=18;
 
-        LOG_MSG:TLogItem=( (msglevel: LOG_CRIT; msg: 'Application is exiting !!'; altlevel: LOG_NONE; altmsg: 'Application is running...'),
+        LOG_MSG:TLogItem=( (msglevel: LOG_CRIT; msg: 'Application is exiting !!'; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_CRIT; msg: 'TAMPER ALERT: CONTROL BOX IS BEING OPENED !!'; altlevel: LOG_DEBUG; altmsg: 'Control box is closed.'),
                            (msglevel: LOG_CRIT; msg: 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN !!'; altlevel: LOG_DEBUG; altmsg: 'Tripwire loop ok'),
                            (msglevel: LOG_CRIT; msg: 'PANIC SWITCH PRESSED: MAGLOCKS PHYSICALLY DISCONNECTED'; altlevel: LOG_DEBUG; altmsg: 'Don''t panic'),
                            (msglevel: LOG_INFO; msg: 'Hallway light is on'; altlevel: LOG_INFO; altmsg: 'Hallway light is off'),
                            (msglevel: LOG_EMAIL; msg: 'We have mail in the mailbox.'; altlevel: LOG_INFO; altmsg: 'No mail.'),
-                           (msglevel: LOG_EMAIL; msg: 'Tuesday mode: ring doorbell to enter'; altlevel: LOG_INFO; altmsg: 'Not in tuesday mode'),
+                           (msglevel: LOG_EMAIL; msg: 'Tuesday mode: ring doorbell to enter'; altlevel: LOG_EMAIL; altmsg: 'Leaving tuesday mode'),
                            (msglevel: LOG_INFO; msg: 'Door is locked by maglock 1'; altlevel: LOG_ERR; altmsg: 'Maglock 1 shoe NOT detected !!'),
                            (msglevel: LOG_INFO; msg: 'Door is locked by maglock 2'; altlevel: LOG_ERR; altmsg: 'Maglock 2 shoe NOT detected !!'),
-                           (msglevel: LOG_INFO; msg: 'Door is open.'; altlevel: LOG_INFO; altmsg: 'Door is closed.'),
+                           (msglevel: LOG_INFO; msg: 'Door is open.'; altlevel: LOG_INFO; altmsg: 'Door is closed (does not mean locked).'),
                            (msglevel: LOG_INFO; msg: 'Maglock 1 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 1 is off'),
                            (msglevel: LOG_INFO; msg: 'Maglock 2 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 2 is off'),
                            (msglevel: LOG_INFO; msg: 'Door strike is on'; altlevel: LOG_DEBUG; altmsg: 'Door strike is off'),
                            (msglevel: LOG_INFO; msg: 'Door is locked'; altlevel: LOG_EMAIL; altmsg: 'DOOR IS NOT LOCKED !!'),
                            (msglevel: LOG_EMAIL; msg: 'Door opening request from command line'; altlevel: LOG_NONE; altmsg: 'no opening request'),
-                           (msglevel: LOG_EMAIL; msg: 'Door opening request from button/handle'; altlevel: LOG_NONE; altmsg: 'No handle touched'),
+                           (msglevel: LOG_EMAIL; msg: 'Door opening request from button'; altlevel: LOG_NONE; altmsg: 'No button touched'),
+                           (msglevel: LOG_EMAIL; msg: 'Door opening request from handle'; altlevel: LOG_NONE; altmsg: 'handle not touched'),
+                           (msglevel: LOG_INFO; msg: 'Door opening request, light+handle'; altlevel: LOG_NONE; altmsg: 'Light+handle conditions not met'),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
@@ -102,10 +104,13 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''));
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_ERR; msg: 'Check wiring or leaf switch: door is maglocked, but i see it open.'; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_ERR; msg: 'Check wiring or maglock 1: Disabled in config, but i see it locked.'; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_ERR; msg: 'Check wiring or maglock 2: Disabled in config, but i see it locked.'; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: '')
+                           );
         // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
         COPENWAIT=5000;
 
@@ -124,7 +129,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         // Available inputs from the 74150
         I15=15; I14=14; I13=13; I12=12; I11=11; I10=10; I9=9; I8=8; I7=7; I6=6; I5=5; I4=4; I3=3; I2=2; I1=1; I0=0;
         // Use more meaningful descriptions of the inputs in the code
-        // Inputs OPTO4, IN3, IN2 and IN1 are not used for the moment.
+        // Inputs OPTO4, IN2 and IN1 are not used for the moment.
         // The numbers below correspond to the numbers printed on the screw terminals
         IN11=I0; IN10=I1; IN9=I2; IN8=I3; IN7=I4; IN6=I5; IN5=I6; IN4=I7; IN3=I8; IN2=I9; IN1=I10; OPTO1=I12; OPTO2=I13; OPTO3=I14; OPTO4=I15;
         PANIC_SENSE=I11;
@@ -139,6 +144,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         LIGHTS_ON_SENSE=IN6;
         DOOR_CLOSED_SWITCH=IN5;
         MAILBOX=IN4;     // Of course we'll have physical mail notification. :-)
+        DOOR_OPEN_BUTTON=IN3;
         IS_CLOSED=false;
         IS_OPEN=true;
         DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
@@ -150,8 +156,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
-        SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10;
-        // Status report only
+        SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11;
+        // Status bit block only
         S_DEMOMODE=63; S_TUESDAY=62;
 
         // Static config
@@ -166,8 +172,9 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              'Door leaf switch',
                                              'handle+light unlock',
                                              'Door unlock button',
+                                             'Handle unlock only',
                                              '',
-                                             '', '', '',  '', '', '', '', '', '', '', '', '', '', '',
+                                             '', '',  '', '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '');
 
@@ -181,12 +188,15 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     false, // SC_HALLWAY (Hallway light not connected)
                                     true,  // SC_DOORSWITCH (Door leaf switch installed)
                                     true,  // SC_HANDLEANDLIGHT (The light must be on to unlock with the handle)
-                                    false, // SC_DOORUNLOCKBUTTON (A push button to open the door)
+                                    true,  // SC_DOORUNLOCKBUTTON (A push button to open the door)
+                                    false, // SC_HANDLE (Unlock with the handle only: not recommended in HSBXL)
                                     false,
-                                    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                                    false,
+                                    false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                    false, false, false, false, // Unused
+                                    false, false, false,
+                                    false, // Unused
                                     false  // Unused
                                     );
 
@@ -268,7 +278,7 @@ end;
 
 // Needed functions: event logging and buzzer handling
 
-
+// Log an event
 procedure log_door_event (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits; doorevent:TLogItem; debugmode: boolean; extratext: string);
 var logstring: string;
 begin
@@ -292,6 +302,14 @@ begin
     if extratext = '' then writeln (logstring)
                       else writeln (logstring, ' (', extratext, ')');
    end;
+end;
+
+// Reset a log event
+procedure log_door_reset (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits);
+begin
+ if use_alt_msg
+  then flags[msgindex]:=true
+  else flags[msgindex]:=false;
 end;
 
 procedure dump_config (bits: TLotsofbits; textdetail:TConfigTextArray );
@@ -388,13 +406,14 @@ var  shmkey: TKey;
      inputs, outputs, oldin, oldout: TRegisterbits;
      SHMPointer: ^TSHMVariables;
      CurrentState, msgflags: TLotsOfBits;
-     demomode: boolean;
      open_wait: word;
 
 begin
  outputs:=word2bits (0);
  oldin:=word2bits (12345);
  oldout:=word2bits (12345);
+ fillchar (CurrentState, sizeof (CurrentState), 0);
+ fillchar (msgflags, sizeof (msgflags), 0);
  busy_delay_reset (open_wait);
 
  progname:=paramstr (0) + #0;
@@ -420,7 +439,7 @@ begin
     clrscr;
     if GPIO_Driver.MapIo then
      begin
-      demomode:=false;
+      CurrentState[S_DEMOMODE]:=false;
       GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
       GpF.SetPinMode (CLOCKPIN, OUTPUT);
       GpF.setpinmode (STROBEPIN, OUTPUT);
@@ -430,17 +449,17 @@ begin
      else
       begin
        gotoxy (1,17); writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
-       demomode:=true;
+       CurrentState[S_DEMOMODE]:=true;
        inputs:=word2bits (65535); // Open contact = 1
        initkeyboard;
       end;
-    SHMPointer^.state[S_DEMOMODE]:=demomode;
+    SHMPointer^.state[S_DEMOMODE]:=CurrentState[S_DEMOMODE];
     gotoxy (1,18);
     log_door_event (LOG_MSG_START, false, msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
     repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
-     if demomode then inputs:=debug_alterinput (inputs)
-                 else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
+     if CurrentState[S_DEMOMODE] then inputs:=debug_alterinput (inputs)
+                                 else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
 (********************************************************************************************************)
 
      // Do lock logic shit !!
@@ -451,8 +470,10 @@ begin
       end
       else
       begin
-
-       if SHMPointer^.command = 'open' then
+       if (SHMPointer^.command = 'open') or
+          (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)) or
+          (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)) or
+          (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))then
         begin
          if not busy_delay (open_wait, COPENWAIT) then
           begin
@@ -513,7 +534,7 @@ begin
     debug_showbits (outputs, 0, DBGOUT);
     // if SHMPointer^.shmmsg <> '' then
     log_door_event (LOG_MSG_STOP, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.shmmsg);
-    if demomode then donekeyboard
+    if CurrentState[S_DEMOMODE] then donekeyboard
                 else write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
     shmctl (shmid, IPC_RMID, nil);
    end;
