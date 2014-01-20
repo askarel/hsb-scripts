@@ -26,9 +26,11 @@ program blackknightio;
 
 uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc;
 
+CONST   SHITBITS=63;
+
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TRegisterbits=bitpacked array [0..15] of boolean; // Like a word: a 16 bits bitfield
-        TLotsofbits=bitpacked array [0..63] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
+        TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
         TSHMVariables=RECORD // What items should be exposed for IPC.
                 PIDofmain:TPid;
                 Inputs, outputs: TRegisterbits;
@@ -36,7 +38,13 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                 Command: string;
                 SHMMsg:string;
                 end;
-        TConfigTextArray=ARRAY [0..63] of string[20];
+        TConfigTextArray=ARRAY [0..SHITBITS] of string[20];
+        TLogItem=ARRAY [0..SHITBITS] OF RECORD // Log and debug text, with alternative and levels
+                msglevel: byte;
+                msg: string;
+                altlevel: byte;
+                altmsg: string;
+                end;
 
 CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
@@ -48,6 +56,85 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         // Using a lookup table to mirror the address bits
         BITMIRROR: array[0..15] of byte=(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15);
 
+        // Log level consts for the logging function
+        LOG_DEBUGMODE=false;
+        LOG_NONE=0;
+        LOG_DEBUG=1;
+        LOG_EMAIL=2;
+        LOG_CRIT=3;
+        LOG_ERR=4;
+        LOG_WARN=5;
+        LOG_INFO=6;
+
+        LOGPREFIXES: ARRAY [0..LOG_INFO] of string[10]=('', 'DEBUG', 'Mail', 'CRITICAL', 'ERROR', 'Warning', 'Info');
+
+        LOG_MSG_STOP=0; LOG_MSG_START=1; LOG_MSG_BOXTAMPER=2; LOG_MSG_TRIPWIRE=3; LOG_MSG_PANIC=4; LOG_MSG_HALLWAYLIGHT=5; LOG_MSG_MAIL=6;
+        LOG_MSG_TUESDAY=7; LOG_MSG_MAG1LOCKED=8; LOG_MSG_MAG2LOCKED=9; LOG_MSG_DOORLEAFSWITCH=10;
+
+        LOG_MSG:TLogItem=( (msglevel: LOG_CRIT; msg: 'Application is exiting !!'; altlevel: LOG_NONE; altmsg: 'Application is running...'),
+                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_CRIT; msg: 'TAMPER ALERT: CONTROL BOX IS BEING OPENED !!'; altlevel: LOG_DEBUG; altmsg: 'Control box is closed.'),
+                           (msglevel: LOG_CRIT; msg: 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN !!'; altlevel: LOG_DEBUG; altmsg: 'Tripwire loop ok'),
+                           (msglevel: LOG_CRIT; msg: 'PANIC SWITCH PRESSED: MAGLOCKS PHYSICALLY DISCONNECTED'; altlevel: LOG_DEBUG; altmsg: 'Don''t panic'),
+                           (msglevel: LOG_INFO; msg: 'Hallway light is on'; altlevel: LOG_INFO; altmsg: 'Hallway light is off'),
+                           (msglevel: LOG_EMAIL; msg: 'We have mail in the mailbox.'; altlevel: LOG_INFO; altmsg: 'No mail.'),
+                           (msglevel: LOG_EMAIL; msg: 'Tuesday mode: ring doorbell to enter'; altlevel: LOG_INFO; altmsg: 'Not in tuesday mode'),
+                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 1'; altlevel: LOG_WARN; altmsg: 'Maglock 1 shoe NOT detected !!'),
+                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 2'; altlevel: LOG_WARN; altmsg: 'Maglock 2 shoe NOT detected !!'),
+                           (msglevel: LOG_INFO; msg: 'Door is open.'; altlevel: LOG_INFO; altmsg: 'Door is closed.'),
+                           (msglevel: LOG_INFO; msg: 'Maglock 1 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 1 is off'),
+                           (msglevel: LOG_INFO; msg: 'Maglock 2 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 2 is off'),
+                           (msglevel: LOG_INFO; msg: 'Door strike is on'; altlevel: LOG_DEBUG; altmsg: 'Door strike is off'),
+                           (msglevel: LOG_INFO; msg: 'Door is locked'; altlevel: LOG_EMAIL; altmsg: 'DOOR IS NOT LOCKED !!'),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''));
         // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
         COPENWAIT=5000;
 
@@ -91,28 +178,10 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
-        SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5;
+        SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
+        SC_DOORSWITCH=8;
         // Status report only
         S_DEMOMODE=63; S_TUESDAY=62;
-
-        MessagesSTR: array [1..16] of string=(
-                'Door is unlocked',
-                'Door is open',
-                'Door is closed',
-                'Door is locked by maglock 1',
-                'Door is locked by maglock 2',
-                'Unlocking maglock 1',
-                'Unlocking maglock 2',
-                'Unlocking door strike',
-                'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN',
-                'TAMPER ALERT: THE CONTROL BOX IS BEING OPENED',
-                'You got mail',
-                'Warning: Maglock 1 is on but the shoe is not there',
-                'Warning: Maglock 2 is on but the shoe is not there',
-                'Hallway light is on',
-                'PANIC BUTTON PRESSED: MAGLOCKS PHYSICALLY DISCONNECTED',
-                'Tuesday mode: Ring doorbell to enter'
-                );
 
         // Static config
         STATIC_CONFIG_STR: TConfigTextArray=('Maglock 1',
@@ -121,8 +190,10 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              'Box tamper',
                                              'Mail notification',
                                              'buzzer',
-                                             '',
-                                             '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '', '',
+                                             'Backup Battery',
+                                             'Hallway lights',
+                                             'Door leaf switch',
+                                             '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '');
 
@@ -132,9 +203,9 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     true,  // SC_BOX_TAMPER_SWITCH (Tamper switch installed)
                                     true,  // SC_MAILBOX (Mail detection installed)
                                     true,  // SC_BUZZER (Let it make some noise)
-                                    false,
-                                    false,
-                                    false,
+                                    false, // SC_BATTERY (battery not attached)
+                                    false, // SC_HALLWAY (Hallway light not connected)
+                                    true,  // SC_DOORSWITCH (Door leaf switch installed)
                                     false,
                                     false,
                                     false,
@@ -252,7 +323,7 @@ begin
   0:busy_delay:=true; // Time's up !!
   65535:              // Reset timer
    begin
-    waittime:=timetowait shr 4;
+    waittime:=timetowait shr 4; // One iteration of the loop takes 16 mS
     busy_delay:=false;
    end;
   else                // Tick...
@@ -271,11 +342,29 @@ end;
 // Needed functions: event logging and buzzer handling
 
 
+procedure log_door_event (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits; doorevent:TLogItem; debugmode: boolean);
+begin
+ if use_alt_msg then
+  if flags[msgindex] then // Alternate message
+   begin
+    flags[msgindex]:=false;
+    writeln (FormatDateTime ('YYYY-MM-DD HH:MM:SS' , now), ' ', LOGPREFIXES[doorevent[msgindex].altlevel], ': ', doorevent[msgindex].altmsg);
+   end
+  else
+   begin
+   end
+  else
+  if not flags[msgindex] then
+   begin
+    flags[msgindex]:=true;
+    writeln (FormatDateTime ('YYYY-MM-DD HH:MM:SS' , now), ' ', LOGPREFIXES[doorevent[msgindex].msglevel], ': ', doorevent[msgindex].msg);
+   end;
+end;
 
 procedure dump_config (bits: TLotsofbits; textdetail:TConfigTextArray );
 var i: byte;
 begin
- for i:=0 to 63 do if textdetail[i] <> '' then writeln ('Config option ', i, ': ', textdetail[i], ': ', CFGSTATESTR[bits[i]]);
+ for i:=0 to SHITBITS do if textdetail[i] <> '' then writeln ('Config option ', i, ': ', textdetail[i], ': ', CFGSTATESTR[bits[i]]);
 end;
 
 ///////////// DEBUG FUNCTIONS /////////////
@@ -365,7 +454,7 @@ var  shmkey: TKey;
      progname:string;
      inputs, outputs, oldin, oldout: TRegisterbits;
      SHMPointer: ^TSHMVariables;
-     CurrentState: TLotsOfBits;
+     CurrentState, msgflags: TLotsOfBits;
      demomode: boolean;
      open_wait: word;
 
@@ -418,11 +507,13 @@ begin
     repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
      if demomode then inputs:=debug_alterinput (inputs)
                  else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
+(********************************************************************************************************)
 
      // Do lock logic shit !!
      if inputs[PANIC_SENSE] = IS_OPEN then
       begin // PANIC MODE (topmost priority)
-       writeln ('PANIC');
+       outputs[MAGLOCK1_RELAY]:=false;
+       outputs[MAGLOCK2_RELAY]:=false;
       end
       else
       begin
@@ -453,38 +544,24 @@ begin
       end;
      // End of lock logic shit.
 
+     // Panic logging
+     log_door_event (LOG_MSG_PANIC, not inputs[PANIC_SENSE] , msgflags, LOG_MSG, LOG_DEBUGMODE);
      // Tamper processing
      if STATIC_CONFIG[SC_TRIPWIRE_LOOP] then
-      if inputs[TRIPWIRE_LOOP] = IS_OPEN then
-       begin
-        writeln ('TRIPWIRE BROKEN');
-       end
-       else
-       begin
-        writeln ('tripwire ok');
-       end;
-
+      log_door_event (LOG_MSG_TRIPWIRE, inputs[TRIPWIRE_LOOP] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE);
      if STATIC_CONFIG[SC_BOX_TAMPER_SWITCH] then
-      if inputs[BOX_TAMPER_SWITCH] = IS_OPEN then
-       begin
-        writeln ('CONTROL BOX BREACHED');
-       end
-       else
-       begin
-        writeln ('control box closed');
-       end;
-
+      log_door_event (LOG_MSG_BOXTAMPER, inputs[BOX_TAMPER_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE);
      // Check mail
      if STATIC_CONFIG[SC_MAILBOX] then
-      if inputs[MAILBOX] = IS_CLOSED then
-       begin
-        writeln ('You have mail.');
-       end
-       else
-       begin
-        writeln ('No mail.');
-       end;
+      log_door_event (LOG_MSG_MAIL, inputs[MAILBOX] = IS_OPEN , msgflags, LOG_MSG, LOG_DEBUGMODE);
+     // Hallway light logging
+     if STATIC_CONFIG[SC_HALLWAY] then
+      log_door_event (LOG_MSG_HALLWAYLIGHT, inputs[LIGHTS_ON_SENSE] = IS_OPEN , msgflags, LOG_MSG, LOG_DEBUGMODE);
+     // Leaf switch
+     if STATIC_CONFIG[SC_DOORSWITCH] then
+      log_door_event (LOG_MSG_DOORLEAFSWITCH, inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE);
 
+(********************************************************************************************************)
      // Do some housekeeping
      if bits2word (oldout) <> bits2word (outputs) then debug_showbits (outputs, 0, DBGOUT);
      if bits2word (oldin) <> bits2word (inputs) then debug_showbits (inputs, 17, DBGIN);
