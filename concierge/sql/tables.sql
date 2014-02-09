@@ -54,5 +54,11 @@ create table if not exists validiban (id int not null auto_increment primary key
 				    country char(2) unique not null,
 				    validlength int not null);
 
+create table if not exists expenses (id int not null auto_increment primary key,
+				    deadline_date date,
+				    other_account char (40),
+				    message char (40),
+				    submitter_id int);
+
 -- Needed for seamless upgrade from previous versions. Do nothing if new field length is current.
 alter table bankstatements modify other_account_name char(50);

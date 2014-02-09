@@ -152,7 +152,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         CFGSTATESTR: Array [false..true] of string[8]=('Disabled','Enabled');
         DBGOUT: TDbgArray=('Q15 not used', 'Q14 not used', 'Q13 not used', 'Q12 not used', 'buzzer', 'battery', 'mag1 power', 'mag2 power', 'strike',
                                 'light', 'bell inhib.', 'Q4 not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
-        DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','IN 3',
+        DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','''Open door'' button',
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
@@ -179,7 +179,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '');
 
         STATIC_CONFIG: TLotsOfBits=(true,  // SC_MAGLOCK1 (Maglock 1 installed)
-                                    false, // SC_MAGLOCK2 (Maglock 2 not installed)
+                                    true, // SC_MAGLOCK2 (Maglock 2 not installed)
                                     true,  // SC_TRIPWIRE_LOOP (Tripwire installed)
                                     true,  // SC_BOX_TAMPER_SWITCH (Tamper switch installed)
                                     true,  // SC_MAILBOX (Mail detection installed)
@@ -276,7 +276,7 @@ begin
  waittime:=65535;
 end;
 
-// Needed functions: event logging and buzzer handling
+// Needed functions:  buzzer handling
 
 // Log an event
 procedure log_door_event (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits; doorevent:TLogItem; debugmode: boolean; extratext: string);
@@ -407,6 +407,7 @@ var  shmkey: TKey;
      SHMPointer: ^TSHMVariables;
      CurrentState, msgflags: TLotsOfBits;
      open_wait: word;
+     opendoor: byte; // A boolean can be used, but is very sketchy
 
 begin
  outputs:=word2bits (0);
@@ -414,6 +415,7 @@ begin
  oldout:=word2bits (12345);
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
+ opendoor:=0;
  busy_delay_reset (open_wait);
 
  progname:=paramstr (0) + #0;
@@ -470,14 +472,22 @@ begin
       end
       else
       begin
-       if (SHMPointer^.command = 'open') or
-          (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)) or
-          (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)) or
-          (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))then
+       if SHMPointer^.command = 'open' then
         begin
+         opendoor:=255;
+         SHMPointer^.command:='';
+        end;
+
+       if (opendoor = 255) or (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED))
+          or (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED))
+          or (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))
+          or (CurrentState[S_TUESDAY] and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))) then
+        begin
+
+         // somewhat sketchy below
          if not busy_delay (open_wait, COPENWAIT) then
           begin
-//           writeln ('Opening door. Reason: ', SHMPointer^.shmmsg);
+           opendoor:=255;
            outputs[MAGLOCK1_RELAY]:=false;
            outputs[MAGLOCK2_RELAY]:=false;
            outputs[DOOR_STRIKE_RELAY]:=true;
@@ -487,7 +497,7 @@ begin
           begin
            writeln ('relocking door.');
            busy_delay_reset (open_wait);
-           SHMPointer^.command:='';
+           opendoor:=0;
           end;
         end
         else
@@ -497,9 +507,13 @@ begin
          outputs[DOOR_STRIKE_RELAY]:=false;
          outputs[BUZZER_OUTPUT]:=false;
        end;
-
+       // somewhat sketchy above
       end;
      // End of lock logic shit.
+
+     // Leaf switch: sketchy
+//     if STATIC_CONFIG[SC_DOORSWITCH] then
+//      log_door_event (LOG_MSG_DOORLEAFSWITCH, inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
      // Panic logging
      log_door_event (LOG_MSG_PANIC, not inputs[PANIC_SENSE] , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
@@ -514,9 +528,6 @@ begin
      // Hallway light logging
      if STATIC_CONFIG[SC_HALLWAY] then
       log_door_event (LOG_MSG_HALLWAYLIGHT, inputs[LIGHTS_ON_SENSE] = IS_OPEN , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-     // Leaf switch
-     if STATIC_CONFIG[SC_DOORSWITCH] then
-      log_door_event (LOG_MSG_DOORLEAFSWITCH, inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
 (********************************************************************************************************)
      // Do some housekeeping
