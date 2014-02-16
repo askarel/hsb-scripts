@@ -37,6 +37,7 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                 state, Config :TLotsofbits;
                 Command: string;
                 SHMMsg:string;
+                lastcommandstatus: byte;
                 end;
         TConfigTextArray=ARRAY [0..SHITBITS] of string[20];
         TLogItem=ARRAY [0..SHITBITS] OF RECORD // Log and debug text, with alternative and levels
@@ -118,8 +119,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         // Available outputs on 74LS673. Outputs Q0 to Q3 are connected to the address inputs of the 74150
         Q15=0; Q14=1; Q13=2; Q12=3; Q11=4; Q10=5; Q9=6; Q8=7; Q7=8; Q6=9; Q5=10; Q4=11;
         // Use more meaningful descriptions of the outputs in the code
-        // Outputs Q4, Q12, Q13, Q14 and Q15 are not used for the moment. Status LED maybe ?
-        BUZZER_OUTPUT=Q11;
+        // Outputs Q12, Q13, Q14 and Q15 are not used for the moment. Status LED maybe ?
+        BUZZER_OUTPUT=Q4;
         BATTERY_RELAY=Q10;
         MAGLOCK1_RELAY=Q9;
         MAGLOCK2_RELAY=Q8;
@@ -150,8 +151,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
         DBGOUTSTATESTR: Array [false..true] of string[5]=('On', 'Off');
         CFGSTATESTR: Array [false..true] of string[8]=('Disabled','Enabled');
-        DBGOUT: TDbgArray=('Q15 not used', 'Q14 not used', 'Q13 not used', 'Q12 not used', 'buzzer', 'battery', 'mag1 power', 'mag2 power', 'strike',
-                                'light', 'bell inhib.', 'Q4 not used', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
+        DBGOUT: TDbgArray=('Q15 not used', 'Q14 not used', 'Q13 not used', 'Q12 not used', 'relay not used', 'battery', 'mag1 power', 'mag2 power', 'strike',
+                                'light', 'bell inhib.', 'Buzzer', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
         DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','''Open door'' button',
                                 'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
@@ -282,7 +283,7 @@ end;
 procedure log_door_event (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits; doorevent:TLogItem; debugmode: boolean; extratext: string);
 var logstring: string;
 begin
- logstring:=FormatDateTime ('YYY-MM-DD HH:MM:SS', now) + ' ';
+ logstring:=FormatDateTime ('YYYY-MM-DD HH:MM:SS', now) + ' ';
  if use_alt_msg then
   if flags[msgindex] then // Alternate message
    begin
@@ -424,6 +425,8 @@ begin
  case paramstr (1) of
   'stop':
     sendcommand (shmkey, 'stop', paramstr (2));
+  'tuesday':
+    sendcommand (shmkey, 'tuesday', paramstr (2));
   'open':
     sendcommand (shmkey, 'open', paramstr (2));
 
@@ -541,6 +544,7 @@ begin
      oldout:=outputs;
      oldin:=inputs;
     until SHMPointer^.command = 'stop';
+    // Cleaning up
     outputs:=word2bits (0);
     debug_showbits (outputs, 0, DBGOUT);
     // if SHMPointer^.shmmsg <> '' then
@@ -568,7 +572,7 @@ begin
 
    '':
    begin
-    writeln ('Usage: ', paramstr (0), ' [start|stop|test|open|diag]');
+    writeln ('Usage: ', paramstr (0), ' [start|stop|tuesday|test|open|diag]');
     halt (1);
    end;
  end;
