@@ -43,7 +43,7 @@ create table if not exists bankstatements (id int not null auto_increment primar
 				    this_account char(40),
 				    other_account char (40),
 				    amount decimal (15,2) not null,
-				    currency char (5) not null,
+				    currency char (5) not null, -- should be enum
 				    message char (60),
 				    other_account_name char (50),
 				    transactionhash binary(20) unique not null,
@@ -55,10 +55,21 @@ create table if not exists validiban (id int not null auto_increment primary key
 				    validlength int not null);
 
 create table if not exists expenses (id int not null auto_increment primary key,
+				    submitter_id int not null,
+				    description text not null,
+				    dest_account char (40),
+				    amount decimal (15,2) not null,
+				    currency char (5) not null, -- should be enum
+				    message char (60),
+				    occurence int not null, -- should be enum
+				    pay_method int not null, -- should be enum
 				    deadline_date date,
-				    other_account char (40),
-				    message char (40),
-				    submitter_id int);
+				    submit_date date,
+				    start_date date,
+				    stop_date date,
+				    flags int, -- should be a bitfield
+				    category int not null, -- should be enum
+				    in_year_seq_no int not null);
 
 -- Needed for seamless upgrade from previous versions. Do nothing if new field length is current.
 alter table bankstatements modify other_account_name char(50);
