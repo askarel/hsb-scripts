@@ -138,23 +138,23 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DOORBELL2=OPTO2;
         DOORBELL3=OPTO3;
         BOX_TAMPER_SWITCH=IN11;
-        TRIPWIRE_LOOP=IN10;
-        MAGLOCK1_RETURN=IN9;
-        MAGLOCK2_RETURN=IN8;
-        DOORHANDLE=IN7;
+        MAGLOCK1_RETURN=IN10;
+        MAGLOCK2_RETURN=IN9;
         LIGHTS_ON_SENSE=IN6;
         DOOR_CLOSED_SWITCH=IN5;
-        MAILBOX=IN4;     // Of course we'll have physical mail notification. :-)
-        DOOR_OPEN_BUTTON=IN3;
+        DOORHANDLE=IN4;
+        MAILBOX=IN3;     // Of course we'll have physical mail notification. :-)
+        TRIPWIRE_LOOP=IN2;
+        DOOR_OPEN_BUTTON=IN1;
         IS_CLOSED=false;
         IS_OPEN=true;
         DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
         DBGOUTSTATESTR: Array [false..true] of string[5]=('On', 'Off');
         CFGSTATESTR: Array [false..true] of string[8]=('Disabled','Enabled');
-        DBGOUT: TDbgArray=('Q15 not used', 'Q14 not used', 'Q13 not used', 'Q12 not used', 'relay not used', 'battery', 'mag1 power', 'mag2 power', 'strike',
+        DBGOUT: TDbgArray=('Green LED', 'Red LED', 'Q13 not used', 'Q12 not used', 'relay not used', 'battery', 'mag1 power', 'mag2 power', 'strike',
                                 'light', 'bell inhib.', 'Buzzer', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
-        DBGIN: TDbgArray=('TAMPER BOX','TRIPWIRE','MAG1 CLOSED','MAG2 CLOSED','HANDLE','LIGHT ON','DOOR SWITCH','MAILBOX','''Open door'' button',
-                                'IN 2','IN 1','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
+        DBGIN: TDbgArray=('TAMPER BOX','MAG1 CLOSED','MAG2 CLOSED','IN 8','IN 7','Light on sense','door closed','Handle',
+                          'Mailbox','Tripwire','opendoorbtn','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
         SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11;
@@ -179,10 +179,10 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '');
 
-        STATIC_CONFIG: TLotsOfBits=(true,  // SC_MAGLOCK1 (Maglock 1 installed)
+        STATIC_CONFIG: TLotsOfBits=(false,  // SC_MAGLOCK1 (Maglock 1 installed)
                                     true, // SC_MAGLOCK2 (Maglock 2 not installed)
                                     true,  // SC_TRIPWIRE_LOOP (Tripwire installed)
-                                    true,  // SC_BOX_TAMPER_SWITCH (Tamper switch installed)
+                                    false,  // SC_BOX_TAMPER_SWITCH (Tamper switch installed)
                                     true,  // SC_MAILBOX (Mail detection installed)
                                     true,  // SC_BUZZER (Let it make some noise)
                                     false, // SC_BATTERY (battery not attached)
@@ -491,6 +491,7 @@ begin
          if not busy_delay (open_wait, COPENWAIT) then
           begin
            opendoor:=255;
+           log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
            outputs[MAGLOCK1_RELAY]:=false;
            outputs[MAGLOCK2_RELAY]:=false;
            outputs[DOOR_STRIKE_RELAY]:=true;
