@@ -231,6 +231,17 @@ begin
  bits2str:=s;
 end;
 
+// Apparently, despite the crappy CPU on the raspberry pi, it is too fast for the shift register.
+// This should help the shift register to settle
+procedure wastecpucycles (waste: word);
+var i: word;
+begin
+ for i:=0 to waste do
+  asm
+   nop
+  end;
+end;
+
 // For IPC stuff (sending commands)
 Procedure sendcommand (shmkey: TKey; cmd, comment: string);
 var  shmid: longint;
@@ -377,11 +388,14 @@ begin
  for i:=0 to 15 do
  begin
   GpF.SetBit (clockpin);
+  wastecpucycles (4);
   if data[i] then GpF.SetBit (datapin) else GpF.Clearbit (datapin);
+  wastecpucycles (4);
   GpF.ClearBit (clockpin);
+  wastecpucycles (4);
  end;
-// GpF.SetBit (datapin); // Is that line needed ?
  GpF.SetBit (strobepin);
+ wastecpucycles (4);
  GpF.Clearbit (strobepin);
 end;
 
