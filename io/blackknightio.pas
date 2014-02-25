@@ -51,6 +51,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
         DATAPIN=25;
         READOUTPIN=4; // Output of 74150
+        MAXBOUNCES=8;
 
         bits:array [false..true] of char=('0', '1');
         // Hardware bug: i got the address lines reversed while building the board.
@@ -113,7 +114,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: '')
                            );
         // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
-        COPENWAIT=5000;
+        COPENWAIT=4000;
 
 
         // Available outputs on 74LS673. Outputs Q0 to Q3 are connected to the address inputs of the 74150
@@ -232,23 +233,23 @@ begin
  bits2str:=s;
 end;
 
-
+// TODO: glitch counter
 function debounceinput (inputbits: TRegisterbits; samplesize: byte): TRegisterbits;
 var i: byte;
 begin
  for i:=0 to 15 do
   begin
-   debounceinput_array[inputbits[i]][i]:= debounceinput_array[inputbits[i]][i] + 1;
+   debounceinput_array[inputbits[i]][i]:= debounceinput_array[inputbits[i]][i] + 1; // increment counters
 //   writeln ('input[0] state: ', inputbits[0], '  debounce 0[0]: ', debounceinput_array[false][0], '  debounce 1[0]', debounceinput_array[true][0], '    ');
    if debounceinput_array[false][i] >= samplesize then
     begin
-     debounceinput_array[true][i]:=0;
+     debounceinput_array[true][i]:=0; // We have a real false, resetting counters
      debounceinput_array[false][i]:=0;
      debounceinput[i]:=false;
     end;
    if debounceinput_array[true][i] >= samplesize then
     begin
-     debounceinput_array[true][i]:=0;
+     debounceinput_array[true][i]:=0; // we have a real true, resetting counters
      debounceinput_array[false][i]:=0;
      debounceinput[i]:=true;
     end;
@@ -446,7 +447,7 @@ var  shmkey: TKey;
      SHMPointer: ^TSHMVariables;
      CurrentState, msgflags: TLotsOfBits;
      open_wait: word;
-     opendoor: byte; // A boolean can be used, but is very sketchy
+     opendoor, i: byte; // A boolean can be used, but is very sketchy
 
 begin
  outputs:=word2bits (0);
@@ -454,6 +455,7 @@ begin
  oldout:=word2bits (12345);
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
+ for i:=0 to 15 do debounceinput_array[true][i]:=MAXBOUNCES;
  opendoor:=0;
  busy_delay_reset (open_wait);
 
@@ -501,8 +503,8 @@ begin
     log_door_event (LOG_MSG_START, false, msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
     repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
-     if CurrentState[S_DEMOMODE] then inputs:=debounceinput (debug_alterinput (inputs), 5)
-                                 else inputs:=debounceinput (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs), 4);
+     if CurrentState[S_DEMOMODE] then inputs:=debounceinput (debug_alterinput (inputs), MAXBOUNCES)
+                                 else inputs:=debounceinput (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs), MAXBOUNCES);
 (********************************************************************************************************)
 
      // Do lock logic shit !!
