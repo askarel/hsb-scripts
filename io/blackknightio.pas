@@ -231,6 +231,16 @@ begin
  bits2str:=s;
 end;
 
+
+function debounceinput (inputbits: TRegisterbits; samplesize, errorcount: byte): TRegisterbits;
+var i: byte;
+begin
+ for i:=0 to 15 do
+  begin
+
+  end;
+end;
+
 // Apparently, despite the crappy CPU on the raspberry pi, it is too fast for the shift register.
 // This should help the shift register to settle
 procedure wastecpucycles (waste: word);
@@ -238,7 +248,7 @@ var i: word;
 begin
  for i:=0 to waste do
   asm
-   nop
+   nop // How handy... This is portable ASM... :-)
   end;
 end;
 
@@ -367,13 +377,14 @@ end;
 
 // Decompose a word into bitfields with description
 procedure debug_showbits (inputbits: TRegisterbits; screenshift: byte; description: TDbgArray );
+const modchar: array [false..true] of char=(' ', '>');
 var i, oldx, oldy: byte;
 begin
  oldx:=wherex; oldy:=wherey;
  for i:=0 to 15 do
   begin
    description[i][0]:=char (15);// Trim length
-   gotoxy (1 + screenshift, i + 1); write ( bits[inputbits[i]], ' ', description[i]);
+   gotoxy (1 + screenshift, i + 1); write ( bits[inputbits[i]], modchar[false], description[i]);
   end;
   gotoxy (oldx, oldy);
 //  writeln;
