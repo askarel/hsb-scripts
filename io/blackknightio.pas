@@ -203,6 +203,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
 
 VAR     GPIO_Driver: TIODriver;
         GpF: TIOPort;
+        debounceinput_array: ARRAY[false..true, 0..15] of byte; // That one has to be global. No way around it.
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
 
@@ -232,12 +233,25 @@ begin
 end;
 
 
-function debounceinput (inputbits: TRegisterbits; samplesize, errorcount: byte): TRegisterbits;
+function debounceinput (inputbits: TRegisterbits; samplesize: byte): TRegisterbits;
 var i: byte;
 begin
  for i:=0 to 15 do
   begin
-
+   debounceinput_array[inputbits[i]][i]:= debounceinput_array[inputbits[i]][i] + 1;
+//   writeln ('input[0] state: ', inputbits[0], '  debounce 0[0]: ', debounceinput_array[false][0], '  debounce 1[0]', debounceinput_array[true][0], '    ');
+   if debounceinput_array[false][i] >= samplesize then
+    begin
+     debounceinput_array[true][i]:=0;
+     debounceinput_array[false][i]:=0;
+     debounceinput[i]:=false;
+    end;
+   if debounceinput_array[true][i] >= samplesize then
+    begin
+     debounceinput_array[true][i]:=0;
+     debounceinput_array[false][i]:=0;
+     debounceinput[i]:=true;
+    end;
   end;
 end;
 
@@ -352,27 +366,26 @@ begin
    k:=TranslateKeyEvent (GetKeyEvent);
    key:= KeyEventToString (k);
    case key of
-    '0': if inbits[0] then inbits[0]:=false else inbits[0]:=true;
-    '1': if inbits[1] then inbits[1]:=false else inbits[1]:=true;
-    '2': if inbits[2] then inbits[2]:=false else inbits[2]:=true;
-    '3': if inbits[3] then inbits[3]:=false else inbits[3]:=true;
-    '4': if inbits[4] then inbits[4]:=false else inbits[4]:=true;
-    '5': if inbits[5] then inbits[5]:=false else inbits[5]:=true;
-    '6': if inbits[6] then inbits[6]:=false else inbits[6]:=true;
-    '7': if inbits[7] then inbits[7]:=false else inbits[7]:=true;
-    '8': if inbits[8] then inbits[8]:=false else inbits[8]:=true;
-    '9': if inbits[9] then inbits[9]:=false else inbits[9]:=true;
-    'a': if inbits[10] then inbits[10]:=false else inbits[10]:=true;
-    'b': if inbits[11] then inbits[11]:=false else inbits[11]:=true;
-    'c': if inbits[12] then inbits[12]:=false else inbits[12]:=true;
-    'd': if inbits[13] then inbits[13]:=false else inbits[13]:=true;
-    'e': if inbits[14] then inbits[14]:=false else inbits[14]:=true;
-    'f': if inbits[15] then inbits[15]:=false else inbits[15]:=true;
+    '0': if inbits[0] then debug_alterinput[0]:=false else debug_alterinput[0]:=true;
+    '1': if inbits[1] then debug_alterinput[1]:=false else debug_alterinput[1]:=true;
+    '2': if inbits[2] then debug_alterinput[2]:=false else debug_alterinput[2]:=true;
+    '3': if inbits[3] then debug_alterinput[3]:=false else debug_alterinput[3]:=true;
+    '4': if inbits[4] then debug_alterinput[4]:=false else debug_alterinput[4]:=true;
+    '5': if inbits[5] then debug_alterinput[5]:=false else debug_alterinput[5]:=true;
+    '6': if inbits[6] then debug_alterinput[6]:=false else debug_alterinput[6]:=true;
+    '7': if inbits[7] then debug_alterinput[7]:=false else debug_alterinput[7]:=true;
+    '8': if inbits[8] then debug_alterinput[8]:=false else debug_alterinput[8]:=true;
+    '9': if inbits[9] then debug_alterinput[9]:=false else debug_alterinput[9]:=true;
+    'a': if inbits[10] then debug_alterinput[10]:=false else debug_alterinput[10]:=true;
+    'b': if inbits[11] then debug_alterinput[11]:=false else debug_alterinput[11]:=true;
+    'c': if inbits[12] then debug_alterinput[12]:=false else debug_alterinput[12]:=true;
+    'd': if inbits[13] then debug_alterinput[13]:=false else debug_alterinput[13]:=true;
+    'e': if inbits[14] then debug_alterinput[14]:=false else debug_alterinput[14]:=true;
+    'f': if inbits[15] then debug_alterinput[15]:=false else debug_alterinput[15]:=true;
     else writeln ('Invalid key: ',key);
    end;
   end;
  sleep (16); // Emulate the real deal
- debug_alterinput:=inbits;
 end;
 
 // Decompose a word into bitfields with description
@@ -488,8 +501,8 @@ begin
     log_door_event (LOG_MSG_START, false, msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
     repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
-     if CurrentState[S_DEMOMODE] then inputs:=debug_alterinput (inputs)
-                                 else inputs:=io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs);
+     if CurrentState[S_DEMOMODE] then inputs:=debounceinput (debug_alterinput (inputs), 5)
+                                 else inputs:=debounceinput (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs), 4);
 (********************************************************************************************************)
 
      // Do lock logic shit !!
