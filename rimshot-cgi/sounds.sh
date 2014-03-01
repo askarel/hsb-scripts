@@ -22,38 +22,35 @@
 #
 
 DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
-DIR_AUDIOFILES="./filez"
+PAGETITLE="Rimshot and other shit"
+#DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
-HASHDBFILE=".$ME.troll"
-PLAYMETHOD="PLAY"
 CSSMETHOD="CSS"
-RANDOMMETHOD="RANDOM"
+JSONMETHOD="JSON"
 PLAYPROG="paplay"
 
-# Create a database of hashed file names and directory names if it is missing
-# or if there is a change in the filesystem. Ignores any file/directory beginning with a dot.
-# Parameter 1: root of the directory to hash
-# File structure: hash filename
-mkhashdb()
-{
-    test -f "$1/$HASHDBFILE" || touch "$1/$HASHDBFILE" || (echo "$ME: Can't create $1/$HASHDBFILE"; exit)
-    if [ $( (find $1 \( -xtype f -o -xtype d \) \( -iname "*" ! -iname ".*" \) -print )|wc -l) != $(cat "$1/$HASHDBFILE"|wc -l) ]; then
-	rm -f "$1/$HASHDBFILE"
-	(find $1 \( -xtype f -o -xtype d \) \( -iname "*" ! -iname ".*" \) -print ) | while read LINE ; do
-	    printf "%s %s\n" "$(echo -n "$LINE"|md5sum|cut -d ' ' -f 1)" "$LINE" >> "$1/$HASHDBFILE"
-	done
-    fi
-}
+# Create the hash databases. Ignores any file/directory beginning with a dot.
+FILEHASHDB="$(find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
+DIRHASHDB="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
 
-# Pick a file using the filename hash
-# Return full path to the file if in database.
-# Return nothing if there is no match
-# parameter 1: target directory
-# parameter 2: requested file hash
-pickfilehash()
+# Self explanatory.
+err404()
 {
- grep "$2" "$1/$HASHDBFILE" | cut -d ' ' -f 2-
+cat << ERR404
+Status: 404 not found
+Content-Type: text/html
+
+<!DOCTYPE html>
+<HTML>
+ <HEAD>
+  <TITLE>$PAGETITLE</TITLE>
+ </HEAD>
+ <BODY>
+    <H1>404 FILE "$(basename "$1")" NOT FOUND</H1><BR />Troll another day.
+ </BODY>
+</HTML>
+ERR404
 }
 
 # Pick a file from specified directory
@@ -65,59 +62,97 @@ pickfilehash()
 pickfile()
 {
     ls -1 "$1" | while read line; do
-	test "$line" = "$(echo "$2"| sed -e 's/+/ /')" && echo "$1/$line"
+    test "$line" = "$2" && echo "$1/$line"
     done
 }
 
-# Show the html page
-# parameter 1: target directory
-showpage()
+# Pick a file using the filename hash
+# Return full path to the file if in database.
+# Return nothing if there is no match
+# parameter 1: requested file hash
+# THIS FUNCTION IS EXPOSED TO USER INPUT
+pickfilehash()
+{
+    echo "$FILEHASHDB"|grep "$1" | cut -d ' ' -f 2-
+}
+
+# Show the page
+showpagehash()
 {
 cat << EOM
-Content-type: text/html
-
-<!DOCTYPE html>
-<HTML>
  <HEAD>
-  <TITLE>Rimshot and other shit</TITLE>
+  <TITLE>$PAGETITLE</TITLE>
   <link rel="stylesheet" href="$ME?CSS=trollin.css" type="text/css" />
  </HEAD>
  <BODY>
-  <H1>HSBXL TROLLING PAGE</H1>
+  <DIV ID="TOP"><H1>HSBXL TROLLING PAGE 2.0 !!!</H1></DIV>
 EOM
 
-mkhashdb "$1"
+if [ -d "$DIR_AUDIOFILES" ]; then
+cat <<EOM
+  <FORM ACTION="$ME" method="POST">
+   <INPUT TYPE="SUBMIT" VALUE="RANDOM" NAME="RANDOM" CLASS="RANDOM soundBtn"></INPUT>
+   Jump to a section:
+EOM
 
-if [ -d "$1" ]; then
-    echo "  <FORM ACTION=\"$ME\" method=\"GET\">"
-    echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"RANDOM\" NAME=\"$RANDOMMETHOD\" CLASS=\"RANDOM soundBtn\"></INPUT>"
-    ls -1 "$1" | while read line ; do
-	echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$line\" NAME=\"$PLAYMETHOD\" CLASS=\"$(echo "$line"| sed -e 's/ /+/') soundBtn\"></INPUT>"
-#    cat "$1/$HASHDBFILE"| while read hash name ; do
-#	test -f "$name" && echo "   <INPUT TYPE=\"SUBMIT\" VALUE=\"$(basename $name)\" NAME=\"$PLAYMETHOD\" CLASS=\"$hash soundBtn\" ID=\"$hash\"></INPUT>"
+    echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make jump bar
+	test "$directoryname" != "$DIR_AUDIOFILES" && printf "    <A HREF=\"#%s\">%s</A>\n" "$directoryhash" "$(basename "$directoryname")"
     done
-    echo "  </FORM>"
+    echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
+	test "$directoryname" != $DIR_AUDIOFILES && printf "<DIV ID=\"%s\"><H2>%s <A HREF=\"#TOP\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
+	echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
+	    test "$(dirname "$filename")" = "$directoryname" && 
+		printf "   <INPUT TYPE=\"SUBMIT\" VALUE=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\"></INPUT>\n" "$(basename "$filename")" "$filehash" "$filehash"
+	done
+    done
 fi
-
-printf " </BODY>\n</HTML>\n"
+printf " </BODY>\n"
 }
 
-# content dispatcher
 case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
-    "$PLAYMETHOD")
-	showpage "$DIR_AUDIOFILES"
-	SNDFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
-	test -n "$( pickfilehash "$DIR_AUDIOFILES" "$SNDFILE" )" && $PLAYPROG "$( pickfilehash "$DIR_AUDIOFILES" "$SNDFILE" )"
-	;;
     "$CSSMETHOD")
 	CSSFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
-	test -n "$( pickfile "$CSSDIR" "$CSSFILE" )" && printf "Content-type: text/css\n\n" && cat "$( pickfile "$CSSDIR" "$CSSFILE" )"
+	if [ -n "$( pickfile "$CSSDIR" "$CSSFILE" )" ]; then
+	    printf "Content-type: text/css\n\n"
+	    cat "$( pickfile "$CSSDIR" "$CSSFILE" )"
+	    else
+	    err404 "$CSSFILE"
+	fi
 	;;
-    "$RANDOMMETHOD")
-	showpage "$DIR_AUDIOFILES"
-	$PLAYPROG "$DIR_AUDIOFILES/$(ls -1 "$DIR_AUDIOFILES" |shuf -n 1)" &
+    "$JSONMETHOD") # Dump a JSON version of the page
+	printf 'Content-type: application/json\n\n'
+	printf '{\n	"Title:": "%s"' "$PAGETITLE"
+	if [ -d "$DIR_AUDIOFILES" ]; then
+	    printf ',\n		"buttons": {\n		"RANDOM": "RANDOM"'
+	    echo "$DIRHASHDB"| while read directoryhash directoryname; do 
+		test "$directoryname" != "$DIR_AUDIOFILES" && jdirectoryname="$(basename "$directoryname")"
+		printf ',\n		"%s": {\n			"directoryname": "%s"' "$directoryhash" "$jdirectoryname"
+		echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
+		    test "$(dirname "$filename")" = "$directoryname" && 
+			printf ',\n			"%s": "%s"' "$filehash" "$(basename "$filename")" 
+		done
+		printf '\n			}'
+	    done
+	    printf '\n		}'
+	fi
+	printf "\n}\n"
 	;;
-    *)
-	showpage "$DIR_AUDIOFILES"
+    *) # Catch-all method. Data is in the POST
+	printf "Content-type: text/html\n\n<!DOCTYPE html>\n<HTML>\n"
+	showpagehash
+	# Process POSTed data
+	if [ "$REQUEST_METHOD" = "POST" -a -n "$CONTENT_LENGTH" ]; then
+	    read -n "$CONTENT_LENGTH" POSTDATA
+	    POSTDATAVAR="$(echo -n "$POSTDATA"|cut -d '=' -f 1)"
+	    case "$POSTDATAVAR" in
+		"RANDOM")
+		    $PLAYPROG "$(pickfilehash "$(echo "$FILEHASHDB" |cut -d ' ' -f 1|shuf -n 1)")" & #" choke alert
+		    ;;
+		*)
+		    test -n "$( pickfilehash "$POSTDATAVAR" )" && $PLAYPROG "$( pickfilehash "$POSTDATAVAR")"
+		    ;;
+	    esac
+	fi
+	printf "</HTML>\n"
 	;;
 esac

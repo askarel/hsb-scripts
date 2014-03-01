@@ -122,10 +122,10 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         // Use more meaningful descriptions of the outputs in the code
         // Outputs Q12, Q13, Q14 and Q15 are not used for the moment. Status LED maybe ?
         BUZZER_OUTPUT=Q4;
-        BATTERY_RELAY=Q10;
+        BATTERY_RELAY=Q7;
         MAGLOCK1_RELAY=Q9;
         MAGLOCK2_RELAY=Q8;
-        DOOR_STRIKE_RELAY=Q7;
+        DOOR_STRIKE_RELAY=Q10;
         LIGHT_CONTROL_RELAY=Q6;
         DOORBELL_INHIBIT_RELAY=Q5;
         // Available inputs from the 74150
@@ -152,7 +152,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
         DBGOUTSTATESTR: Array [false..true] of string[5]=('On', 'Off');
         CFGSTATESTR: Array [false..true] of string[8]=('Disabled','Enabled');
-        DBGOUT: TDbgArray=('Green LED', 'Red LED', 'Q13 not used', 'Q12 not used', 'relay not used', 'battery', 'mag1 power', 'mag2 power', 'strike',
+        DBGOUT: TDbgArray=('Green LED', 'Red LED', 'Q13 not used', 'Q12 not used', 'relay not used', 'strike', 'mag1 power', 'mag2 power', 'not used',
                                 'light', 'bell inhib.', 'Buzzer', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
         DBGIN: TDbgArray=('TAMPER BOX','MAG1 CLOSED','MAG2 CLOSED','IN 8','IN 7','Light on sense','door closed','Handle',
                           'Mailbox','Tripwire','opendoorbtn','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
@@ -290,6 +290,30 @@ begin
       halt (1);
      end;
 end;
+
+(*
+// Rewriting the busy_delay bunch of functions
+function busy_delay_calibrate: longint;
+begin
+
+end;
+
+function busy_delay_init (var ;
+
+procedure busy_delay_tick;
+
+function busy_delay_is_expired: boolean;
+
+procedure busy_delay_reset
+
+procedure busy_delay_
+
+*)
+
+(*
+// Buzzer functions
+
+*)
 
 function busy_delay (var waittime: word; timetowait: word): boolean;
 begin
