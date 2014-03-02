@@ -178,11 +178,11 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              '',
                                              '', '',  '', '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
-                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '');
+                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', 'Stop order', 'Tuesday mode', 'Demo mode');
 
         STATIC_CONFIG: TLotsOfBits=(false,  // SC_MAGLOCK1 (Maglock 1 installed)
                                     true, // SC_MAGLOCK2 (Maglock 2 not installed)
-                                    true,  // SC_TRIPWIRE_LOOP (Tripwire installed)
+                                    false,  // SC_TRIPWIRE_LOOP (Tripwire not installed)
                                     false,  // SC_BOX_TAMPER_SWITCH (Tamper switch installed)
                                     true,  // SC_MAILBOX (Mail detection installed)
                                     true,  // SC_BUZZER (Let it make some noise)
@@ -381,17 +381,20 @@ end;
 ///////////// DEBUG FUNCTIONS /////////////
 
 // Decompose a word into bitfields with description
-procedure debug_showbits (inputbits: TRegisterbits; screenshift: byte; description: TDbgArray );
+procedure debug_showbits (inputbits, oldbits: TRegisterbits; screenshift: byte; description: TDbgArray );
 const modchar: array [false..true] of char=(' ', '>');
 var i, oldx, oldy: byte;
 begin
- oldx:=wherex; oldy:=wherey;
- for i:=0 to 15 do
-  begin
-   description[i][0]:=char (15);// Trim length
-   gotoxy (1 + screenshift, i + 1); write ( bits[inputbits[i]], modchar[false], description[i]);
-  end;
-  gotoxy (oldx, oldy);
+ if bits2word (inputbits) <> bits2word (oldbits) then
+ begin
+  oldx:=wherex; oldy:=wherey;
+  for i:=0 to 15 do
+   begin
+    description[i][0]:=char (15);// Trim length
+    gotoxy (1 + screenshift, i + 2); write ( bits[inputbits[i]], modchar[(inputbits[i]<>oldbits[i])], description[i]);
+   end;
+   gotoxy (oldx, oldy);
+ end;
 //  writeln;
 end;
 
@@ -404,6 +407,7 @@ var  shmid: longint;
      key: string;
      K: TKeyEvent;
      quitcmd: boolean;
+     i: byte;
 begin
  shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
  if shmid = -1 then
@@ -412,11 +416,12 @@ begin
    shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
    // Add test for shmget error here ?
    SHMPointer:=shmat (shmid, nil, 0);
-   oldin:=word2bits (12345);
-   oldout:=word2bits (12345);
+   oldin:=word2bits (0);
+   oldout:=word2bits (0);
    quitcmd:=false;
    initkeyboard;
    clrscr;
+   writeln (' Black Knight Monitor  -- keys: k kill system - q quit monitor - o open door - r refresh');
    gotoxy (1,18);
    while not ( SHMPointer^.state[S_STOP] or quitcmd ) do
     begin
@@ -443,18 +448,33 @@ begin
         'e': if SHMPointer^.inputs[14] then SHMPointer^.fakeinputs[14]:=false else SHMPointer^.fakeinputs[14]:=true;
         'f': if SHMPointer^.inputs[15] then SHMPointer^.fakeinputs[15]:=false else SHMPointer^.fakeinputs[15]:=true;
         'q': quitcmd:=true;
-        'k': begin SHMPointer^.command:='stop'; SHMPointer^.SHMMSG:='Quit order given by monitor'; end;
+        'k': begin
+              SHMPointer^.command:='stop';
+              SHMPointer^.SHMMSG:='Quit order given by monitor';
+             end;
+        'o': begin
+              SHMPointer^.command:='open';
+              SHMPointer^.SHMMSG:='Open order given by monitor';
+             end;
+        'r': begin
+              for i:=0 to 15 do
+               begin
+                oldout[i]:=not SHMPointer^.outputs[i];
+                oldin[i]:= not SHMPointer^.inputs[i];
+               end;
+              writeln ('Forcing refresh');
+             end;
         else writeln ('Invalid key: ',key);
        end;
       end;
      // Do some housekeeping
-     debug_showbits (SHMPointer^.outputs, 0, DBGOUT);
-     debug_showbits (SHMPointer^.inputs, 17, DBGIN);
-//     if bits2word (oldout) <> bits2word (SHMPointer^.outputs) then debug_showbits (SHMPointer^.outputs, 0, DBGOUT);
-//     if bits2word (oldin) <> bits2word (SHMPointer^.inputs) then debug_showbits (SHMPointer^.inputs, 17, DBGIN);
+     debug_showbits (SHMPointer^.outputs, oldout, 0, DBGOUT);
+     debug_showbits (SHMPointer^.inputs, oldin, 17, DBGIN);
      oldout:=SHMPointer^.outputs;
      oldin:=SHMPointer^.inputs;
+     sleep (1);
     end;
+   // Cleanup
    if quitcmd then writeln ('Quitting monitor.')
               else writeln ('Main program stopped. Quitting as well.');
    donekeyboard;
@@ -672,7 +692,7 @@ begin
     sendcommand (shmkey, 'open', paramstr (2));
   'start':
     run_door (shmkey);
-  'test': // Interactive test mode
+  'monitor': // Interactive monitor mode
     repeat
      sleep (500);
     until run_test_mode (shmkey);
@@ -688,7 +708,7 @@ begin
     end;
   '':
    begin
-    writeln ('Usage: ', paramstr (0), ' [start|stop|tuesday|test|open|diag]');
+    writeln ('Usage: ', paramstr (0), ' [start|stop|tuesday|monitor|open|diag]');
     halt (1);
    end;
  end;
