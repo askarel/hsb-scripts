@@ -139,7 +139,6 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	;;
     *) # Catch-all method. Data is in the POST
 	printf "Content-type: text/html\n\n<!DOCTYPE html>\n<HTML>\n"
-	showpagehash
 	# Process POSTed data
 	if [ "$REQUEST_METHOD" = "POST" -a -n "$CONTENT_LENGTH" ]; then
 	    read -n "$CONTENT_LENGTH" POSTDATA
@@ -153,6 +152,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 		    ;;
 	    esac
 	fi
+	showpagehash
 	printf "</HTML>\n"
 	;;
 esac
