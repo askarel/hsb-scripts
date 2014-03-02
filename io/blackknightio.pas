@@ -33,7 +33,7 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
         TSHMVariables=RECORD // What items should be exposed for IPC.
                 PIDofmain:TPid;
-                Inputs, outputs: TRegisterbits;
+                Inputs, outputs, fakeinputs: TRegisterbits;
                 state, Config :TLotsofbits;
                 Command: string;
                 SHMMsg:string;
@@ -160,7 +160,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
         SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11;
         // Status bit block only
-        S_DEMOMODE=63; S_TUESDAY=62;
+        S_DEMOMODE=63; S_TUESDAY=62; S_STOP=61;
 
         // Static config
         STATIC_CONFIG_STR: TConfigTextArray=('Maglock 1',
@@ -197,7 +197,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                    false, false, false,
+                                    false, false,
+                                    false, // Unused
                                     false, // Unused
                                     false  // Unused
                                     );
@@ -239,6 +240,7 @@ var i: byte;
 begin
  for i:=0 to 15 do
   begin
+//  delay (10);
    debounceinput_array[inputbits[i]][i]:= debounceinput_array[inputbits[i]][i] + 1; // increment counters
 //   writeln ('input[0] state: ', inputbits[0], '  debounce 0[0]: ', debounceinput_array[false][0], '  debounce 1[0]', debounceinput_array[true][0], '    ');
    if debounceinput_array[false][i] >= samplesize then
@@ -298,15 +300,12 @@ begin
 
 end;
 
-function busy_delay_init (var ;
+procedure busy_delay_init (var ;
 
 procedure busy_delay_tick;
 
 function busy_delay_is_expired: boolean;
 
-procedure busy_delay_reset
-
-procedure busy_delay_
 
 *)
 
@@ -381,38 +380,6 @@ end;
 
 ///////////// DEBUG FUNCTIONS /////////////
 
-function debug_alterinput(inbits: TRegisterbits): TRegisterbits;
-var key: string;
-    K: TKeyEvent;
-begin
- K:=PollKeyEvent; // Check for keyboard input
- if k<>0 then // Key pressed ?
-  begin
-   k:=TranslateKeyEvent (GetKeyEvent);
-   key:= KeyEventToString (k);
-   case key of
-    '0': if inbits[0] then debug_alterinput[0]:=false else debug_alterinput[0]:=true;
-    '1': if inbits[1] then debug_alterinput[1]:=false else debug_alterinput[1]:=true;
-    '2': if inbits[2] then debug_alterinput[2]:=false else debug_alterinput[2]:=true;
-    '3': if inbits[3] then debug_alterinput[3]:=false else debug_alterinput[3]:=true;
-    '4': if inbits[4] then debug_alterinput[4]:=false else debug_alterinput[4]:=true;
-    '5': if inbits[5] then debug_alterinput[5]:=false else debug_alterinput[5]:=true;
-    '6': if inbits[6] then debug_alterinput[6]:=false else debug_alterinput[6]:=true;
-    '7': if inbits[7] then debug_alterinput[7]:=false else debug_alterinput[7]:=true;
-    '8': if inbits[8] then debug_alterinput[8]:=false else debug_alterinput[8]:=true;
-    '9': if inbits[9] then debug_alterinput[9]:=false else debug_alterinput[9]:=true;
-    'a': if inbits[10] then debug_alterinput[10]:=false else debug_alterinput[10]:=true;
-    'b': if inbits[11] then debug_alterinput[11]:=false else debug_alterinput[11]:=true;
-    'c': if inbits[12] then debug_alterinput[12]:=false else debug_alterinput[12]:=true;
-    'd': if inbits[13] then debug_alterinput[13]:=false else debug_alterinput[13]:=true;
-    'e': if inbits[14] then debug_alterinput[14]:=false else debug_alterinput[14]:=true;
-    'f': if inbits[15] then debug_alterinput[15]:=false else debug_alterinput[15]:=true;
-    else writeln ('Invalid key: ',key);
-   end;
-  end;
- sleep (16); // Emulate the real deal
-end;
-
 // Decompose a word into bitfields with description
 procedure debug_showbits (inputbits: TRegisterbits; screenshift: byte; description: TDbgArray );
 const modchar: array [false..true] of char=(' ', '>');
@@ -426,6 +393,77 @@ begin
   end;
   gotoxy (oldx, oldy);
 //  writeln;
+end;
+
+// This run as another process and will monitor the SHM buffer for changes.
+// If in demo mode, you will be able to fiddle the inputs
+function run_test_mode (SHMKey: TKey): boolean;
+var  shmid: longint;
+     SHMPointer: ^TSHMVariables;
+     oldin, oldout: TRegisterbits;
+     key: string;
+     K: TKeyEvent;
+     quitcmd: boolean;
+begin
+ shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
+ if shmid = -1 then
+  begin
+   run_test_mode:=true;
+   shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
+   // Add test for shmget error here ?
+   SHMPointer:=shmat (shmid, nil, 0);
+   oldin:=word2bits (12345);
+   oldout:=word2bits (12345);
+   quitcmd:=false;
+   initkeyboard;
+   clrscr;
+   gotoxy (1,18);
+   while not ( SHMPointer^.state[S_STOP] or quitcmd ) do
+    begin
+     K:=PollKeyEvent; // Check for keyboard input
+     if k<>0 then // Key pressed ?
+      begin
+       k:=TranslateKeyEvent (GetKeyEvent);
+       key:= KeyEventToString (k);
+       case key of
+        '0': if SHMPointer^.inputs[0] then SHMPointer^.fakeinputs[0]:=false else SHMPointer^.fakeinputs[0]:=true;
+        '1': if SHMPointer^.inputs[1] then SHMPointer^.fakeinputs[1]:=false else SHMPointer^.fakeinputs[1]:=true;
+        '2': if SHMPointer^.inputs[2] then SHMPointer^.fakeinputs[2]:=false else SHMPointer^.fakeinputs[2]:=true;
+        '3': if SHMPointer^.inputs[3] then SHMPointer^.fakeinputs[3]:=false else SHMPointer^.fakeinputs[3]:=true;
+        '4': if SHMPointer^.inputs[4] then SHMPointer^.fakeinputs[4]:=false else SHMPointer^.fakeinputs[4]:=true;
+        '5': if SHMPointer^.inputs[5] then SHMPointer^.fakeinputs[5]:=false else SHMPointer^.fakeinputs[5]:=true;
+        '6': if SHMPointer^.inputs[6] then SHMPointer^.fakeinputs[6]:=false else SHMPointer^.fakeinputs[6]:=true;
+        '7': if SHMPointer^.inputs[7] then SHMPointer^.fakeinputs[7]:=false else SHMPointer^.fakeinputs[7]:=true;
+        '8': if SHMPointer^.inputs[8] then SHMPointer^.fakeinputs[8]:=false else SHMPointer^.fakeinputs[8]:=true;
+        '9': if SHMPointer^.inputs[9] then SHMPointer^.fakeinputs[9]:=false else SHMPointer^.fakeinputs[9]:=true;
+        'a': if SHMPointer^.inputs[10] then SHMPointer^.fakeinputs[10]:=false else SHMPointer^.fakeinputs[10]:=true;
+        'b': if SHMPointer^.inputs[11] then SHMPointer^.fakeinputs[11]:=false else SHMPointer^.fakeinputs[11]:=true;
+        'c': if SHMPointer^.inputs[12] then SHMPointer^.fakeinputs[12]:=false else SHMPointer^.fakeinputs[12]:=true;
+        'd': if SHMPointer^.inputs[13] then SHMPointer^.fakeinputs[13]:=false else SHMPointer^.fakeinputs[13]:=true;
+        'e': if SHMPointer^.inputs[14] then SHMPointer^.fakeinputs[14]:=false else SHMPointer^.fakeinputs[14]:=true;
+        'f': if SHMPointer^.inputs[15] then SHMPointer^.fakeinputs[15]:=false else SHMPointer^.fakeinputs[15]:=true;
+        'q': quitcmd:=true;
+        'k': begin SHMPointer^.command:='stop'; SHMPointer^.SHMMSG:='Quit order given by monitor'; end;
+        else writeln ('Invalid key: ',key);
+       end;
+      end;
+     // Do some housekeeping
+     debug_showbits (SHMPointer^.outputs, 0, DBGOUT);
+     debug_showbits (SHMPointer^.inputs, 17, DBGIN);
+//     if bits2word (oldout) <> bits2word (SHMPointer^.outputs) then debug_showbits (SHMPointer^.outputs, 0, DBGOUT);
+//     if bits2word (oldin) <> bits2word (SHMPointer^.inputs) then debug_showbits (SHMPointer^.inputs, 17, DBGIN);
+     oldout:=SHMPointer^.outputs;
+     oldin:=SHMPointer^.inputs;
+    end;
+   if quitcmd then writeln ('Quitting monitor.')
+              else writeln ('Main program stopped. Quitting as well.');
+   donekeyboard;
+  end
+ else
+  begin // We may have just created an instance. Killing it.
+   shmctl (shmid, IPC_RMID, nil);
+   writeln (paramstr (0),': not started. Waiting for startup...');
+  end;
 end;
 
 ///////////// CHIP HANDLING FUNCTIONS /////////////
@@ -463,72 +501,70 @@ begin
  io_673_150:=word2bits (gpioword);
 end;
 
-///////////// MAIN BLOCK /////////////
-var  shmkey: TKey;
-     shmid: longint;
-     progname:string;
-     inputs, outputs, oldin, oldout: TRegisterbits;
+///////////// RUN THE FUCKING DOOR /////////////
+
+// The brain of the whole system. This is the part that require intensive debugging
+procedure process_door_io (var inputs, outputs: TRegisterbits);
+begin
+
+end;
+
+// Spaghetti code warning !!
+// This is the dirtiest function: need a rewrite. It is not maintainable.
+procedure run_door (shmkey: TKey);
+var  shmid: longint;
+     inputs, outputs : TRegisterbits;
      SHMPointer: ^TSHMVariables;
      CurrentState, msgflags: TLotsOfBits;
      open_wait: word;
-     opendoor, i: byte; // A boolean can be used, but is very sketchy
-
+     opendoor, i, dryrun: byte; // A boolean can be used, but is very sketchy
 begin
+ shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
+ if shmid = -1 then
+  begin
+   writeln (paramstr (0),': not starting: already running.');
+   halt (1);
+  end;
+ SHMPointer:=shmat (shmid, nil, 0);
+ fillchar (SHMPointer^, sizeof (TSHMVariables), 0);
+ SHMPointer^.PIDOfMain:=fpGetPid;
+ SHMPointer^.fakeinputs:=word2bits (65535);
  outputs:=word2bits (0);
- oldin:=word2bits (12345);
- oldout:=word2bits (12345);
+ dryrun:=MAXBOUNCES+2;
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
- for i:=0 to 15 do debounceinput_array[true][i]:=MAXBOUNCES;
+ fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
+// for i:=0 to 15 do debounceinput_array[true][i]:=MAXBOUNCES;
  opendoor:=0;
  busy_delay_reset (open_wait);
+ if GPIO_Driver.MapIo then
+  begin
+   CurrentState[S_DEMOMODE]:=false;
+   GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
+   GpF.SetPinMode (CLOCKPIN, OUTPUT);
+   GpF.setpinmode (STROBEPIN, OUTPUT);
+   GpF.setpinmode (DATAPIN, OUTPUT);
+   GpF.setpinmode (READOUTPIN, INPUT);
+  end
+  else
+  begin
+   writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
+   CurrentState[S_DEMOMODE]:=true;
+   inputs:=word2bits (65535); // Open contact = 1
+  end;
+ log_door_event (LOG_MSG_START, false, msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
- progname:=paramstr (0) + #0;
- shmkey:=ftok (pchar (@progname[1]), ord ('t'));
-
- case paramstr (1) of
-  'stop':
-    sendcommand (shmkey, 'stop', paramstr (2));
-  'tuesday':
-    sendcommand (shmkey, 'tuesday', paramstr (2));
-  'open':
-    sendcommand (shmkey, 'open', paramstr (2));
-
-  'start':
+ repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
+  if CurrentState[S_DEMOMODE] then
    begin
-    shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
-    if shmid = -1 then
-     begin
-      writeln (paramstr (0),': not starting: already running.');
-      halt (1);
-     end;
-    SHMPointer:=shmat (shmid, nil, 0);
-    fillchar (SHMPointer^, sizeof (TSHMVariables), 0);
-    SHMPointer^.PIDOfMain:=fpGetPid;
-    clrscr;
-    if GPIO_Driver.MapIo then
-     begin
-      CurrentState[S_DEMOMODE]:=false;
-      GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
-      GpF.SetPinMode (CLOCKPIN, OUTPUT);
-      GpF.setpinmode (STROBEPIN, OUTPUT);
-      GpF.setpinmode (DATAPIN, OUTPUT);
-      GpF.setpinmode (READOUTPIN, INPUT);
-     end
-     else
-      begin
-       gotoxy (1,17); writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
-       CurrentState[S_DEMOMODE]:=true;
-       inputs:=word2bits (65535); // Open contact = 1
-       initkeyboard;
-      end;
-    SHMPointer^.state[S_DEMOMODE]:=CurrentState[S_DEMOMODE];
-    gotoxy (1,18);
-    log_door_event (LOG_MSG_START, false, msgflags, LOG_MSG, LOG_DEBUGMODE, '');
+    inputs:=debounceinput (SHMPointer^.fakeinputs, MAXBOUNCES);
+    sleep (16); // Emulate the real deal
+   end
+   else
+    inputs:=debounceinput (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs), MAXBOUNCES);
 
-    repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
-     if CurrentState[S_DEMOMODE] then inputs:=debounceinput (debug_alterinput (inputs), MAXBOUNCES)
-                                 else inputs:=debounceinput (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs), MAXBOUNCES);
+  if dryrun = 0 then // Make a dry run to let inputs settle
+   begin
 (********************************************************************************************************)
 
      // Do lock logic shit !!
@@ -598,48 +634,62 @@ begin
       log_door_event (LOG_MSG_HALLWAYLIGHT, inputs[LIGHTS_ON_SENSE] = IS_OPEN , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
 (********************************************************************************************************)
-     // Do some housekeeping
-     if bits2word (oldout) <> bits2word (outputs) then debug_showbits (outputs, 0, DBGOUT);
-     if bits2word (oldin) <> bits2word (inputs) then debug_showbits (inputs, 17, DBGIN);
-     // Return current state to the shm buffer
-     SHMPointer^.inputs:=inputs;
-     SHMPointer^.outputs:=outputs;
-     SHMPointer^.state:=CurrentState;
-     SHMPointer^.Config:=STATIC_CONFIG;
-     oldout:=outputs;
-     oldin:=inputs;
-    until SHMPointer^.command = 'stop';
-    // Cleaning up
-    outputs:=word2bits (0);
-    debug_showbits (outputs, 0, DBGOUT);
-    // if SHMPointer^.shmmsg <> '' then
-    log_door_event (LOG_MSG_STOP, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.shmmsg);
-    if CurrentState[S_DEMOMODE] then donekeyboard
-                else write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
-    shmctl (shmid, IPC_RMID, nil);
-   end;
+      // Return current state to the shm buffer
+      if SHMPointer^.command = 'stop' then
+       begin
+        SHMPointer^.command:='';
+        outputs:=word2bits (0);
+        CurrentState[S_STOP]:=true;
+        if not CurrentState[S_DEMOMODE] then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
+       end;
+      SHMPointer^.inputs:=inputs;
+      SHMPointer^.outputs:=outputs;
+      SHMPointer^.state:=CurrentState;
+      SHMPointer^.Config:=STATIC_CONFIG;
+   end
+   else dryrun:=dryrun-1;
+ until CurrentState[S_STOP];
+ // Cleaning up
+ log_door_event (LOG_MSG_STOP, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.shmmsg);
+ shmctl (shmid, IPC_RMID, nil);
+end;
 
-   'test':
-    begin
-    end;
 
-   'forget':
+///////////// MAIN BLOCK /////////////
+var     progname:string;
+        shmkey: TKey;
+        shmid: longint;
+begin
+ progname:=paramstr (0) + #0;
+ shmkey:=ftok (pchar (@progname[1]), ord ('t'));
+
+ case paramstr (1) of
+  'stop':
+    sendcommand (shmkey, 'stop', paramstr (2));
+  'tuesday':
+    sendcommand (shmkey, 'tuesday', paramstr (2));
+  'open':
+    sendcommand (shmkey, 'open', paramstr (2));
+  'start':
+    run_door (shmkey);
+  'test': // Interactive test mode
+    repeat
+     sleep (500);
+    until run_test_mode (shmkey);
+  'forget':
     begin
      writeln ('Forgetting everything about my running processes (NOT RECOMMENDED)');
      shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
      shmctl (shmid, IPC_RMID, nil);
     end;
-
-   'diag':
+  'diag':
     begin
      dump_config (STATIC_CONFIG, STATIC_CONFIG_STR);
     end;
-
-   '':
+  '':
    begin
     writeln ('Usage: ', paramstr (0), ' [start|stop|tuesday|test|open|diag]');
     halt (1);
    end;
  end;
-
 end.
