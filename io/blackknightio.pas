@@ -37,7 +37,7 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                 state, Config :TLotsofbits;
                 Command: string;
                 SHMMsg:string;
-                lastcommandstatus: byte;
+//                lastcommandstatus: byte;
                 end;
         TConfigTextArray=ARRAY [0..SHITBITS] of string[20];
         TLogItem=ARRAY [0..SHITBITS] OF RECORD // Log and debug text, with alternative and levels
@@ -65,7 +65,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
 
         LOG_MSG_STOP=0; LOG_MSG_START=1; LOG_MSG_BOXTAMPER=2; LOG_MSG_TRIPWIRE=3; LOG_MSG_PANIC=4; LOG_MSG_HALLWAYLIGHT=5; LOG_MSG_MAIL=6;
         LOG_MSG_TUESDAY=7; LOG_MSG_MAG1LOCKED=8; LOG_MSG_MAG2LOCKED=9; LOG_MSG_DOORLEAFSWITCH=10; LOG_MSG_MAGLOCK1ON=11; LOG_MSG_MAGLOCK2ON=12;
-        LOG_MSG_STRIKEON=13; LOG_MSG_DOORISLOCKED=14; LOG_MSG_CMDLINEOPEN=15; LOG_MSG_SWITCHOPEN=16; LOG_MSG_HANDLE=17; LOG_MSG_HANDLELIGHT=18;
+        LOG_MSG_STRIKEON=13; LOG_MSG_DOORISLOCKED=14; LOG_MSG_SOFTOPEN=15; LOG_MSG_SWITCHOPEN=16; LOG_MSG_HANDLEOPEN=17; LOG_MSG_HANDLELIGHTOPEN=18;
 
         LOG_MSG:TLogItem=( (msglevel: LOG_CRIT; msg: 'Application is exiting !!'; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
@@ -82,12 +82,13 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                            (msglevel: LOG_INFO; msg: 'Maglock 2 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 2 is off'),
                            (msglevel: LOG_INFO; msg: 'Door strike is on'; altlevel: LOG_DEBUG; altmsg: 'Door strike is off'),
                            (msglevel: LOG_INFO; msg: 'Door is locked'; altlevel: LOG_EMAIL; altmsg: 'DOOR IS NOT LOCKED !!'),
-                           (msglevel: LOG_EMAIL; msg: 'Door opening request from command line'; altlevel: LOG_NONE; altmsg: 'no opening request'),
+                           (msglevel: LOG_EMAIL; msg: 'Door opening request from system'; altlevel: LOG_NONE; altmsg: 'system is quiet'),
                            (msglevel: LOG_EMAIL; msg: 'Door opening request from button'; altlevel: LOG_NONE; altmsg: 'No button touched'),
                            (msglevel: LOG_EMAIL; msg: 'Door opening request from handle'; altlevel: LOG_NONE; altmsg: 'handle not touched'),
                            (msglevel: LOG_INFO; msg: 'Door opening request, light+handle'; altlevel: LOG_NONE; altmsg: 'Light+handle conditions not met'),
+                           (msglevel: LOG_INFO; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
@@ -523,12 +524,6 @@ end;
 
 ///////////// RUN THE FUCKING DOOR /////////////
 
-// The brain of the whole system. This is the part that require intensive debugging
-procedure process_door_io (var inputs, outputs: TRegisterbits);
-begin
-
-end;
-
 // Spaghetti code warning !!
 // This is the dirtiest function: need a rewrite. It is not maintainable.
 procedure run_door (shmkey: TKey);
@@ -592,12 +587,14 @@ begin
       begin // PANIC MODE (topmost priority)
        outputs[MAGLOCK1_RELAY]:=false;
        outputs[MAGLOCK2_RELAY]:=false;
+       if SHMPointer^.command <> 'stop' then SHMPointer^.command:=''; // Deny any other command
       end
       else
       begin
        if SHMPointer^.command = 'open' then
         begin
          opendoor:=255;
+         log_door_event (LOG_MSG_SOFTOPEN, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.SHMMSG);
          SHMPointer^.command:='';
         end;
 
@@ -626,6 +623,7 @@ begin
         end
         else
         begin
+         log_door_event (LOG_MSG_SOFTOPEN, true, msgflags, LOG_MSG, LOG_DEBUGMODE, ''); // reset log event
          if STATIC_CONFIG[SC_MAGLOCK1] then outputs[MAGLOCK1_RELAY]:=true;
          if STATIC_CONFIG[SC_MAGLOCK2] then outputs[MAGLOCK2_RELAY]:=true;
          outputs[DOOR_STRIKE_RELAY]:=false;
@@ -689,7 +687,7 @@ begin
   'tuesday':
     sendcommand (shmkey, 'tuesday', paramstr (2));
   'open':
-    sendcommand (shmkey, 'open', paramstr (2));
+    sendcommand (shmkey, 'open', 'commandline: ' + paramstr (2));
   'start':
     run_door (shmkey);
   'monitor': // Interactive monitor mode
