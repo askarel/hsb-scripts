@@ -85,13 +85,26 @@ cat << EOM
   <link rel="stylesheet" href="$ME?CSS=trollin.css" type="text/css" />
  </HEAD>
  <BODY>
+  <SCRIPT>
+    function reqListener() {
+	console.log(this.responseText);
+    }
+
+
+    function troll(sound) {
+	var trollrequest = new XMLHttpRequest();
+	trollrequest.onload = reqListener;
+	trollrequest.open ("POST", "$ME", true);
+	trollrequest.send (sound);
+    }
+  </SCRIPT>
   <DIV ID="TOP"><H1>HSBXL TROLLING PAGE 2.0 !!!</H1></DIV>
 EOM
 
 if [ -d "$DIR_AUDIOFILES" ]; then
 cat <<EOM
   <FORM ACTION="$ME" method="POST">
-   <INPUT TYPE="SUBMIT" VALUE="RANDOM" NAME="RANDOM" CLASS="RANDOM soundBtn"></INPUT>
+   <BUTTON TYPE="BUTTON" VALUE="SUBMIT" NAME="RANDOM" CLASS="RANDOM soundBtn" ONCLICK="troll('RANDOM');">RANDOM SOUND</BUTTON>
    Jump to a section:
 EOM
 
@@ -99,14 +112,14 @@ EOM
 	test "$directoryname" != "$DIR_AUDIOFILES" && printf "    <A HREF=\"#%s\">%s</A>\n" "$directoryhash" "$(basename "$directoryname")"
     done
     echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
-	test "$directoryname" != $DIR_AUDIOFILES && printf "<DIV ID=\"%s\"><H2>%s <A HREF=\"#TOP\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
+	test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s <A HREF=\"#TOP\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
 	echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
 	    test "$(dirname "$filename")" = "$directoryname" && 
-		printf "   <INPUT TYPE=\"SUBMIT\" VALUE=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\"></INPUT>\n" "$(basename "$filename")" "$filehash" "$filehash"
+		printf "    <BUTTON TYPE=\"BUTTON\" VALUE=\"Submit\" ID=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\" ONCLICK=\"troll('%s')\">%s</BUTTON>\n" "$filehash" "$filehash" "$filehash" "$filehash" "$(basename "$filename")"
 	done
     done
 fi
-printf " </BODY>\n"
+printf "  </FORM>\n </BODY>\n"
 }
 
 case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
@@ -142,15 +155,18 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	# Process POSTed data
 	if [ "$REQUEST_METHOD" = "POST" -a -n "$CONTENT_LENGTH" ]; then
 	    read -n "$CONTENT_LENGTH" POSTDATA
-	    POSTDATAVAR="$(echo -n "$POSTDATA"|cut -d '=' -f 1)"
-	    case "$POSTDATAVAR" in
-		"RANDOM")
-		    $PLAYPROG "$(pickfilehash "$(echo "$FILEHASHDB" |cut -d ' ' -f 1|shuf -n 1)")" & #" choke alert
-		    ;;
-		*)
-		    test -n "$( pickfilehash "$POSTDATAVAR" )" && $PLAYPROG "$( pickfilehash "$POSTDATAVAR")"
-		    ;;
-	    esac
+	    logger -t $ME-post "POST data: '$POSTDATA'"
+	    if [ -n "$POSTDATA" -a "$POSTDATA" != "[object HTMLFormElement]" ]; then # Is there something in the POSTed data ?
+		POSTDATAVAR="$(echo -n "$POSTDATA"|cut -d '=' -f 1)"
+		case "$POSTDATAVAR" in
+		    "RANDOM")
+			$PLAYPROG "$(pickfilehash "$(echo "$FILEHASHDB" |cut -d ' ' -f 1|shuf -n 1)")" & #" choke alert
+		        ;;
+		    *)
+		        test -n "$( pickfilehash "$POSTDATAVAR" )" && $PLAYPROG "$( pickfilehash "$POSTDATAVAR")"
+			;;
+		esac
+	    fi
 	fi
 	showpagehash
 	printf "</HTML>\n"

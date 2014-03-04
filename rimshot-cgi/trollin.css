@@ -20,13 +20,13 @@ form
 	padding : 10px 0 5px 0;
 	margin : 0 auto;
 }
-input.soundBtn
+button.soundBtn
 {
 	width : 430px;
 	min-height : 30px;
 	margin : 0 10px 5px 10px
 }
-input.RANDOM
+button.RANDOM
 {
 	background-color : #CC0000;
 	color : white;
