@@ -80,6 +80,8 @@ pickfilehash()
 showpagehash()
 {
 cat << EOM
+<!DOCTYPE html>
+<HTML>
  <HEAD>
   <TITLE>$PAGETITLE</TITLE>
   <link rel="stylesheet" href="$ME?CSS=trollin.css" type="text/css" />
@@ -89,7 +91,6 @@ cat << EOM
     function reqListener() {
 	console.log(this.responseText);
     }
-
 
     function troll(sound) {
 	var trollrequest = new XMLHttpRequest();
@@ -119,7 +120,7 @@ EOM
 	done
     done
 fi
-printf "  </FORM>\n </BODY>\n"
+printf "  </FORM>\n </BODY>\n</HTML>\n"
 }
 
 case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
@@ -151,11 +152,11 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	printf "\n}\n"
 	;;
     *) # Catch-all method. Data is in the POST
-	printf "Content-type: text/html\n\n<!DOCTYPE html>\n<HTML>\n"
 	# Process POSTed data
+	printf 'Content-type: text/html\n\n'
 	if [ "$REQUEST_METHOD" = "POST" -a -n "$CONTENT_LENGTH" ]; then
 	    read -n "$CONTENT_LENGTH" POSTDATA
-	    logger -t $ME-post "POST data: '$POSTDATA'"
+#	    logger -t $ME-post "POST data: '$POSTDATA'"
 	    if [ -n "$POSTDATA" -a "$POSTDATA" != "[object HTMLFormElement]" ]; then # Is there something in the POSTed data ?
 		POSTDATAVAR="$(echo -n "$POSTDATA"|cut -d '=' -f 1)"
 		case "$POSTDATAVAR" in
@@ -167,8 +168,8 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 			;;
 		esac
 	    fi
+	else
+	    showpagehash
 	fi
-	showpagehash
-	printf "</HTML>\n"
 	;;
 esac
