@@ -24,7 +24,7 @@ program blackknightio;
 
 // This is a quick hack to check if everything works
 
-uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc;
+uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog;
 
 CONST   SHITBITS=63;
 
@@ -86,7 +86,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                            (msglevel: LOG_EMAIL; msg: 'Door opening request from button'; altlevel: LOG_NONE; altmsg: 'No button touched'),
                            (msglevel: LOG_EMAIL; msg: 'Door opening request from handle'; altlevel: LOG_NONE; altmsg: 'handle not touched'),
                            (msglevel: LOG_INFO; msg: 'Door opening request, light+handle'; altlevel: LOG_NONE; altmsg: 'Light+handle conditions not met'),
-                           (msglevel: LOG_INFO; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_CRIT; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
@@ -294,49 +294,22 @@ begin
      end;
 end;
 
-(*
-// Rewriting the busy_delay bunch of functions
-function busy_delay_calibrate: longint;
+// Decrement the timer variable
+procedure busy_delay_tick (var waitvar: longint; ticklength: word);
+var mytick: word;
 begin
-
+ if ticklength <= 0 then mytick:=1 else mytick:=ticklength;
+ if waitvar >= 0 then waitvar:=waitvar - ticklength else waitvar:=0;
 end;
 
-procedure busy_delay_init (var ;
-
-procedure busy_delay_tick;
-
-function busy_delay_is_expired: boolean;
-
-
-*)
-
-(*
-// Buzzer functions
-
-*)
-
-function busy_delay (var waittime: word; timetowait: word): boolean;
+// Is the timer expired ?
+function busy_delay_is_expired (var waitvar: longint): boolean;
 begin
- case waittime of
-  0:busy_delay:=true; // Time's up !!
-  65535:              // Reset timer
-   begin
-    waittime:=timetowait shr 4; // One iteration of the loop takes 16 mS
-    busy_delay:=false;
-   end;
-  else                // Tick...
-   begin
-    waittime:=waittime -1;
-    busy_delay:=false;
-   end;
- end;
+ if waitvar <= 0 then busy_delay_is_expired:=true
+                 else busy_delay_is_expired:=false;
 end;
 
-procedure busy_delay_reset (var waittime: word);
-begin
- waittime:=65535;
-end;
-
+// Buzzer functions ?
 // Needed functions:  buzzer handling
 
 // Log an event
@@ -422,7 +395,7 @@ begin
    quitcmd:=false;
    initkeyboard;
    clrscr;
-   writeln (' Black Knight Monitor  -- keys: k kill system - q quit monitor - o open door - r refresh');
+   writeln ('Black Knight Monitor -- keys: k kill system - q quit monitor - o open door - r refresh');
    gotoxy (1,18);
    while not ( SHMPointer^.state[S_STOP] or quitcmd ) do
     begin
@@ -531,7 +504,7 @@ var  shmid: longint;
      inputs, outputs : TRegisterbits;
      SHMPointer: ^TSHMVariables;
      CurrentState, msgflags: TLotsOfBits;
-     open_wait: word;
+     open_wait: longint;
      opendoor, i, dryrun: byte; // A boolean can be used, but is very sketchy
 begin
  shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
@@ -551,7 +524,8 @@ begin
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
 // for i:=0 to 15 do debounceinput_array[true][i]:=MAXBOUNCES;
  opendoor:=0;
- busy_delay_reset (open_wait);
+ open_wait:=COPENWAIT;
+
  if GPIO_Driver.MapIo then
   begin
    CurrentState[S_DEMOMODE]:=false;
@@ -605,8 +579,11 @@ begin
         begin
 
          // somewhat sketchy below
-         if not busy_delay (open_wait, COPENWAIT) then
+         if not busy_delay_is_expired (open_wait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then
+
+
           begin
+           busy_delay_tick (open_wait, 16);
            opendoor:=255;
            log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
            outputs[MAGLOCK1_RELAY]:=false;
@@ -617,15 +594,15 @@ begin
           else
           begin
            writeln ('relocking door.');
-           busy_delay_reset (open_wait);
+           open_wait:=COPENWAIT;
            opendoor:=0;
           end;
         end
         else
         begin
          log_door_event (LOG_MSG_SOFTOPEN, true, msgflags, LOG_MSG, LOG_DEBUGMODE, ''); // reset log event
-         if STATIC_CONFIG[SC_MAGLOCK1] then outputs[MAGLOCK1_RELAY]:=true;
-         if STATIC_CONFIG[SC_MAGLOCK2] then outputs[MAGLOCK2_RELAY]:=true;
+         if STATIC_CONFIG[SC_MAGLOCK1] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK1_RELAY]:=true;
+         if STATIC_CONFIG[SC_MAGLOCK2] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK2_RELAY]:=true;
          outputs[DOOR_STRIKE_RELAY]:=false;
          outputs[BUZZER_OUTPUT]:=false;
        end;
@@ -672,6 +649,16 @@ begin
  shmctl (shmid, IPC_RMID, nil);
 end;
 
+function godaemon (shmkey: TKey): boolean;
+begin
+
+end;
+
+// Fork process from main daemon and run something
+function runstuff (command: string): integer;
+begin
+
+end;
 
 ///////////// MAIN BLOCK /////////////
 var     progname:string;
@@ -690,6 +677,8 @@ begin
     sendcommand (shmkey, 'open', 'commandline: ' + paramstr (2));
   'start':
     run_door (shmkey);
+  'start2':
+    godaemon (shmkey);
   'monitor': // Interactive monitor mode
     repeat
      sleep (500);
