@@ -207,6 +207,44 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
 VAR     GPIO_Driver: TIODriver;
         GpF: TIOPort;
         debounceinput_array: ARRAY[false..true, 0..15] of byte; // That one has to be global. No way around it.
+        CurrentState,   // Reason for global: it is modified by the signal handler
+        msgflags: TLotsOfBits; // Reason for global: message state must be preserved (avoid spamming the syslog)
+
+///////////// PID FILE HANDLING /////////////
+
+Procedure SavePid(pidfile: string; apid: integer);
+var fPid: text;
+Begin
+ Assign(fPid,pidfile);
+ Rewrite(fPid);
+ Writeln(fPid,apid);
+ Close(fPid);
+End;
+
+function LoadPid(pidfile: string): integer;
+var s: ansistring;
+    fPid: text;
+Begin
+ Assign(fPid,pidfile);
+ {$I-}
+ Reset(fPid);
+ Read(fPid,s);
+ Close(fPid);
+ {$I+}
+ if (IOResult <> 0) and (pidfile <> '') then
+  LoadPid := 0
+ else
+  LoadPid := strtoint(s);
+End;
+
+Procedure DeletePid(pidfile: string);
+var fPid: text;
+Begin
+ {$I-}
+ Assign(fPid,pidfile);
+ erase (fPid);
+ {$I+}
+End;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
 
@@ -312,7 +350,7 @@ end;
 // Buzzer functions ?
 // Needed functions:  buzzer handling
 
-// Log an event
+// Log an event (NEED REWRITE)
 procedure log_door_event (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits; doorevent:TLogItem; debugmode: boolean; extratext: string);
 var logstring: string;
 begin
@@ -495,6 +533,22 @@ begin
  io_673_150:=word2bits (gpioword);
 end;
 
+// Return true if the GPIO pins have been successfully initialized
+function initgpios (clockpin, datapin, strobepin, readout: byte): boolean;
+begin
+ if GPIO_Driver.MapIo then
+  begin
+   GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
+   GpF.SetPinMode (clockpin, OUTPUT);
+   GpF.setpinmode (strobepin, OUTPUT);
+   GpF.setpinmode (datapin, OUTPUT);
+   GpF.setpinmode (readout, INPUT);
+   initgpios:=true;
+  end
+  else
+   initgpios:=false;
+end;
+
 ///////////// RUN THE FUCKING DOOR /////////////
 
 // Spaghetti code warning !!
@@ -503,7 +557,6 @@ procedure run_door (shmkey: TKey);
 var  shmid: longint;
      inputs, outputs : TRegisterbits;
      SHMPointer: ^TSHMVariables;
-     CurrentState, msgflags: TLotsOfBits;
      open_wait: longint;
      opendoor, i, dryrun: byte; // A boolean can be used, but is very sketchy
 begin
@@ -526,15 +579,8 @@ begin
  opendoor:=0;
  open_wait:=COPENWAIT;
 
- if GPIO_Driver.MapIo then
-  begin
-   CurrentState[S_DEMOMODE]:=false;
-   GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
-   GpF.SetPinMode (CLOCKPIN, OUTPUT);
-   GpF.setpinmode (STROBEPIN, OUTPUT);
-   GpF.setpinmode (DATAPIN, OUTPUT);
-   GpF.setpinmode (READOUTPIN, INPUT);
-  end
+ if initgpios (CLOCKPIN, STROBEPIN, DATAPIN, READOUTPIN) then
+  CurrentState[S_DEMOMODE]:=false
   else
   begin
    writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
@@ -580,8 +626,6 @@ begin
 
          // somewhat sketchy below
          if not busy_delay_is_expired (open_wait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then
-
-
           begin
            busy_delay_tick (open_wait, 16);
            opendoor:=255;
@@ -611,8 +655,8 @@ begin
      // End of lock logic shit.
 
      // Leaf switch: sketchy
-//     if STATIC_CONFIG[SC_DOORSWITCH] then
-//      log_door_event (LOG_MSG_DOORLEAFSWITCH, inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
+     if STATIC_CONFIG[SC_DOORSWITCH] then
+      log_door_event (LOG_MSG_DOORLEAFSWITCH, inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
      // Panic logging
      log_door_event (LOG_MSG_PANIC, not inputs[PANIC_SENSE] , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
@@ -627,6 +671,12 @@ begin
      // Hallway light logging
      if STATIC_CONFIG[SC_HALLWAY] then
       log_door_event (LOG_MSG_HALLWAYLIGHT, inputs[LIGHTS_ON_SENSE] = IS_OPEN , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
+     // Maglock
+     if STATIC_CONFIG[SC_MAGLOCK1] then
+      log_door_event (LOG_MSG_MAGLOCK1ON, not outputs[MAGLOCK1_RELAY] , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
+     if STATIC_CONFIG[SC_MAGLOCK2] then
+      log_door_event (LOG_MSG_MAGLOCK2ON, not outputs[MAGLOCK2_RELAY] , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
+     // Door locked ?
 
 (********************************************************************************************************)
       // Return current state to the shm buffer
@@ -649,28 +699,45 @@ begin
  shmctl (shmid, IPC_RMID, nil);
 end;
 
+///////////// DAEMON STUFF /////////////
+
 function godaemon (shmkey: TKey): boolean;
 begin
 
 end;
 
 // Fork process from main daemon and run something
-function runstuff (command: string): integer;
+function runstuff (command, parameter: string; actionindex: word): integer;
+begin
+
+end;
+
+// Do something on signal
+procedure signalhandler (sig: longint); cdecl;
+begin
+
+end;
+
+// Determine if there is another copy running
+function am_i_running: boolean;
 begin
 
 end;
 
 ///////////// MAIN BLOCK /////////////
-var     progname:string;
+var     progname, pidname :string;
         shmkey: TKey;
         shmid: longint;
 begin
+ if fpGetUid = 0 then pidname:='/run/' + ApplicationName + '.PID' else pidname:=getEnvironmentVariable ('HOME') + '/.' + ApplicationName + '.PID';
  progname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@progname[1]), ord ('t'));
 
  case paramstr (1) of
   'stop':
     sendcommand (shmkey, 'stop', paramstr (2));
+  'beep':
+    sendcommand (shmkey, 'beep', '');
   'tuesday':
     sendcommand (shmkey, 'tuesday', paramstr (2));
   'open':
