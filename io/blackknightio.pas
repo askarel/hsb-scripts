@@ -107,7 +107,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
+                           (msglevel: LOG_ERR; msg: 'System is disabled in software'; altlevel: LOG_NONE; altmsg: 'System is enabled'),
                            (msglevel: LOG_ERR; msg: 'Check wiring or leaf switch: door is maglocked, but i see it open.'; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_ERR; msg: 'Check wiring or maglock 1: Disabled in config, but i see it locked.'; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_ERR; msg: 'Check wiring or maglock 2: Disabled in config, but i see it locked.'; altlevel: LOG_NONE; altmsg: ''),
@@ -159,7 +159,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                           'Mailbox','Tripwire','opendoorbtn','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
-        SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11;
+        SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11; SC_DISABLED=12;
         // Status bit block only
         S_DEMOMODE=63; S_TUESDAY=62; S_STOP=61;
 
@@ -176,7 +176,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              'handle+light unlock',
                                              'Door unlock button',
                                              'Handle unlock only',
-                                             '',
+                                             'Software-disabled',
                                              '', '',  '', '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', 'Stop order', 'Tuesday mode', 'Demo mode');
@@ -193,7 +193,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     true,  // SC_HANDLEANDLIGHT (The light must be on to unlock with the handle)
                                     true,  // SC_DOORUNLOCKBUTTON (A push button to open the door)
                                     false, // SC_HANDLE (Unlock with the handle only: not recommended in HSBXL)
-                                    false,
+                                    false, // SC_DISABLED (system is software-disabled)
                                     false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
@@ -245,6 +245,42 @@ Begin
  erase (fPid);
  {$I+}
 End;
+
+// Determine if there is another copy running
+function am_i_running (pidfile: string): boolean;
+var mainpid : integer;
+    cmdlinefile: text;
+    procstr, s: string;
+begin
+ mainpid:=loadpid (pidfile);
+ if mainpid = 0 then
+  am_i_running:=false // Failed to load pidfile: we're not running.
+ else
+  begin
+   str (mainpid, procstr);
+   procstr:='/proc/' + procstr;
+   if directoryexists (procstr) // There is a process ID linked to our PID file
+    then
+     procstr:=procstr + '/cmdline';
+     Assign(cmdlinefile, procstr);
+     {$I-}
+     Reset(cmdlinefile);
+     Read(cmdlinefile, s);
+     Close(cmdlinefile);
+     ioresult;
+     {$I+}
+     s:=copy (s, 1, pos (#0, s) -1 ); // Shave everything after and including the first NULL
+     am_i_running:=extractfilename (s) = applicationName; // Is it ours ?
+  end;
+end;
+
+function getpidname: string;
+begin
+ if fpGetUid = 0 then
+  getpidname:='/run/' + ApplicationName + '.PID'
+ else
+  getpidname:=getEnvironmentVariable ('HOME') + '/.' + ApplicationName + '.PID';
+end;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
 
@@ -718,18 +754,12 @@ begin
 
 end;
 
-// Determine if there is another copy running
-function am_i_running: boolean;
-begin
-
-end;
-
 ///////////// MAIN BLOCK /////////////
 var     progname, pidname :string;
         shmkey: TKey;
         shmid: longint;
 begin
- if fpGetUid = 0 then pidname:='/run/' + ApplicationName + '.PID' else pidname:=getEnvironmentVariable ('HOME') + '/.' + ApplicationName + '.PID';
+ pidname:=getpidname;
  progname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@progname[1]), ord ('t'));
 
@@ -742,6 +772,10 @@ begin
     sendcommand (shmkey, 'tuesday', paramstr (2));
   'open':
     sendcommand (shmkey, 'open', 'commandline: ' + paramstr (2));
+  'disable':
+    sendcommand (shmkey, 'disable', paramstr (2));
+  'enable':
+    sendcommand (shmkey, 'enable', paramstr (2));
   'start':
     run_door (shmkey);
   'start2':
