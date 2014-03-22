@@ -575,10 +575,10 @@ begin
  if GPIO_Driver.MapIo then
   begin
    GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
-   GpF.SetPinMode (clockpin, OUTPUT);
-   GpF.setpinmode (strobepin, OUTPUT);
-   GpF.setpinmode (datapin, OUTPUT);
-   GpF.setpinmode (readout, INPUT);
+   GpF.SetPinMode (clockpin, pigpio.OUTPUT);
+   GpF.setpinmode (strobepin, pigpio.OUTPUT);
+   GpF.setpinmode (datapin, pigpio.OUTPUT);
+   GpF.setpinmode (readout, pigpio.INPUT);
    initgpios:=true;
   end
   else
@@ -589,6 +589,8 @@ end;
 
 // Spaghetti code warning !!
 // This is the dirtiest function: need a rewrite. It is not maintainable.
+// The functionalities from this function will be moved to the one below,
+// and it will be rewritten to be daemon-friendly.
 procedure run_door (shmkey: TKey);
 var  shmid: longint;
      inputs, outputs : TRegisterbits;
@@ -737,9 +739,30 @@ end;
 
 ///////////// DAEMON STUFF /////////////
 
-function godaemon (shmkey: TKey): boolean;
+function godaemon (daemonpid: Tpid): boolean;
+var shmname: string;
+    inputs, outputs : TRegisterbits;
+    shmkey: TKey;
+    shmid: longint;
+    SHMPointer: ^TSHMVariables;
 begin
+ shmname:=paramstr (0) + #0;
+ shmkey:=ftok (pchar (@shmname[1]), daemonpid);
+ shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
+ if shmid = -1 then syslog (log_err, 'Can''t create shared memory segment (pid %d). Leaving.', [daemonpid])
+ else
+  begin
+   SHMPointer:=shmat (shmid, nil, 0);
+   fillchar (SHMPointer^, sizeof (TSHMVariables), 0);
 
+
+   syslog (log_info, 'Doing daemon shit...'#10, []);
+   sleep (3000);
+   syslog (log_info, 'leaving daemon...'#10, []);
+
+
+  end;
+ shmctl (shmid, IPC_RMID, nil); // Destroy shared memory segment upon leaving
 end;
 
 // Fork process from main daemon and run something
@@ -755,13 +778,35 @@ begin
 end;
 
 ///////////// MAIN BLOCK /////////////
-var     progname, pidname :string;
-        shmkey: TKey;
+var     shmname, pidname :string;
+        aOld, aTerm, aHup : pSigActionRec;
+        zerosigs : sigset_t;
+        ps1 : psigset;
+        sSet : cardinal;
+        oldpid, sid, pid: TPid;
+        shmkey, shmoldkey: TKey;
         shmid: longint;
+        iamrunning: boolean;
+
 begin
  pidname:=getpidname;
- progname:=paramstr (0) + #0;
- shmkey:=ftok (pchar (@progname[1]), ord ('t'));
+ iamrunning:=am_i_running (pidname);
+ oldpid:=loadpid (pidname);
+ shmname:=paramstr (0) + #0;
+
+ // Clean up in case of crash or hard reboot
+ if (oldpid <> 0) and not iamrunning then
+  begin
+   writeln ('Removing stale PID file and SHM buffer');
+   deletepid (pidname);
+   shmoldkey:=ftok (pchar (@shmname[1]), oldpid);
+   shmid:=shmget (shmoldkey, sizeof (TSHMVariables), 0);
+   shmctl (shmid, IPC_RMID, nil);
+   oldpid:=0; // PID was stale
+  end;
+
+ // That part will be removed. Sendcommand should use the daemon PID as key
+ shmkey:=ftok (pchar (@shmname[1]), ord ('t'));
 
  case paramstr (1) of
   'stop':
@@ -779,7 +824,59 @@ begin
   'start':
     run_door (shmkey);
   'start2':
-    godaemon (shmkey);
+    if iamrunning
+     then writeln ('Already started as PID ', oldpid)
+     else
+      begin
+       fpsigemptyset(zerosigs);
+       { block all signals except -HUP & -TERM }
+       sSet := $ffffbffe;
+       ps1 := @sSet;
+       fpsigprocmask(sig_block,ps1,nil);
+       { setup the signal handlers }
+       new(aOld);
+       new(aHup);
+       new(aTerm);
+       aTerm^.sa_handler := SigactionHandler(@signalhandler);
+       aTerm^.sa_mask := zerosigs;
+       aTerm^.sa_flags := 0;
+       aTerm^.sa_restorer := nil;
+       aHup^.sa_handler := SigactionHandler(@signalhandler);
+       aHup^.sa_mask := zerosigs;
+       aHup^.sa_flags := 0;
+       aHup^.sa_restorer := nil;
+       fpSigAction(SIGTERM,aTerm,aOld);
+       fpSigAction(SIGHUP,aHup,aOld);
+
+       pid := fpFork;
+       if pid = 0 then
+        Begin // we're in the child
+         openlog (pchar (format (ApplicationName + '[%d]', [fpgetpid])), LOG_NOWAIT, LOG_DEBUG);
+         syslog (log_info, 'Spawned new process: %d'#10, [fpgetpid]);
+         Close(system.input); // close stdin
+         Close(system.output); // close stdout
+         Assign(system.output,'/dev/null');
+         ReWrite(system.output);
+         Close(stderr); // close stderr
+         Assign(stderr,'/dev/null');
+         ReWrite(stderr);
+         FpUmask (0);
+         sid:=FpSetSid;
+         syslog (log_info, 'Session ID: %d'#10, [sid]);
+         FpChdir ('/tmp/');
+        End
+       Else
+        Begin // We're in the parent
+         writeln (applicationname, '[',fpgetpid,']: started background process ',pid);
+         SavePid(pidname, pid);
+         Halt; // successful fork, so parent dies
+        End;
+       // Running into the daemon
+       godaemon (fpgetpid);
+       deletepid (pidname); // cleanup
+      end;
+  'running':
+    if iamrunning then halt (0) else halt (1);
   'monitor': // Interactive monitor mode
     repeat
      sleep (500);
