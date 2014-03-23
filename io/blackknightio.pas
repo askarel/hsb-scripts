@@ -24,7 +24,7 @@ program blackknightio;
 
 // This is a quick hack to check if everything works
 
-uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog;
+uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile;
 
 CONST   SHITBITS=63;
 
@@ -209,78 +209,6 @@ VAR     GPIO_Driver: TIODriver;
         debounceinput_array: ARRAY[false..true, 0..15] of byte; // That one has to be global. No way around it.
         CurrentState,   // Reason for global: it is modified by the signal handler
         msgflags: TLotsOfBits; // Reason for global: message state must be preserved (avoid spamming the syslog)
-
-///////////// PID FILE HANDLING /////////////
-
-Procedure SavePid(pidfile: string; apid: integer);
-var fPid: text;
-Begin
- Assign(fPid,pidfile);
- Rewrite(fPid);
- Writeln(fPid,apid);
- Close(fPid);
-End;
-
-function LoadPid(pidfile: string): integer;
-var s: ansistring;
-    fPid: text;
-Begin
- Assign(fPid,pidfile);
- {$I-}
- Reset(fPid);
- Read(fPid,s);
- Close(fPid);
- {$I+}
- if (IOResult <> 0) and (pidfile <> '') then
-  LoadPid := 0
- else
-  LoadPid := strtoint(s);
-End;
-
-Procedure DeletePid(pidfile: string);
-var fPid: text;
-Begin
- {$I-}
- Assign(fPid,pidfile);
- erase (fPid);
- {$I+}
-End;
-
-// Determine if there is another copy running
-function am_i_running (pidfile: string): boolean;
-var mainpid : integer;
-    cmdlinefile: text;
-    procstr, s: string;
-begin
- mainpid:=loadpid (pidfile);
- if mainpid = 0 then
-  am_i_running:=false // Failed to load pidfile: we're not running.
- else
-  begin
-   str (mainpid, procstr);
-   procstr:='/proc/' + procstr;
-   if directoryexists (procstr) // There is a process ID linked to our PID file
-    then
-     procstr:=procstr + '/cmdline';
-     Assign(cmdlinefile, procstr);
-     {$I-}
-     Reset(cmdlinefile);
-     Read(cmdlinefile, s);
-     Close(cmdlinefile);
-     ioresult;
-     {$I+}
-     s:=copy (s, 1, pos (#0, s) -1 ); // Shave everything after and including the first NULL
-     am_i_running:=extractfilename (s) = applicationName; // Is it ours ?
-  end;
-end;
-
-function getpidname: string;
-begin
- if fpGetUid = 0 then
-  getpidname:='/run/' + ApplicationName + '.PID'
- else
-  getpidname:=getEnvironmentVariable ('HOME') + '/.' + ApplicationName + '.PID';
-end;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
 
@@ -745,23 +673,42 @@ var shmname: string;
     shmkey: TKey;
     shmid: longint;
     SHMPointer: ^TSHMVariables;
+    dryrun: byte;
+    open_wait: longint;
 begin
  shmname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@shmname[1]), daemonpid);
  shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
  if shmid = -1 then syslog (log_err, 'Can''t create shared memory segment (pid %d). Leaving.', [daemonpid])
  else
-  begin
+  begin // start from a clean state
    SHMPointer:=shmat (shmid, nil, 0);
    fillchar (SHMPointer^, sizeof (TSHMVariables), 0);
+   SHMPointer^.fakeinputs:=word2bits (65535);
+   outputs:=word2bits (0);
+   dryrun:=MAXBOUNCES+2;
+   fillchar (CurrentState, sizeof (CurrentState), 0);
+   fillchar (msgflags, sizeof (msgflags), 0);
+   fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
+   open_wait:=COPENWAIT;
+
+   if initgpios (CLOCKPIN, STROBEPIN, DATAPIN, READOUTPIN) then
+    CurrentState[S_DEMOMODE]:=false
+   else
+    begin
+     syslog (log_warning,'WARNING: Error mapping registry: GPIO code disabled, running in demo mode.', []);
+     CurrentState[S_DEMOMODE]:=true;
+     inputs:=word2bits (65535); // Open contact = 1
+    end;
 
 
    syslog (log_info, 'Doing daemon shit...'#10, []);
    sleep (3000);
-   syslog (log_info, 'leaving daemon...'#10, []);
 
 
   end;
+ syslog (log_crit,' Daemon is exiting for reason: %s', ['']);
+ sleep (1000); // Give time for the monitor to die before yanking the segment
  shmctl (shmid, IPC_RMID, nil); // Destroy shared memory segment upon leaving
 end;
 
@@ -851,7 +798,7 @@ begin
        pid := fpFork;
        if pid = 0 then
         Begin // we're in the child
-         openlog (pchar (format (ApplicationName + '[%d]', [fpgetpid])), LOG_NOWAIT, LOG_DEBUG);
+         openlog (pchar (format (ApplicationName + '[%d]', [fpgetpid])), LOG_NOWAIT, LOG_DAEMON);
          syslog (log_info, 'Spawned new process: %d'#10, [fpgetpid]);
          Close(system.input); // close stdin
          Close(system.output); // close stdout
@@ -874,6 +821,7 @@ begin
        // Running into the daemon
        godaemon (fpgetpid);
        deletepid (pidname); // cleanup
+       closelog;
       end;
   'running':
     if iamrunning then halt (0) else halt (1);
