@@ -1,3 +1,4 @@
+unit pidfile;
 {
  pidfile.pas - routines to handle the PID file
 
@@ -18,7 +19,6 @@
  from; if not, see <http://www.gnu.org/licenses/>.
 }
 
-unit pidfile;
 interface
 
 Procedure SavePid(pidfile: string; apid: integer);

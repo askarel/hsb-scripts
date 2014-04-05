@@ -35,7 +35,7 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                 PIDofmain:TPid;
                 Inputs, outputs, fakeinputs: TRegisterbits;
                 state, Config :TLotsofbits;
-                Command: string;
+                Command: byte;
                 SHMMsg:string;
 //                lastcommandstatus: byte;
                 end;
@@ -53,11 +53,15 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         READOUTPIN=4; // Output of 74150
         MAXBOUNCES=8;
 
+        // Possible commands and their names
+        CMD_NONE=0; CMD_OPEN=1; CMD_TUESDAY=2; CMD_ENABLE=3; CMD_DISABLE=4; CMD_BEEP=5; CMD_STOP=6;
+        CMD_NAME: ARRAY [CMD_NONE..CMD_STOP] of pchar=('NoCMD','open','tuesday','enable','disable','beep','stop');
+
         bits:array [false..true] of char=('0', '1');
         // Hardware bug: i got the address lines reversed while building the board.
         // Using a lookup table to mirror the address bits
         BITMIRROR: array[0..15] of byte=(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15);
-
+{
         // Log level consts for the logging function
         LOG_DEBUGMODE=false;
         LOG_NONE=0; LOG_DEBUG=1; LOG_EMAIL=2; LOG_CRIT=3; LOG_ERR=4; LOG_WARN=5; LOG_INFO=6;
@@ -114,7 +118,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: '')
                            );
-        // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
+ }       // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
         COPENWAIT=4000;
 
 
@@ -129,6 +133,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DOOR_STRIKE_RELAY=Q10;
         LIGHT_CONTROL_RELAY=Q6;
         DOORBELL_INHIBIT_RELAY=Q5;
+        REDLED=Q14;
+        GREENLED=Q15;
         // Available inputs from the 74150
         I15=15; I14=14; I13=13; I12=12; I11=11; I10=10; I9=9; I8=8; I7=7; I6=6; I5=5; I4=4; I3=3; I2=2; I1=1; I0=0;
         // Use more meaningful descriptions of the inputs in the code
@@ -161,7 +167,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
         SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11; SC_DISABLED=12;
         // Status bit block only
-        S_DEMOMODE=63; S_TUESDAY=62; S_STOP=61;
+        S_DEMOMODE=63; S_TUESDAY=62; S_STOP=61; S_HUP=60;
 
         // Static config
         STATIC_CONFIG_STR: TConfigTextArray=('Maglock 1',
@@ -179,7 +185,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              'Software-disabled',
                                              '', '',  '', '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
-                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', 'Stop order', 'Tuesday mode', 'Demo mode');
+                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', 'HUP received', 'Stop order', 'Tuesday mode', 'Demo mode');
 
         STATIC_CONFIG: TLotsOfBits=(false,  // SC_MAGLOCK1 (Maglock 1 installed)
                                     true, // SC_MAGLOCK2 (Maglock 2 not installed)
@@ -272,30 +278,6 @@ begin
   end;
 end;
 
-// For IPC stuff (sending commands)
-Procedure sendcommand (shmkey: TKey; cmd, comment: string);
-var  shmid: longint;
-     SHMPointer: ^TSHMVariables;
-begin
- shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
-    if shmid = -1 then
-     begin
-      shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
-      // Add test for shmget error here ?
-      SHMPointer:=shmat (shmid, nil, 0);
-      writeln (paramstr (0),': Sending command ', cmd, ' to PID ', SHMPointer^.PIDOfMain);
-      SHMPointer^.command:=cmd;
-      if comment = '' then SHMPointer^.SHMMsg:='<no message provided>'
-                      else SHMPointer^.SHMMsg:=comment;
-     end
-    else
-     begin // We may have just created an instance. Killing it.
-      writeln (paramstr (0),': not started.');
-      shmctl (shmid, IPC_RMID, nil);
-      halt (1);
-     end;
-end;
-
 // Decrement the timer variable
 procedure busy_delay_tick (var waitvar: longint; ticklength: word);
 var mytick: word;
@@ -314,6 +296,7 @@ end;
 // Buzzer functions ?
 // Needed functions:  buzzer handling
 
+{
 // Log an event (NEED REWRITE)
 procedure log_door_event (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits; doorevent:TLogItem; debugmode: boolean; extratext: string);
 var logstring: string;
@@ -339,7 +322,7 @@ begin
                       else writeln (logstring, ' (', extratext, ')');
    end;
 end;
-
+ }
 // Reset a log event
 procedure log_door_reset (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits);
 begin
@@ -376,28 +359,35 @@ end;
 
 // This run as another process and will monitor the SHM buffer for changes.
 // If in demo mode, you will be able to fiddle the inputs
-function run_test_mode (SHMKey: TKey): boolean;
+procedure run_test_mode (daemonpid: TPid);
 var  shmid: longint;
+     shmkey: TKey;
      SHMPointer: ^TSHMVariables;
      oldin, oldout: TRegisterbits;
-     key: string;
+     shmname, key: string;
      K: TKeyEvent;
      quitcmd: boolean;
      i: byte;
 begin
- shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
- if shmid = -1 then
+ if daemonpid = 0 then
   begin
-   run_test_mode:=true;
+   writeln ('Daemon not started.');
+   halt (1);
+  end
+ else
+  begin
+   shmname:=paramstr (0) + #0;
+   shmkey:=ftok (pchar (@shmname[1]), daemonpid);
    shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
    // Add test for shmget error here ?
    SHMPointer:=shmat (shmid, nil, 0);
+
    oldin:=word2bits (0);
    oldout:=word2bits (0);
    quitcmd:=false;
    initkeyboard;
    clrscr;
-   writeln ('Black Knight Monitor -- keys: k kill system - q quit monitor - o open door - r refresh');
+   writeln ('Black Knight Monitor -- keys: k kill system - n enable/disable - o open door - q quit Monitor - r refresh');
    gotoxy (1,18);
    while not ( SHMPointer^.state[S_STOP] or quitcmd ) do
     begin
@@ -425,12 +415,27 @@ begin
         'f': if SHMPointer^.inputs[15] then SHMPointer^.fakeinputs[15]:=false else SHMPointer^.fakeinputs[15]:=true;
         'q': quitcmd:=true;
         'k': begin
-              SHMPointer^.command:='stop';
-              SHMPointer^.SHMMSG:='Quit order given by monitor';
+              SHMPointer^.command:=CMD_STOP;
+              SHMPointer^.SHMMSG:='Quit order given by Monitor';
+              fpkill (daemonpid, SIGHUP);
+             end;
+        'n': begin
+              if SHMPointer^.State[SC_DISABLED] then
+               begin
+                SHMPointer^.command:=CMD_ENABLE;
+                SHMPointer^.SHMMSG:='Enabled by Monitor';
+               end
+              else
+               begin
+                SHMPointer^.command:=CMD_DISABLE;
+                SHMPointer^.SHMMSG:='Disabled by Monitor';
+               end;
+              fpkill (daemonpid, SIGHUP);
              end;
         'o': begin
-              SHMPointer^.command:='open';
-              SHMPointer^.SHMMSG:='Open order given by monitor';
+              SHMPointer^.command:=CMD_OPEN;
+              SHMPointer^.SHMMSG:='Open from Monitor';
+              fpkill (daemonpid, SIGHUP);
              end;
         'r': begin
               for i:=0 to 15 do
@@ -451,14 +456,9 @@ begin
      sleep (1);
     end;
    // Cleanup
-   if quitcmd then writeln ('Quitting monitor.')
+   if quitcmd then writeln ('Quitting Monitor.')
               else writeln ('Main program stopped. Quitting as well.');
    donekeyboard;
-  end
- else
-  begin // We may have just created an instance. Killing it.
-   shmctl (shmid, IPC_RMID, nil);
-   writeln (paramstr (0),': not started. Waiting for startup...');
   end;
 end;
 
@@ -553,7 +553,7 @@ begin
    CurrentState[S_DEMOMODE]:=true;
    inputs:=word2bits (65535); // Open contact = 1
   end;
- log_door_event (LOG_MSG_START, false, msgflags, LOG_MSG, LOG_DEBUGMODE, '');
+// log_door_event (LOG_MSG_START, false, msgflags, LOG_MSG, LOG_DEBUGMODE, '');
 
  repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
   if CurrentState[S_DEMOMODE] then
@@ -573,15 +573,15 @@ begin
       begin // PANIC MODE (topmost priority)
        outputs[MAGLOCK1_RELAY]:=false;
        outputs[MAGLOCK2_RELAY]:=false;
-       if SHMPointer^.command <> 'stop' then SHMPointer^.command:=''; // Deny any other command
+       if SHMPointer^.command <> CMD_STOP then SHMPointer^.command:=CMD_NONE; // Deny any other command
       end
       else
       begin
-       if SHMPointer^.command = 'open' then
+       if SHMPointer^.command = CMD_OPEN then
         begin
          opendoor:=255;
-         log_door_event (LOG_MSG_SOFTOPEN, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.SHMMSG);
-         SHMPointer^.command:='';
+//         log_door_event (LOG_MSG_SOFTOPEN, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.SHMMSG);
+         SHMPointer^.command:=CMD_NONE;
         end;
 
        if (opendoor = 255) or (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED))
@@ -595,7 +595,7 @@ begin
           begin
            busy_delay_tick (open_wait, 16);
            opendoor:=255;
-           log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
+//           log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
            outputs[MAGLOCK1_RELAY]:=false;
            outputs[MAGLOCK2_RELAY]:=false;
            outputs[DOOR_STRIKE_RELAY]:=true;
@@ -610,7 +610,7 @@ begin
         end
         else
         begin
-         log_door_event (LOG_MSG_SOFTOPEN, true, msgflags, LOG_MSG, LOG_DEBUGMODE, ''); // reset log event
+//         log_door_event (LOG_MSG_SOFTOPEN, true, msgflags, LOG_MSG, LOG_DEBUGMODE, ''); // reset log event
          if STATIC_CONFIG[SC_MAGLOCK1] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK1_RELAY]:=true;
          if STATIC_CONFIG[SC_MAGLOCK2] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK2_RELAY]:=true;
          outputs[DOOR_STRIKE_RELAY]:=false;
@@ -619,7 +619,7 @@ begin
        // somewhat sketchy above
       end;
      // End of lock logic shit.
-
+{
      // Leaf switch: sketchy
      if STATIC_CONFIG[SC_DOORSWITCH] then
       log_door_event (LOG_MSG_DOORLEAFSWITCH, inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
@@ -643,12 +643,12 @@ begin
      if STATIC_CONFIG[SC_MAGLOCK2] then
       log_door_event (LOG_MSG_MAGLOCK2ON, not outputs[MAGLOCK2_RELAY] , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
      // Door locked ?
-
+ }
 (********************************************************************************************************)
       // Return current state to the shm buffer
-      if SHMPointer^.command = 'stop' then
+      if SHMPointer^.command = CMD_STOP then
        begin
-        SHMPointer^.command:='';
+        SHMPointer^.command:=CMD_NONE;
         outputs:=word2bits (0);
         CurrentState[S_STOP]:=true;
         if not CurrentState[S_DEMOMODE] then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
@@ -661,13 +661,13 @@ begin
    else dryrun:=dryrun-1;
  until CurrentState[S_STOP];
  // Cleaning up
- log_door_event (LOG_MSG_STOP, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.shmmsg);
+// log_door_event (LOG_MSG_STOP, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.shmmsg);
  shmctl (shmid, IPC_RMID, nil);
 end;
 
 ///////////// DAEMON STUFF /////////////
 
-function godaemon (daemonpid: Tpid): boolean;
+procedure godaemon (daemonpid: Tpid);
 var shmname: string;
     inputs, outputs : TRegisterbits;
     shmkey: TKey;
@@ -675,7 +675,16 @@ var shmname: string;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
     open_wait: longint;
+    open_order: boolean;
 begin
+ outputs:=word2bits (0);
+ open_order:=false;
+ dryrun:=MAXBOUNCES+2;
+ fillchar (CurrentState, sizeof (CurrentState), 0);
+ fillchar (msgflags, sizeof (msgflags), 0);
+ fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
+ open_wait:=COPENWAIT;
+ CurrentState[SC_DISABLED]:=STATIC_CONFIG[SC_DISABLED]; // Get default state from config
  shmname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@shmname[1]), daemonpid);
  shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
@@ -685,13 +694,6 @@ begin
    SHMPointer:=shmat (shmid, nil, 0);
    fillchar (SHMPointer^, sizeof (TSHMVariables), 0);
    SHMPointer^.fakeinputs:=word2bits (65535);
-   outputs:=word2bits (0);
-   dryrun:=MAXBOUNCES+2;
-   fillchar (CurrentState, sizeof (CurrentState), 0);
-   fillchar (msgflags, sizeof (msgflags), 0);
-   fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
-   open_wait:=COPENWAIT;
-
    if initgpios (CLOCKPIN, STROBEPIN, DATAPIN, READOUTPIN) then
     CurrentState[S_DEMOMODE]:=false
    else
@@ -701,14 +703,100 @@ begin
      inputs:=word2bits (65535); // Open contact = 1
     end;
 
+   repeat
+    if CurrentState[S_DEMOMODE] then // I/O cycle
+     begin // Fake I/O
+      inputs:=debounceinput (SHMPointer^.fakeinputs, MAXBOUNCES);
+      sleep (16); // Emulate the real deal
+     end
+    else // Real I/O
+     inputs:=debounceinput (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs), MAXBOUNCES);
+    if CurrentState[S_HUP] then // Process HUP signal
+     begin
+      SHMPointer^.shmmsg:=SHMPointer^.shmmsg + #0; // Make sure the string is null terminated
+      syslog (log_info, 'Received HUP signal with command "%s" and the following extra parameter: %s', [ CMD_NAME[SHMPointer^.command], @SHMPointer^.shmmsg[1]]);
+      CurrentState[S_HUP]:=false; // Reset HUP signal
+      case SHMPointer^.command of
+       CMD_ENABLE: CurrentState[SC_DISABLED]:=false;
+       CMD_DISABLE: CurrentState[SC_DISABLED]:=true;
+       CMD_STOP: CurrentState[S_STOP]:=true;
+       CMD_OPEN: open_order:=true;
+      end;
+      SHMPointer^.command:=CMD_NONE;
+      SHMPointer^.shmmsg:='';
+     end;
 
-   syslog (log_info, 'Doing daemon shit...'#10, []);
-   sleep (3000);
+    if dryrun = 0 then // Make a dry run to let inputs settle
+     begin
+      if not CurrentState[SC_DISABLED] then // System is enabled.  Process outputs
+       begin
+(********************************************************************************************************)
+        // Do lock logic shit !!
+        if inputs[PANIC_SENSE] = IS_OPEN then
+         begin // PANIC MODE (topmost priority)
+          outputs[MAGLOCK1_RELAY]:=false;
+          outputs[MAGLOCK2_RELAY]:=false;
+          open_order:=false;
+         end
+        else // no panic
+         begin
+          if open_order or (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED))
+           or (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED))
+           or (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))
+           or (CurrentState[S_TUESDAY] and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))) then
+           begin // Open order received
+            if not busy_delay_is_expired (open_wait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then
+             begin // Open !!
+              busy_delay_tick (open_wait, 16);
+//              open_order:=true;
+//              log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
+              outputs[MAGLOCK1_RELAY]:=false;
+              outputs[MAGLOCK2_RELAY]:=false;
+              outputs[DOOR_STRIKE_RELAY]:=true;
+              outputs[BUZZER_OUTPUT]:=true;
+             end
+            else
+             begin
+              syslog (LOG_INFO, 'relocking door.', []);
+              open_wait:=COPENWAIT;
+              open_order:=false;
+             end;
+           end
+          else
+           begin // No open order (lock mode)
+//           log_door_event (LOG_MSG_SOFTOPEN, true, msgflags, LOG_MSG, LOG_DEBUGMODE, ''); // reset log event
+           if STATIC_CONFIG[SC_MAGLOCK1] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK1_RELAY]:=true;
+           if STATIC_CONFIG[SC_MAGLOCK2] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK2_RELAY]:=true;
+           outputs[DOOR_STRIKE_RELAY]:=false;
+           outputs[BUZZER_OUTPUT]:=false;
+           end;
+         end;
+(********************************************************************************************************)
+       end
+      else
+       begin // System is software-disabled
+        outputs:=word2bits (0); // Set all outputs to zero.
+        open_order:=false;      // Deny open order (we're disabled)
+       end;
+(********************************************************************************************************)
+      // Do switch monitoring
 
+  //    syslog (log_info, 'Doing daemon shit...'#10, []);
+    //  sleep (300);
 
+(********************************************************************************************************)
+      SHMPointer^.inputs:=inputs;
+      SHMPointer^.outputs:=outputs;
+      SHMPointer^.state:=CurrentState;
+      SHMPointer^.Config:=STATIC_CONFIG;
+     end
+    else dryrun:=dryrun-1;
+   until CurrentState[S_STOP];
   end;
- syslog (log_crit,' Daemon is exiting for reason: %s', ['']);
- sleep (1000); // Give time for the monitor to die before yanking the segment
+ syslog (log_crit,'Daemon is exiting. Clearing outputs', []);
+ outputs:=word2bits (0);
+ if not CurrentState[S_DEMOMODE] then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
+ sleep (100); // Give time for the monitor to die before yanking the segment
  shmctl (shmid, IPC_RMID, nil); // Destroy shared memory segment upon leaving
 end;
 
@@ -721,8 +809,40 @@ end;
 // Do something on signal
 procedure signalhandler (sig: longint); cdecl;
 begin
-
+ case sig of
+  SIGHUP: CurrentState[S_HUP]:=true;
+  SIGTERM: CurrentState[S_STOP]:=true;
+ end;
 end;
+
+
+// For IPC stuff (sending commands)
+Procedure senddaemoncommand (daemonpid: TPid; cmd: byte; comment: string);
+var  shmid: longint;
+     shmname: string;
+     shmkey: tkey;
+     SHMPointer: ^TSHMVariables;
+begin
+ if daemonpid = 0 then
+  begin
+   writeln ('Daemon not started.');
+   halt (1);
+  end
+ else
+  begin
+   shmname:=paramstr (0) + #0;
+   shmkey:=ftok (pchar (@shmname[1]), daemonpid);
+   shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
+   // Add test for shmget error here ?
+   SHMPointer:=shmat (shmid, nil, 0);
+   writeln (paramstr (0),': Sending command ', CMD_NAME[cmd], ' to PID ', daemonpid);
+   SHMPointer^.command:=cmd;
+   if comment = '' then SHMPointer^.SHMMsg:='<no message provided>'
+                   else SHMPointer^.SHMMsg:=comment;
+   fpkill (daemonpid, SIGHUP);
+  end;
+end;
+
 
 ///////////// MAIN BLOCK /////////////
 var     shmname, pidname :string;
@@ -731,46 +851,45 @@ var     shmname, pidname :string;
         ps1 : psigset;
         sSet : cardinal;
         oldpid, sid, pid: TPid;
-        shmkey, shmoldkey: TKey;
+        //shmkey,
+        shmoldkey: TKey;
         shmid: longint;
         iamrunning: boolean;
+        moncount: byte;
 
 begin
  pidname:=getpidname;
+ moncount:=20;
  iamrunning:=am_i_running (pidname);
  oldpid:=loadpid (pidname);
- shmname:=paramstr (0) + #0;
 
  // Clean up in case of crash or hard reboot
  if (oldpid <> 0) and not iamrunning then
   begin
    writeln ('Removing stale PID file and SHM buffer');
    deletepid (pidname);
+   shmname:=paramstr (0) + #0;
    shmoldkey:=ftok (pchar (@shmname[1]), oldpid);
    shmid:=shmget (shmoldkey, sizeof (TSHMVariables), 0);
    shmctl (shmid, IPC_RMID, nil);
    oldpid:=0; // PID was stale
   end;
 
- // That part will be removed. Sendcommand should use the daemon PID as key
- shmkey:=ftok (pchar (@shmname[1]), ord ('t'));
-
  case paramstr (1) of
-  'stop':
-    sendcommand (shmkey, 'stop', paramstr (2));
-  'beep':
-    sendcommand (shmkey, 'beep', '');
-  'tuesday':
-    sendcommand (shmkey, 'tuesday', paramstr (2));
-  'open':
-    sendcommand (shmkey, 'open', 'commandline: ' + paramstr (2));
-  'disable':
-    sendcommand (shmkey, 'disable', paramstr (2));
-  'enable':
-    sendcommand (shmkey, 'enable', paramstr (2));
+  'running':   if iamrunning then halt (0) else halt (1);
+  'stop':      if iamrunning then fpkill (oldpid, SIGTERM);
+  'beep':      senddaemoncommand (oldpid, CMD_BEEP, '');
+  'tuesday':   senddaemoncommand (oldpid, CMD_TUESDAY, paramstr (2));
+  'open':      senddaemoncommand (oldpid, CMD_OPEN, '(cmdline): ' + paramstr (2));
+  'disable':   senddaemoncommand (oldpid, CMD_DISABLE, paramstr (2));
+  'enable':    senddaemoncommand (oldpid, CMD_ENABLE, paramstr (2));
+  'diag':      dump_config (STATIC_CONFIG, STATIC_CONFIG_STR);
+  '':
+   begin
+    writeln ('Usage: ', paramstr (0), ' [start|stop|tuesday|monitor|open|diag]');
+    halt (1);
+   end;
   'start':
-    run_door (shmkey);
-  'start2':
     if iamrunning
      then writeln ('Already started as PID ', oldpid)
      else
@@ -810,7 +929,7 @@ begin
          FpUmask (0);
          sid:=FpSetSid;
          syslog (log_info, 'Session ID: %d'#10, [sid]);
-         FpChdir ('/tmp/');
+         FpChdir ('/');
         End
        Else
         Begin // We're in the parent
@@ -823,26 +942,26 @@ begin
        deletepid (pidname); // cleanup
        closelog;
       end;
-  'running':
-    if iamrunning then halt (0) else halt (1);
   'monitor': // Interactive monitor mode
-    repeat
-     sleep (500);
-    until run_test_mode (shmkey);
-  'forget':
     begin
-     writeln ('Forgetting everything about my running processes (NOT RECOMMENDED)');
-     shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
-     shmctl (shmid, IPC_RMID, nil);
-    end;
-  'diag':
-    begin
-     dump_config (STATIC_CONFIG, STATIC_CONFIG_STR);
-    end;
-  '':
-   begin
-    writeln ('Usage: ', paramstr (0), ' [start|stop|tuesday|monitor|open|diag]');
-    halt (1);
-   end;
+     while (not iamrunning) and (moncount <> 0) do
+      begin
+       moncount:=moncount-1;
+       iamrunning:=am_i_running (pidname);
+       writeln ('Waiting for main process to come up (',moncount,')');
+       sleep (500);
+      end;
+     if iamrunning then
+      begin
+       oldpid:=loadpid (pidname);
+       writeln ('Found instance running as PID ', oldpid, ', launching monitor...');
+       run_test_mode (oldpid);
+      end
+      else
+      begin
+       writeln ('Main process did not start. Bailing out.');
+       halt (1);
+      end;
+     end;
  end;
 end.
