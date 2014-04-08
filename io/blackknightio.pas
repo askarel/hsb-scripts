@@ -32,7 +32,7 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TRegisterbits=bitpacked array [0..15] of boolean; // Like a word: a 16 bits bitfield
         TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
         TSHMVariables=RECORD // What items should be exposed for IPC.
-                PIDofmain:TPid;
+//                PIDofmain:TPid;
                 Inputs, outputs, fakeinputs: TRegisterbits;
                 state, Config :TLotsofbits;
                 Command: byte;
@@ -40,13 +40,13 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
 //                lastcommandstatus: byte;
                 end;
         TConfigTextArray=ARRAY [0..SHITBITS] of string[20];
-        TLogItem=ARRAY [0..SHITBITS] OF RECORD // Log and debug text, with alternative and levels
+{        TLogItem=ARRAY [0..SHITBITS] OF RECORD // Log and debug text, with alternative and levels
                 msglevel: byte;
                 msg: string;
                 altlevel: byte;
                 altmsg: string;
                 end;
-
+ }
 CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
         DATAPIN=25;
@@ -199,7 +199,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     true,  // SC_HANDLEANDLIGHT (The light must be on to unlock with the handle)
                                     true,  // SC_DOORUNLOCKBUTTON (A push button to open the door)
                                     false, // SC_HANDLE (Unlock with the handle only: not recommended in HSBXL)
-                                    false, // SC_DISABLED (system is software-disabled)
+                                    true, // SC_DISABLED (system is software-disabled)
                                     false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
@@ -383,7 +383,7 @@ begin
    SHMPointer:=shmat (shmid, nil, 0);
 
    oldin:=word2bits (0);
-   oldout:=word2bits (0);
+   oldout:=word2bits (1);
    quitcmd:=false;
    initkeyboard;
    clrscr;
@@ -514,157 +514,6 @@ begin
 end;
 
 ///////////// RUN THE FUCKING DOOR /////////////
-
-// Spaghetti code warning !!
-// This is the dirtiest function: need a rewrite. It is not maintainable.
-// The functionalities from this function will be moved to the one below,
-// and it will be rewritten to be daemon-friendly.
-procedure run_door (shmkey: TKey);
-var  shmid: longint;
-     inputs, outputs : TRegisterbits;
-     SHMPointer: ^TSHMVariables;
-     open_wait: longint;
-     opendoor, i, dryrun: byte; // A boolean can be used, but is very sketchy
-begin
- shmid:=shmget (shmkey, sizeof (TSHMVariables), IPC_CREAT or IPC_EXCL or 438);
- if shmid = -1 then
-  begin
-   writeln (paramstr (0),': not starting: already running.');
-   halt (1);
-  end;
- SHMPointer:=shmat (shmid, nil, 0);
- fillchar (SHMPointer^, sizeof (TSHMVariables), 0);
- SHMPointer^.PIDOfMain:=fpGetPid;
- SHMPointer^.fakeinputs:=word2bits (65535);
- outputs:=word2bits (0);
- dryrun:=MAXBOUNCES+2;
- fillchar (CurrentState, sizeof (CurrentState), 0);
- fillchar (msgflags, sizeof (msgflags), 0);
- fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
-// for i:=0 to 15 do debounceinput_array[true][i]:=MAXBOUNCES;
- opendoor:=0;
- open_wait:=COPENWAIT;
-
- if initgpios (CLOCKPIN, STROBEPIN, DATAPIN, READOUTPIN) then
-  CurrentState[S_DEMOMODE]:=false
-  else
-  begin
-   writeln ('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.');
-   CurrentState[S_DEMOMODE]:=true;
-   inputs:=word2bits (65535); // Open contact = 1
-  end;
-// log_door_event (LOG_MSG_START, false, msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-
- repeat // Start of the main loop. Should run at around 62,5 Hz. The I/O operation has a hard-coded 16 ms delay (propagation time through the I/O chips)
-  if CurrentState[S_DEMOMODE] then
-   begin
-    inputs:=debounceinput (SHMPointer^.fakeinputs, MAXBOUNCES);
-    sleep (16); // Emulate the real deal
-   end
-   else
-    inputs:=debounceinput (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs), MAXBOUNCES);
-
-  if dryrun = 0 then // Make a dry run to let inputs settle
-   begin
-(********************************************************************************************************)
-
-     // Do lock logic shit !!
-     if inputs[PANIC_SENSE] = IS_OPEN then
-      begin // PANIC MODE (topmost priority)
-       outputs[MAGLOCK1_RELAY]:=false;
-       outputs[MAGLOCK2_RELAY]:=false;
-       if SHMPointer^.command <> CMD_STOP then SHMPointer^.command:=CMD_NONE; // Deny any other command
-      end
-      else
-      begin
-       if SHMPointer^.command = CMD_OPEN then
-        begin
-         opendoor:=255;
-//         log_door_event (LOG_MSG_SOFTOPEN, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.SHMMSG);
-         SHMPointer^.command:=CMD_NONE;
-        end;
-
-       if (opendoor = 255) or (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED))
-          or (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED))
-          or (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))
-          or (CurrentState[S_TUESDAY] and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))) then
-        begin
-
-         // somewhat sketchy below
-         if not busy_delay_is_expired (open_wait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then
-          begin
-           busy_delay_tick (open_wait, 16);
-           opendoor:=255;
-//           log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-           outputs[MAGLOCK1_RELAY]:=false;
-           outputs[MAGLOCK2_RELAY]:=false;
-           outputs[DOOR_STRIKE_RELAY]:=true;
-           outputs[BUZZER_OUTPUT]:=true;
-          end
-          else
-          begin
-           writeln ('relocking door.');
-           open_wait:=COPENWAIT;
-           opendoor:=0;
-          end;
-        end
-        else
-        begin
-//         log_door_event (LOG_MSG_SOFTOPEN, true, msgflags, LOG_MSG, LOG_DEBUGMODE, ''); // reset log event
-         if STATIC_CONFIG[SC_MAGLOCK1] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK1_RELAY]:=true;
-         if STATIC_CONFIG[SC_MAGLOCK2] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK2_RELAY]:=true;
-         outputs[DOOR_STRIKE_RELAY]:=false;
-         outputs[BUZZER_OUTPUT]:=false;
-       end;
-       // somewhat sketchy above
-      end;
-     // End of lock logic shit.
-{
-     // Leaf switch: sketchy
-     if STATIC_CONFIG[SC_DOORSWITCH] then
-      log_door_event (LOG_MSG_DOORLEAFSWITCH, inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-
-     // Panic logging
-     log_door_event (LOG_MSG_PANIC, not inputs[PANIC_SENSE] , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-     // Tamper processing
-     if STATIC_CONFIG[SC_TRIPWIRE_LOOP] then
-      log_door_event (LOG_MSG_TRIPWIRE, inputs[TRIPWIRE_LOOP] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-     if STATIC_CONFIG[SC_BOX_TAMPER_SWITCH] then
-      log_door_event (LOG_MSG_BOXTAMPER, inputs[BOX_TAMPER_SWITCH] = IS_CLOSED , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-     // Check mail
-     if STATIC_CONFIG[SC_MAILBOX] then
-      log_door_event (LOG_MSG_MAIL, inputs[MAILBOX] = IS_OPEN , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-     // Hallway light logging
-     if STATIC_CONFIG[SC_HALLWAY] then
-      log_door_event (LOG_MSG_HALLWAYLIGHT, inputs[LIGHTS_ON_SENSE] = IS_OPEN , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-     // Maglock
-     if STATIC_CONFIG[SC_MAGLOCK1] then
-      log_door_event (LOG_MSG_MAGLOCK1ON, not outputs[MAGLOCK1_RELAY] , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-     if STATIC_CONFIG[SC_MAGLOCK2] then
-      log_door_event (LOG_MSG_MAGLOCK2ON, not outputs[MAGLOCK2_RELAY] , msgflags, LOG_MSG, LOG_DEBUGMODE, '');
-     // Door locked ?
- }
-(********************************************************************************************************)
-      // Return current state to the shm buffer
-      if SHMPointer^.command = CMD_STOP then
-       begin
-        SHMPointer^.command:=CMD_NONE;
-        outputs:=word2bits (0);
-        CurrentState[S_STOP]:=true;
-        if not CurrentState[S_DEMOMODE] then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
-       end;
-      SHMPointer^.inputs:=inputs;
-      SHMPointer^.outputs:=outputs;
-      SHMPointer^.state:=CurrentState;
-      SHMPointer^.Config:=STATIC_CONFIG;
-   end
-   else dryrun:=dryrun-1;
- until CurrentState[S_STOP];
- // Cleaning up
-// log_door_event (LOG_MSG_STOP, false, msgflags, LOG_MSG, LOG_DEBUGMODE, SHMPointer^.shmmsg);
- shmctl (shmid, IPC_RMID, nil);
-end;
-
 ///////////// DAEMON STUFF /////////////
 
 procedure godaemon (daemonpid: Tpid);
@@ -728,8 +577,13 @@ begin
 
     if dryrun = 0 then // Make a dry run to let inputs settle
      begin
-      if not CurrentState[SC_DISABLED] then // System is enabled.  Process outputs
-       begin
+      if CurrentState[SC_DISABLED] then
+       begin // System is software-disabled
+        outputs:=word2bits (0); // Set all outputs to zero.
+        open_order:=false;      // Deny open order (we're disabled)
+       end
+      else
+       begin // System is enabled. Process outputs
 (********************************************************************************************************)
         // Do lock logic shit !!
         if inputs[PANIC_SENSE] = IS_OPEN then
@@ -771,12 +625,6 @@ begin
            outputs[BUZZER_OUTPUT]:=false;
            end;
          end;
-(********************************************************************************************************)
-       end
-      else
-       begin // System is software-disabled
-        outputs:=word2bits (0); // Set all outputs to zero.
-        open_order:=false;      // Deny open order (we're disabled)
        end;
 (********************************************************************************************************)
       // Do switch monitoring
@@ -875,7 +723,7 @@ begin
    oldpid:=0; // PID was stale
   end;
 
- case paramstr (1) of
+ case lowercase (paramstr (1)) of
   'running':   if iamrunning then halt (0) else halt (1);
   'stop':      if iamrunning then fpkill (oldpid, SIGTERM);
   'beep':      senddaemoncommand (oldpid, CMD_BEEP, '');
@@ -884,11 +732,6 @@ begin
   'disable':   senddaemoncommand (oldpid, CMD_DISABLE, paramstr (2));
   'enable':    senddaemoncommand (oldpid, CMD_ENABLE, paramstr (2));
   'diag':      dump_config (STATIC_CONFIG, STATIC_CONFIG_STR);
-  '':
-   begin
-    writeln ('Usage: ', paramstr (0), ' [start|stop|tuesday|monitor|open|diag]');
-    halt (1);
-   end;
   'start':
     if iamrunning
      then writeln ('Already started as PID ', oldpid)
@@ -963,5 +806,24 @@ begin
        halt (1);
       end;
      end;
+  else
+   begin
+    writeln ('This is the main control program for The Black Knight, HSBXL front door controller.');
+    if (paramstr (1) <> '') and (lowercase (paramstr (1)) <> 'help') then writeln ('ERROR: unknown parameter: ''', paramstr (1),'''.');
+    writeln;
+    writeln ('Usage: ', applicationname, ' [start|stop|tuesday|monitor|open|diag|running|enable|disable] [...]');
+    writeln;
+    writeln ('Command line parameters:');
+    writeln ('  start      - Start the daemon');
+    writeln ('  stop       - Stop the daemon');
+    writeln ('  tuesday    - Start open mode (not implemented yet)');
+    writeln ('  monitor    - Full screen monitor for debugging');
+    writeln ('  open       - Open the door. Any extra parameter will be sent to the syslog as extra text');
+    writeln ('  diag       - Dump configuration options');
+    writeln ('  running    - For script usage: tell if the main daemon is running (check exitcode: 0=running 1=not running)');
+    writeln ('  enable     - Activate the locking system outputs');
+    writeln ('  disable    - Deactivate the locking system outputs. Inputs still monitored.');
+    halt (1);
+   end;
  end;
 end.
