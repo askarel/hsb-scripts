@@ -523,7 +523,7 @@ var shmname: string;
     shmid: longint;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
-    open_wait: longint;
+    open_wait, beepdelay: longint;
     open_order: boolean;
 begin
  outputs:=word2bits (0);
@@ -532,7 +532,7 @@ begin
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
- open_wait:=COPENWAIT;
+ open_wait:=COPENWAIT; beepdelay:=0; // Initialize some timers
  CurrentState[SC_DISABLED]:=STATIC_CONFIG[SC_DISABLED]; // Get default state from config
  shmname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@shmname[1]), daemonpid);
@@ -570,6 +570,7 @@ begin
        CMD_DISABLE: CurrentState[SC_DISABLED]:=true;
        CMD_STOP: CurrentState[S_STOP]:=true;
        CMD_OPEN: open_order:=true;
+       CMD_BEEP: beepdelay:=300;
       end;
       SHMPointer^.command:=CMD_NONE;
       SHMPointer^.shmmsg:='';
@@ -601,7 +602,7 @@ begin
            begin // Open order received
             if not busy_delay_is_expired (open_wait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then
              begin // Open !!
-              busy_delay_tick (open_wait, 16);
+              busy_delay_tick (open_wait, 16); // tick...
 //              open_order:=true;
 //              log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
               outputs[MAGLOCK1_RELAY]:=false;
@@ -627,6 +628,9 @@ begin
          end;
        end;
 (********************************************************************************************************)
+      // Process beep command
+      busy_delay_tick (beepdelay, 16); // tick...
+      outputs[BUZZER_OUTPUT]:= not busy_delay_is_expired (beepdelay);
       // Do switch monitoring
 
   //    syslog (log_info, 'Doing daemon shit...'#10, []);
