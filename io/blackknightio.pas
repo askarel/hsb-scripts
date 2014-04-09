@@ -119,8 +119,9 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                            (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: '')
                            );
  }       // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
-        COPENWAIT=4000;
-
+        COPENWAIT=4000; // How long to leave the door unlocked after receiving open order
+        LOCKWAIT=2000; // Maximum delay between leaf switch closure and maglock feedback switch closure (if delay expired, alert that the door is not closed properly
+        BUZZERCHIRP=200; // Small beep delay
 
         // Available outputs on 74LS673. Outputs Q0 to Q3 are connected to the address inputs of the 74150
         Q15=0; Q14=1; Q13=2; Q12=3; Q11=4; Q10=5; Q9=6; Q8=7; Q7=8; Q6=9; Q5=10; Q4=11;
@@ -563,14 +564,14 @@ begin
     if CurrentState[S_HUP] then // Process HUP signal
      begin
       SHMPointer^.shmmsg:=SHMPointer^.shmmsg + #0; // Make sure the string is null terminated
-      syslog (log_info, 'Received HUP signal with command "%s" and the following extra parameter: %s', [ CMD_NAME[SHMPointer^.command], @SHMPointer^.shmmsg[1]]);
+      syslog (log_info, 'HUP received. Command: "%s" parameter: %s', [ CMD_NAME[SHMPointer^.command], @SHMPointer^.shmmsg[1]]);
       CurrentState[S_HUP]:=false; // Reset HUP signal
       case SHMPointer^.command of
        CMD_ENABLE: CurrentState[SC_DISABLED]:=false;
        CMD_DISABLE: CurrentState[SC_DISABLED]:=true;
        CMD_STOP: CurrentState[S_STOP]:=true;
        CMD_OPEN: open_order:=true;
-       CMD_BEEP: beepdelay:=300;
+       CMD_BEEP: beepdelay:=BUZZERCHIRP; // Small beep
       end;
       SHMPointer^.command:=CMD_NONE;
       SHMPointer^.shmmsg:='';
@@ -630,7 +631,7 @@ begin
 (********************************************************************************************************)
       // Process beep command
       busy_delay_tick (beepdelay, 16); // tick...
-      outputs[BUZZER_OUTPUT]:= not busy_delay_is_expired (beepdelay);
+      outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT];
       // Do switch monitoring
 
   //    syslog (log_info, 'Doing daemon shit...'#10, []);
