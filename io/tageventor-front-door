@@ -1,0 +1,19 @@
+#!/bin/sh
+
+echo `date +"%s"`" UID $1, T $2 $RES" >> /tmp/tagEventorLog
+echo `date +"%s"`" UID $1, T $2 $RES" > /tmp/tagEventorLastEvent
+
+# Only work on the "tag in" event
+test "$2" != "IN" && exit 0
+sudo blackknightio beep "Seen Tag $1"
+
+RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.checktag('"$1"');" rfid_db_hsbxl`
+if [ -n "$RES" ]; then
+ logger "UID $1, T $2 $RES" 
+ sudo blackknightio open "Using tag $1"
+else
+ logger "WARNING UNKNOWN UID $1, T $2 PROVISIONNING ?"
+fi
+
+exit 0
+
