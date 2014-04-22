@@ -1,0 +1,17 @@
+[package]
+name=blackknightio
+version=1.0
+
+[target]
+units=pidfile pigpio
+programs=blackknightio
+
+[default]
+fpcdir=/usr/lib/fpc/default/
+
+[require]
+libc=y
+
+[install]
+fpcpackage=y
+
