@@ -121,7 +121,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
  }       // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
         COPENWAIT=4000; // How long to leave the door unlocked after receiving open order
         LOCKWAIT=2000; // Maximum delay between leaf switch closure and maglock feedback switch closure (if delay expired, alert that the door is not closed properly
-        BUZZERCHIRP=200; // Small beep delay
+        BUZZERCHIRP=150; // Small beep delay
+//        SND_MISTERCASH: ARRAY OF WORD=(200, 200, 200, 200, 200, 200, 0, 0);
 
         // Available outputs on 74LS673. Outputs Q0 to Q3 are connected to the address inputs of the 74150
         Q15=0; Q14=1; Q13=2; Q12=3; Q11=4; Q10=5; Q9=6; Q8=7; Q7=8; Q6=9; Q5=10; Q4=11;
@@ -296,6 +297,11 @@ end;
 
 // Buzzer functions ?
 // Needed functions:  buzzer handling
+
+procedure logexec (msgindex: byte; var flags: TLotsOfBits; msg: string);
+begin
+
+end;
 
 {
 // Log an event (NEED REWRITE)
@@ -604,7 +610,7 @@ begin
             if not busy_delay_is_expired (open_wait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then
              begin // Open !!
               busy_delay_tick (open_wait, 16); // tick...
-//              open_order:=true;
+              open_order:=true;
 //              log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
               outputs[MAGLOCK1_RELAY]:=false;
               outputs[MAGLOCK2_RELAY]:=false;
@@ -631,7 +637,7 @@ begin
 (********************************************************************************************************)
       // Process beep command
       busy_delay_tick (beepdelay, 16); // tick...
-      outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT];
+      outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT]; // The buzzer might be active elsewhere
       // Do switch monitoring
 
   //    syslog (log_info, 'Doing daemon shit...'#10, []);
@@ -731,7 +737,7 @@ begin
  case lowercase (paramstr (1)) of
   'running':   if iamrunning then halt (0) else halt (1);
   'stop':      if iamrunning then fpkill (oldpid, SIGTERM);
-  'beep':      senddaemoncommand (oldpid, CMD_BEEP, '');
+  'beep':      senddaemoncommand (oldpid, CMD_BEEP, paramstr (2));
   'tuesday':   senddaemoncommand (oldpid, CMD_TUESDAY, paramstr (2));
   'open':      senddaemoncommand (oldpid, CMD_OPEN, '(cmdline): ' + paramstr (2));
   'disable':   senddaemoncommand (oldpid, CMD_DISABLE, paramstr (2));
@@ -823,8 +829,9 @@ begin
     writeln ('  stop       - Stop the daemon');
     writeln ('  tuesday    - Start open mode (not implemented yet)');
     writeln ('  monitor    - Full screen monitor for debugging');
-    writeln ('  open       - Open the door. Any extra parameter will be sent to the syslog as extra text');
+    writeln ('  open       - Open the door. Any extra parameter is logged to syslog as extra text');
     writeln ('  diag       - Dump configuration options');
+    writeln ('  beep       - Chirp the buzzer. Any extra parameter is logged to syslog as extra text');
     writeln ('  running    - For script usage: tell if the main daemon is running (check exitcode: 0=running 1=not running)');
     writeln ('  enable     - Activate the locking system outputs');
     writeln ('  disable    - Deactivate the locking system outputs. Inputs still monitored.');
