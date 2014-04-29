@@ -227,7 +227,7 @@ Yearly payments are not supported yet.
 Hackerspace Brussels
 
 This mail is sent automagically from a broken half-assed bash script. You
-can see the gory details here: https://github.com/askarel/hsb-members
+can see the gory details here: https://github.com/askarel/hsb-scripts
 "| mail -s "HSBXL - information update" $(echo "$SQLRESULT"|cut -f 3) && echo "Email sent to $(echo "$SQLRESULT"|cut -f 3)"
 }
 
@@ -267,7 +267,7 @@ not bother you anymore. Just bring us the key back. :-)
 Hackerspace Brussels
 
 This mail is sent automagically from a broken half-assed bash script. You
-can see the gory details here: https://github.com/askarel/hsb-members
+can see the gory details here: https://github.com/askarel/hsb-scripts
 "| mail -s "HSBXL - BooksBetterBeBalanced - About your membership" $(echo "$SQLRESULT"|cut -f 3) && echo "Email sent to $(echo "$SQLRESULT"|cut -f 3)"
 
 
@@ -319,7 +319,7 @@ $(echo "$SQLRESULT"|cut -d ',' -f 4-)
 Hackerspace Brussels
 
 This mail is sent automagically from a broken half-assed bash script. You
-can see the gory details here: https://github.com/askarel/hsb-members
+can see the gory details here: https://github.com/askarel/hsb-scripts/
 "| mail -s "HSBXL - Welcome aboard" $(echo $SQLRESULT|cut -d ',' -f 3) && echo "mail sent to $(echo $SQLRESULT|cut -d ',' -f 3)"
 }
 
@@ -549,6 +549,41 @@ done
 	test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
 	echo "Added transaction 0x$2 with message '$BANKMSG' to $STRUCTURED"
     ;;
+    massmail)
+	# Spam all members
+	test $# = 1 && die "Please specify the template file to use"
+	test -f "$2" || die "File '$2' does not exist"
+	MEMBERCOUNT="$(runsql 'select count(id) from hsbmembers where exitdate is null;')"
+	test $? -ne "0" && die "There was a database error: The server says $SQLRESULT"
+	if [ $# = 2 ]; then
+	    echo "--- This is a preview of the mail using the first valid database entry. --"
+	    echo "---     Add the word 'send' at the command line to send it for real    ---"
+	    DBID="$(runsql "select id from hsbmembers where exitdate is null order by id limit 1;")"
+	    MAILCOMMAND="test"
+	else
+	    DBID=$(runsql "select id from hsbmembers where exitdate is null;"|tr "\n" ' ')
+	    test "$3" = 'send' || die "Not sending email to $MEMBERCOUNT people"
+	    MAILCOMMAND="go"
+	fi
+
+	QUORUM="$(runsql 'select round((select count(id) from hsbmembers where exitdate is null) / 2)')"
+	for i in $DBID; do
+	    EMAIL="$(runsql "select emailaddress from hsbmembers where id like $i;")"
+	    FIRSTNAME="$(runsql "select firstname from hsbmembers where id like $i;")"
+	    export FIRSTNAME QUORUM
+	    case "$MAILCOMMAND" in
+		"test")
+		 cat "$2" | envsubst
+		;;
+		"go")
+		cat "$2" | envsubst | mail -s "HSBXL - important message" "$EMAIL" && echo "mail sent to $EMAIL"
+		;;
+		*)
+		die 'Invalid command'
+		;;
+	    esac
+	done
+    ;;
     cron)
 	case "$2" in
 	    register)
@@ -570,7 +605,7 @@ done
 	esac
 	;;
     *)
-	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|importbankcsv|resendinfos|begformoney|memberpayment|fixbankfuckup|cron]"
+	echo "Usage: $ME [list-current|add|remove|list-cancelled|count-current|modify|dry|importbankcsv|resendinfos|begformoney|memberpayment|fixbankfuckup|cron|massmail]"
 	exit 1
     ;;
 esac
