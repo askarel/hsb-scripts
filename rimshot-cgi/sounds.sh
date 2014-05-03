@@ -84,60 +84,37 @@ pickfilehash()
 # Show the page
 showpagehash()
 {
+if [ -f "$TEMPLATE" ]; then
+    if [ -d "$DIR_AUDIOFILES" ]; then
+	SIDEBAR=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make jump bar
+	    test "$directoryname" != "$DIR_AUDIOFILES" && printf "    <A HREF=\"#%s\">%s</A><BR />\n" "$directoryhash" "$(basename "$directoryname")"
+	done)
+	TROLLBODY=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
+	    test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s <A HREF=\"#header\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
+	    echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
+		test "$(dirname "$filename")" = "$directoryname" && 
+		    printf "    <BUTTON TYPE=\"BUTTON\" VALUE=\"Submit\" ID=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\" ONCLICK=\"troll('%s')\">%s</BUTTON>\n" "$filehash" "$filehash" "$filehash" "$filehash" "$(basename "$filename")"
+	    done
+	done)
+    else # No files to show: random button is useless
+	unset RANDOMBUTTON
+    fi
+    # Prime the template variables and show the page
+    export PAGETITLE ME RANDOMBUTTON TROLLBODY SIDEBAR SPEECHBAR FOOTER
+    cat $TEMPLATE | envsubst
+else # Template not found. Complain loudly.
 cat << EOM
 <!DOCTYPE html>
 <HTML>
  <HEAD>
   <TITLE>$PAGETITLE</TITLE>
-  <link rel="stylesheet" href="$ME?CSS=trollin.css" type="text/css" />
  </HEAD>
  <BODY>
-  <SCRIPT>
-    function reqListener() {
-	console.log(this.responseText);
-    }
-
-    function troll(sound) {
-	var trollrequest = new XMLHttpRequest();
-	trollrequest.onload = reqListener;
-	trollrequest.open ("POST", "$ME", true);
-	trollrequest.send (sound);
-    }
-  </SCRIPT>
-  <DIV ID="header"><H1>HSBXL TROLLING PAGE 2.0 !!!</H1></DIV>
+    <H1>MISSING TEMPLATE: $TEMPLATE</H1><BR />Troll another day...
+ </BODY>
+</HTML>
 EOM
-
-if [ -d "$DIR_AUDIOFILES" ]; then
-cat <<EOM
-  <FORM ACTION="$ME" method="POST">
-   <DIV ID="sidebar">
-    $RANDOMBUTTON <BR />
-    Jump to a section:<BR />
-EOM
-
-    SIDEBAR=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make jump bar
-	test "$directoryname" != "$DIR_AUDIOFILES" && printf "    <A HREF=\"#%s\">%s</A><BR />\n" "$directoryhash" "$(basename "$directoryname")"
-    done)
-    TROLLBODY=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
-	test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s <A HREF=\"#header\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
-	echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
-	    test "$(dirname "$filename")" = "$directoryname" && 
-		printf "    <BUTTON TYPE=\"BUTTON\" VALUE=\"Submit\" ID=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\" ONCLICK=\"troll('%s')\">%s</BUTTON>\n" "$filehash" "$filehash" "$filehash" "$filehash" "$(basename "$filename")"
-	done
-    done)
-    echo "$SIDEBAR"
-    echo "   </DIV>"
-    echo "   <DIV ID=\"trollbody\">"
-    echo "$TROLLBODY"
-else # No files to show: random button is useless
-unset RANDOMBUTTON
 fi
-
-printf "   </DIV>\n  </FORM>\n </BODY>\n</HTML>\n"
-
-# Prime the template variables and show the page
-export PAGETITLE ME RANDOMBUTTON TROLLBODY SIDEBAR SPEECHBAR FOOTER
-# cat $TEMPLATE | envsubst
 }
 
 case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
