@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<HTML>
+ <HEAD>
+  <TITLE>$PAGETITLE</TITLE>
+  <link rel="stylesheet" href="$ME?CSS=trollin.css" type="text/css" />
+ </HEAD>
+ <BODY>
+  <SCRIPT>
+    function reqListener() {
+	console.log(this.responseText);
+    }
+
+    function troll(sound) {
+	var trollrequest = new XMLHttpRequest();
+	trollrequest.onload = reqListener;
+	trollrequest.open ("POST", "$ME", true);
+	trollrequest.send (sound);
+    }
+  </SCRIPT>
+  <DIV ID="header"><H1>HSBXL TROLLING PAGE 2.5 !!!</H1></DIV>
+
+  <FORM ACTION="$ME" method="POST">
+<!-- sidebar with random button and quick jump box -->
+   <DIV ID="sidebar">
+    $RANDOMBUTTON <br />
+    Jump to a section:<br />
+    $SIDEBAR
+   </DIV>
+<!-- Let it speak (if available) -->
+   <DIV ID="speechbar">
+    $SPEECHBAR
+   </DIV>
+<!-- The body, with buttons -->
+   <DIV ID="trollbody">
+    $TROLLBODY
+<!--
+   <DIV ID=\"%s\"><H2>%s <A HREF=\"#TOP\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
+   <BUTTON TYPE=\"BUTTON\" VALUE=\"Submit\" ID=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\" ONCLICK=\"troll('%s')\">%s</BUTTON>\n" "$filehash" "$filehash" "$filehash" "$filehash" "$(basename "$filename")"
+-->
+   </DIV>
+  </FORM>
+<!-- Footer -->
+  <DIV ID="footer">
+  $FOOTER
+  </DIV>
+ </BODY>
+</HTML>
+
