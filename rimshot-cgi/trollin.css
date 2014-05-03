@@ -3,6 +3,10 @@
 /*
 Trollin stylesheet by ZipionLive for the HSBXL trolling page
 */
+body {
+background: url(/cgi-bin/sounds.sh?CSS=megusta.jpg);
+background-size: 100%;
+}
 
 html
 {
@@ -29,5 +33,22 @@ button.soundBtn
 button.RANDOM
 {
 	background-color : #CC0000;
+	width: 90%;
+	margin: 10px 0px;
 	color : white;
+}
+#sidebar
+{
+	position:fixed;
+	left: 5px;
+	padding: 10px;
+	background: black;
+	opacity: 0.8;
+	top:60px;
+	width: 20%;
+	color: white;
+}
+#sidebar a
+{
+	color: white;
 }

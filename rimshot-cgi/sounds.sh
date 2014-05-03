@@ -26,6 +26,11 @@ PAGETITLE="Rimshot and other shit"
 #DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
+TEMPLATE="$CSSDIR/$ME-template.html"
+#buttons definition
+RANDOMBUTTON="<BUTTON TYPE=\"BUTTON\" VALUE=\"SUBMIT\" NAME=\"RANDOM\" CLASS=\"RANDOM soundBtn\" ONCLICK=\"troll('RANDOM');\">RANDOM SOUND</BUTTON>"
+SPEECHBAR="Here will come the speech bar<br />"
+#internals
 CSSMETHOD="CSS"
 JSONMETHOD="JSON"
 PLAYPROG="paplay"
@@ -99,28 +104,40 @@ cat << EOM
 	trollrequest.send (sound);
     }
   </SCRIPT>
-  <DIV ID="TOP"><H1>HSBXL TROLLING PAGE 2.0 !!!</H1></DIV>
+  <DIV ID="header"><H1>HSBXL TROLLING PAGE 2.0 !!!</H1></DIV>
 EOM
 
 if [ -d "$DIR_AUDIOFILES" ]; then
 cat <<EOM
   <FORM ACTION="$ME" method="POST">
-   <BUTTON TYPE="BUTTON" VALUE="SUBMIT" NAME="RANDOM" CLASS="RANDOM soundBtn" ONCLICK="troll('RANDOM');">RANDOM SOUND</BUTTON>
-   Jump to a section:
+   <DIV ID="sidebar">
+    $RANDOMBUTTON <BR />
+    Jump to a section:<BR />
 EOM
 
-    echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make jump bar
-	test "$directoryname" != "$DIR_AUDIOFILES" && printf "    <A HREF=\"#%s\">%s</A>\n" "$directoryhash" "$(basename "$directoryname")"
-    done
-    echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
-	test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s <A HREF=\"#TOP\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
+    SIDEBAR=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make jump bar
+	test "$directoryname" != "$DIR_AUDIOFILES" && printf "    <A HREF=\"#%s\">%s</A><BR />\n" "$directoryhash" "$(basename "$directoryname")"
+    done)
+    TROLLBODY=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
+	test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s <A HREF=\"#header\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
 	echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
 	    test "$(dirname "$filename")" = "$directoryname" && 
 		printf "    <BUTTON TYPE=\"BUTTON\" VALUE=\"Submit\" ID=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\" ONCLICK=\"troll('%s')\">%s</BUTTON>\n" "$filehash" "$filehash" "$filehash" "$filehash" "$(basename "$filename")"
 	done
-    done
+    done)
+    echo "$SIDEBAR"
+    echo "   </DIV>"
+    echo "   <DIV ID=\"trollbody\">"
+    echo "$TROLLBODY"
+else # No files to show: random button is useless
+unset RANDOMBUTTON
 fi
-printf "  </FORM>\n </BODY>\n</HTML>\n"
+
+printf "   </DIV>\n  </FORM>\n </BODY>\n</HTML>\n"
+
+# Prime the template variables and show the page
+export PAGETITLE ME RANDOMBUTTON TROLLBODY SIDEBAR SPEECHBAR FOOTER
+# cat $TEMPLATE | envsubst
 }
 
 case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
