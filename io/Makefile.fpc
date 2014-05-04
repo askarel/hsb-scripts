@@ -14,4 +14,4 @@ libc=y
 
 [install]
 fpcpackage=y
-
+dirprefix=/usr/local/

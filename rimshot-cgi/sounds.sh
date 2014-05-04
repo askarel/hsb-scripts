@@ -28,7 +28,6 @@ ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
 TEMPLATE="$CSSDIR/$ME-template.html"
 #buttons definition
-RANDOMBUTTON="<BUTTON TYPE=\"BUTTON\" VALUE=\"SUBMIT\" NAME=\"RANDOM\" CLASS=\"RANDOM soundBtn\" ONCLICK=\"troll('RANDOM');\">RANDOM SOUND</BUTTON>"
 SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
 #internals
 CSSMETHOD="CSS"
@@ -115,11 +114,9 @@ if [ -f "$TEMPLATE" ]; then
 		    printf "    <BUTTON TYPE=\"BUTTON\" VALUE=\"Submit\" ID=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\" ONCLICK=\"troll('%s')\">%s</BUTTON>\n" "$filehash" "$filehash" "$filehash" "$filehash" "$(basename "$filename")"
 	    done
 	done)
-    else # No files to show: random button is useless
-	unset RANDOMBUTTON
     fi
     # Prime the template variables and show the page
-    export PAGETITLE ME RANDOMBUTTON TROLLBODY SIDEBAR SPEECHBAR FOOTER
+    export PAGETITLE ME TROLLBODY SIDEBAR SPEECHBAR FOOTER
     cat $TEMPLATE | envsubst
 else # Template not found. Complain loudly.
     htmlbombmsg "MISSING TEMPLATE: $TEMPLATE"
@@ -169,7 +166,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 		    "$POSTRANDOMMETHOD")# Random button (roll the dice)
 			$PLAYPROG "$(pickfilehash "$(echo "$FILEHASHDB" |cut -d ' ' -f 1|shuf -n 1)")" & #" choke alert
 		        ;;
-		    "$POSTSPEAKMETHOD") # Speech synth method. Still need to unescape the returned string
+		    "$POSTSPEAKMETHOD") # Speech synth method.
 			SPEECHTEXT="$(echo "$POSTDATA" | cut -d '=' -f 2-)"
 #			printf 'Coming soon..., got the following text: &quot;%s&quot;\n\n' "$SPEECHTEXT"
 			test -n "$SPEECHMETHOD" && $SPEECHMETHOD "$SPEECHTEXT"
