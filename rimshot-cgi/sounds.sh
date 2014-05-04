@@ -29,33 +29,53 @@ CSSDIR="$DIR_AUDIOFILES/.CSS"
 TEMPLATE="$CSSDIR/$ME-template.html"
 #buttons definition
 RANDOMBUTTON="<BUTTON TYPE=\"BUTTON\" VALUE=\"SUBMIT\" NAME=\"RANDOM\" CLASS=\"RANDOM soundBtn\" ONCLICK=\"troll('RANDOM');\">RANDOM SOUND</BUTTON>"
-SPEECHBAR="Here will come the speech bar<br />"
+SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
+#<input type=\"submit\" value=\"Say it !!\"><br />"
 #internals
 CSSMETHOD="CSS"
 JSONMETHOD="JSON"
+POSTSPEAKMETHOD="SPEAK"
+POSTRANDOMMETHOD="RANDOM"
 PLAYPROG="paplay"
+SPEECHMETHOD="flitemethod"
+#DEBUG=blaah
+
+# Speech method: using flite
+flitemethod()
+{
+    SPEECHBIN="$(which flite)"
+    if [ $? = 0 ]; then # Installed ? Something to say ?
+	test -n "$1" && $SPEECHBIN -t "$1" 
+    else # Selected speech method unavailable ? Remove menu item.
+	unset SPEECHBAR
+    fi
+}
 
 # Create the hash databases. Ignores any file/directory beginning with a dot.
 FILEHASHDB="$(find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
 DIRHASHDB="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
 
-# Self explanatory.
-err404()
+# Dump error message specified by parameter 1
+htmlbombmsg()
 {
-cat << ERR404
-Status: 404 not found
-Content-Type: text/html
-
+cat << BOMB
 <!DOCTYPE html>
 <HTML>
  <HEAD>
   <TITLE>$PAGETITLE</TITLE>
  </HEAD>
  <BODY>
-    <H1>404 FILE "$(basename "$1")" NOT FOUND</H1><BR />Troll another day.
+    <H1>$1</H1><BR />Troll another day...
  </BODY>
 </HTML>
-ERR404
+BOMB
+}
+
+# Error 404: file specified as parameter 1 not found
+err404()
+{
+printf 'Status: 404 not found\nContent-Type: text/html\n\n'
+htmlbombmsg "404 FILE \"$(basename "$1")\" NOT FOUND"
 }
 
 # Pick a file from specified directory
@@ -81,7 +101,7 @@ pickfilehash()
     echo "$FILEHASHDB"|grep "$1" | cut -d ' ' -f 2-
 }
 
-# Show the page
+# Show the page. This might need refactoring for speed.
 showpagehash()
 {
 if [ -f "$TEMPLATE" ]; then
@@ -103,19 +123,12 @@ if [ -f "$TEMPLATE" ]; then
     export PAGETITLE ME RANDOMBUTTON TROLLBODY SIDEBAR SPEECHBAR FOOTER
     cat $TEMPLATE | envsubst
 else # Template not found. Complain loudly.
-cat << EOM
-<!DOCTYPE html>
-<HTML>
- <HEAD>
-  <TITLE>$PAGETITLE</TITLE>
- </HEAD>
- <BODY>
-    <H1>MISSING TEMPLATE: $TEMPLATE</H1><BR />Troll another day...
- </BODY>
-</HTML>
-EOM
+    htmlbombmsg "MISSING TEMPLATE: $TEMPLATE"
 fi
 }
+
+# Valid speech method ?
+test -n "$SPEECHMETHOD" && $SPEECHMETHOD
 
 case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
     "$CSSMETHOD")
@@ -123,7 +136,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	if [ -n "$( pickfile "$CSSDIR" "$CSSFILE" )" ]; then
 	    printf "Content-type: text/css\n\n"
 	    cat "$( pickfile "$CSSDIR" "$CSSFILE" )"
-	    else
+	else
 	    err404 "$CSSFILE"
 	fi
 	;;
@@ -150,14 +163,19 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	printf 'Content-type: text/html\n\n'
 	if [ "$REQUEST_METHOD" = "POST" -a -n "$CONTENT_LENGTH" ]; then
 	    read -n "$CONTENT_LENGTH" POSTDATA
-#	    logger -t $ME-post "POST data: '$POSTDATA'"
+	    test -n "$DEBUG" && logger -t $ME-post "POST data: '$POSTDATA'"
 	    if [ -n "$POSTDATA" -a "$POSTDATA" != "[object HTMLFormElement]" ]; then # Is there something in the POSTed data ?
 		POSTDATAVAR="$(echo -n "$POSTDATA"|cut -d '=' -f 1)"
 		case "$POSTDATAVAR" in
-		    "RANDOM")
+		    "$POSTRANDOMMETHOD")# Random button (roll the dice)
 			$PLAYPROG "$(pickfilehash "$(echo "$FILEHASHDB" |cut -d ' ' -f 1|shuf -n 1)")" & #" choke alert
 		        ;;
-		    *)
+		    "$POSTSPEAKMETHOD") # Speech synth method. Still need to unescape the returned string
+			SPEECHTEXT="$(echo "$POSTDATA" | cut -d '=' -f 2-)"
+#			printf 'Coming soon..., got the following text: &quot;%s&quot;\n\n' "$SPEECHTEXT"
+			test -n "$SPEECHMETHOD" && $SPEECHMETHOD "$SPEECHTEXT"
+			;;
+		    *)# The rest...
 		        test -n "$( pickfilehash "$POSTDATAVAR" )" && $PLAYPROG "$( pickfilehash "$POSTDATAVAR")"
 			;;
 		esac
