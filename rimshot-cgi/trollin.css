@@ -13,17 +13,30 @@ html
 body {
     height: 99%;
     width: 99%;
-    background: url(/cgi-bin/sounds.sh?CSS=megusta.jpg) no-repeat center center fixed;
+    /*background: url(/cgi-bin/sounds.sh?CSS=megusta.jpg) no-repeat center center fixed;*/
     background-size: 100%;
+}
+
+#sidebar {
+  float: left;
+  width: 20%;
+  padding: 10px;
+  background: #48fb47;
 }
 
 h1
 {
-	font-weight : bold;
-	font-size : 24px;
-	color : #CC0000;
-	background: #48fb47;
-	display: inline-block;
+	font-weight: bold;
+  font-size: 24px;
+  color: #CC0000;
+  display: block;
+}
+#megusta {
+  margin-top: 10px;
+  background: url(/cgi-bin/sounds.sh?CSS=Me_Gusta_transparent.png) no-repeat;
+  height: 295px;
+  width: 100%;
+  background-size: 100%;
 }
 button.soundBtn
 {
@@ -38,15 +51,12 @@ button.RANDOM
 	margin: 10px 0px;
 	color : white;
 }
-#sidebar
+#menu
 {
-	position:fixed;
-	left: 5px;
 	padding: 10px;
 	background: black;
 	opacity: 0.8;
-	top:15%;
-	width: 20%;
+	width: 93%;
 	color: white;
 }
 #sidebar a
