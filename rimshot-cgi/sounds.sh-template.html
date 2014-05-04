@@ -17,20 +17,23 @@
 	trollrequest.send (sound);
     }
   </SCRIPT>
-  <DIV ID="header"><H1>HSBXL TROLLING PAGE<br />VERSION 2.9 !!!</H1></DIV>
-
-  <FORM ACTION="$ME" method="POST">
+  <DIV ID="sidebar">
+    <H1>HSBXL TROLLING v2.9</H1>
 <!-- sidebar with random button and quick jump box -->
-   <DIV ID="sidebar">
+   <DIV ID="menu">
     $RANDOMBUTTON <br />
     Jump to a section:<br />
     $SIDEBAR
    </DIV>
    <DIV ID="megusta"></DIV>
-<!-- Let it speak (if available) -->
-   <DIV ID="speechbar">
+  </DIV>
+  
+  <!-- Let it speak (if available) -->
+  <DIV ID="speechbar">
     $SPEECHBAR
-   </DIV>
+  </DIV>
+   
+  <FORM ACTION="$ME" method="POST" enctype="text/plain">
 <!-- The body, with buttons -->
    <DIV ID="trollbody">
     $TROLLBODY
