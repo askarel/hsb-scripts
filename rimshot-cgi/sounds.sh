@@ -30,7 +30,6 @@ TEMPLATE="$CSSDIR/$ME-template.html"
 #buttons definition
 RANDOMBUTTON="<BUTTON TYPE=\"BUTTON\" VALUE=\"SUBMIT\" NAME=\"RANDOM\" CLASS=\"RANDOM soundBtn\" ONCLICK=\"troll('RANDOM');\">RANDOM SOUND</BUTTON>"
 SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
-#<input type=\"submit\" value=\"Say it !!\"><br />"
 #internals
 CSSMETHOD="CSS"
 JSONMETHOD="JSON"
@@ -110,7 +109,7 @@ if [ -f "$TEMPLATE" ]; then
 	    test "$directoryname" != "$DIR_AUDIOFILES" && printf "    <A HREF=\"#%s\">%s</A><BR />\n" "$directoryhash" "$(basename "$directoryname")"
 	done)
 	TROLLBODY=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
-	    test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s <A HREF=\"#header\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
+	    test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s</H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
 	    echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
 		test "$(dirname "$filename")" = "$directoryname" && 
 		    printf "    <BUTTON TYPE=\"BUTTON\" VALUE=\"Submit\" ID=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\" ONCLICK=\"troll('%s')\">%s</BUTTON>\n" "$filehash" "$filehash" "$filehash" "$filehash" "$(basename "$filename")"
