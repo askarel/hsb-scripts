@@ -23,6 +23,7 @@
    <DIV ID="menu">
     <BUTTON TYPE="BUTTON" VALUE="SUBMIT" NAME="RANDOM" CLASS="RANDOM soundBtn" ONCLICK="troll('RANDOM');">RANDOM SOUND</BUTTON> <br />
     Jump to a section:<br />
+    <A HREF="#pagetop">Top of page</A> <br />
     $SIDEBAR
    </DIV>
    <DIV ID="megusta"></DIV>
@@ -32,10 +33,10 @@
   <DIV ID="speechbar">
     $SPEECHBAR
   </DIV>
-   
   <FORM ACTION="$ME" method="POST" enctype="text/plain">
 <!-- The body, with buttons -->
    <DIV ID="trollbody">
+   <DIV ID="pagetop"></DIV>
     $TROLLBODY
 <!--
    <DIV ID=\"%s\"><H2>%s <A HREF=\"#TOP\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
