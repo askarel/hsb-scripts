@@ -104,9 +104,7 @@ showpagehash()
 {
 if [ -f "$TEMPLATE" ]; then
     if [ -d "$DIR_AUDIOFILES" ]; then
-	SIDEBAR=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make jump bar
-	    test "$directoryname" != "$DIR_AUDIOFILES" && printf "    <A HREF=\"#%s\">%s</A><BR />\n" "$directoryhash" "$(basename "$directoryname")"
-	done)
+	SIDEBAR="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" ! -wholename "$DIR_AUDIOFILES" \) -not -path "*/.*"  -exec /bin/sh -c 'printf "<A HREF=\"#%s\">%s</A> <br />\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "$(basename "{}")"' \;)"
 	TROLLBODY=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
 	    test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s</H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
 	    echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
