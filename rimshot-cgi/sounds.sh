@@ -51,9 +51,6 @@ flitemethod()
     fi
 }
 
-# Create the hash database. Ignores any file/directory beginning with a dot.
-FILEHASHDB="$(find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
-
 # Dump error message specified by parameter 1
 htmlbombmsg()
 {
@@ -97,7 +94,11 @@ pickfile()
 # THIS FUNCTION IS EXPOSED TO USER INPUT
 pickfilehash()
 {
-    echo "$FILEHASHDB"|grep "$1" | cut -d ' ' -f 2-
+    find "$DIR_AUDIFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/sh -c \
+	'printf "%s %s\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "{}"' \; | while read trollhash trollfile; do 
+	    test "$trollhash" = "$1" && echo "$trollfile"
+	 done
+#    echo "$FILEHASHDB"|grep "$1" | cut -d ' ' -f 2-
 }
 
 # Spit out the HTML code for a button
@@ -123,7 +124,8 @@ showpagehash()
 if [ -f "$TEMPLATE" ]; then
     if [ -d "$DIR_AUDIOFILES" ]; then
 	# Sidebar 
-	SIDEBAR="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" ! -wholename "$DIR_AUDIOFILES" \) -not -path "*/.*"  -exec /bin/sh -c 'printf "<A HREF=\"#%s\">%s</A> <br />\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "$(basename "{}")"' \;)"
+	SIDEBAR="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" ! -wholename "$DIR_AUDIOFILES" \) -not -path "*/.*"  -exec /bin/sh -c \
+	    'printf "<A HREF=\"#%s\">%s</A> <br />\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "$(basename "{}")"' \;)"
 	# Make categories
 	TROLLBODY="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -not -path "*/.*" | while read line; do printhtmlsectionhash "$line"; done)"
     fi
@@ -152,6 +154,8 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	printf 'Content-type: application/json\n\n'
 	printf '{\n	"Title:": "%s"' "$PAGETITLE"
 	if [ -d "$DIR_AUDIOFILES" ]; then
+	    # Create the hash database. Ignores any file/directory beginning with a dot.
+	    FILEHASHDB="$(find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
 	    DIRHASHDB="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
 	    printf ',\n		"buttons": {\n		"RANDOM": "RANDOM"'
 	    echo "$DIRHASHDB"| while read directoryhash directoryname; do 
@@ -177,7 +181,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 		POSTDATAVAR="$(echo -n "$POSTDATA"|cut -d '=' -f 1)"
 		case "$POSTDATAVAR" in
 		    "$POSTRANDOMMETHOD")# Random button (roll the dice)
-			$PLAYPROG "$(pickfilehash "$(echo "$FILEHASHDB" |cut -d ' ' -f 1|shuf -n 1)")" & #" choke alert
+			$PLAYPROG "$(pickfilehash "$( find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/sh -c 'echo -n "{}" | md5sum | cut -d " " -f 1  ' \; |shuf -n 1)")" & #" choke alert
 		        ;;
 		    "$POSTSPEAKMETHOD") # Speech synth method.
 			SPEECHTEXT="$(echo "$POSTDATA" | cut -d '=' -f 2-)"
