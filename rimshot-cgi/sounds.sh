@@ -74,6 +74,15 @@ printf 'Status: 404 not found\nContent-Type: text/html\n\n'
 htmlbombmsg "404 FILE \"$(basename "$1")\" NOT FOUND"
 }
 
+# Prepend the md5 hash of the pathname specified as parameter 1 
+# Sample output: "d5b8180a0a7fe1e9e661bfa1211066e5 /example"
+hashpath()
+{
+    test -z "$1" && echo "hashpath() requires a parameter." && exit 1
+    printf '%s %s\n' "$(echo -n "$1" | md5sum | cut -d " " -f 1 )" "$1"
+}
+export -f hashpath
+
 # Pick a file from specified directory
 # Secure handling of user-defined input: avoid the abuse of the '../' trick.
 # Return a full path to a file if a match is found in directory.
@@ -94,7 +103,7 @@ pickfile()
 # THIS FUNCTION IS EXPOSED TO USER INPUT
 pickfilehash()
 {
-    find "$DIR_AUDIFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/sh -c \
+    find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/sh -c \
 	'printf "%s %s\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "{}"' \; | while read trollhash trollfile; do 
 	    test "$trollhash" = "$1" && echo "$trollfile"
 	 done
@@ -150,27 +159,6 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	    err404 "$CSSFILE"
 	fi
 	;;
-    "$JSONMETHOD") # Dump a JSON version of the page. Must be rebuilt nearly from scratch.
-	printf 'Content-type: application/json\n\n'
-	printf '{\n	"Title:": "%s"' "$PAGETITLE"
-	if [ -d "$DIR_AUDIOFILES" ]; then
-	    # Create the hash database. Ignores any file/directory beginning with a dot.
-	    FILEHASHDB="$(find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
-	    DIRHASHDB="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
-	    printf ',\n		"buttons": {\n		"RANDOM": "RANDOM"'
-	    echo "$DIRHASHDB"| while read directoryhash directoryname; do 
-		test "$directoryname" != "$DIR_AUDIOFILES" && jdirectoryname="$(basename "$directoryname")"
-		printf ',\n		"%s": {\n			"directoryname": "%s"' "$directoryhash" "$jdirectoryname"
-		echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
-		    test "$(dirname "$filename")" = "$directoryname" && 
-			printf ',\n			"%s": "%s"' "$filehash" "$(basename "$filename")" 
-		done
-		printf '\n			}'
-	    done
-	    printf '\n		}'
-	fi
-	printf "\n}\n"
-	;;
     *) # Catch-all method. Data is in the POST
 	# Process POSTed data
 	printf 'Content-type: text/html\n\n'
@@ -197,3 +185,5 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	fi
 	;;
 esac
+
+#    find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/bash -c 'hashpath "{}"' \;
