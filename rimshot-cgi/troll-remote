@@ -1,0 +1,41 @@
+#!/bin/sh
+
+# The rimshot CGI script - Trolling HSBXL with style - Remote command line client
+# (c) 2014 Frederic Pasteleurs <askarel@gmail.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program or from the site that you downloaded it
+# from; if not, write to the Free Software Foundation, Inc., 59 Temple
+# Place, Suite 330, Boston, MA  02111-1307   USA
+#
+
+PAGEURL="http://gate/cgi-bin/sounds.sh"
+
+ME="$(basename $0)"
+
+case "$1" in
+    "random")
+	wget -q -O - --content-disposition "$PAGEURL" --post-data="RANDOM" > /dev/null
+	;;
+    "troll")
+	test -z "$2" && echo "$ME: Option troll require a file hash" && exit 1
+	wget -q -O - --content-disposition "$PAGEURL" --post-data="$2" > /dev/null
+	;;
+    "speak")
+	test -z "$2" && echo "$ME: Option speak require a text to be spoken" && exit 1
+	wget -q -O - --content-disposition "$PAGEURL" --post-data="SPEAK=$2" > /dev/null
+	;;
+    *)
+	echo "Syntax: $ME [random|troll|speak] [filehash|text]"
+	exit 1
+	;;
+esac
