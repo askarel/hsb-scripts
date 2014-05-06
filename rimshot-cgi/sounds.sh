@@ -27,8 +27,10 @@ PAGETITLE="Rimshot and other shit"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
 TEMPLATE="$CSSDIR/$ME-template.html"
-#buttons definition
+# buttons definition
 SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
+HTMLTROLLBUTTON='<BUTTON TYPE="BUTTON" VALUE="Submit" ID="%s" NAME="%s" CLASS="%s soundBtn" ONCLICK="troll('\''%s'\'')">%s</BUTTON>\n'
+# HTMLSIDEBAR='<A HREF="#%s">%s</A> <br />\n'
 #internals
 CSSMETHOD="CSS"
 JSONMETHOD="JSON"
@@ -49,9 +51,8 @@ flitemethod()
     fi
 }
 
-# Create the hash databases. Ignores any file/directory beginning with a dot.
+# Create the hash database. Ignores any file/directory beginning with a dot.
 FILEHASHDB="$(find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
-DIRHASHDB="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
 
 # Dump error message specified by parameter 1
 htmlbombmsg()
@@ -99,19 +100,32 @@ pickfilehash()
     echo "$FILEHASHDB"|grep "$1" | cut -d ' ' -f 2-
 }
 
-# Show the page. This might need refactoring for speed.
+# Spit out the HTML code for a button
+# Parameter 1: full path to file
+printhtmlbuttonhash()
+{
+    local btnhash="$(echo -n "$1" | md5sum | cut -d ' ' -f 1 )"
+    printf "    $HTMLTROLLBUTTON" "$btnhash" "$btnhash" "$btnhash" "$btnhash" "$(basename "$1")"
+}
+
+# Make a section with anchor for a category
+# Parameter 1: path to generate buttons for
+printhtmlsectionhash()
+{
+    local ITEMNAME="${1#$DIR_AUDIOFILES}"
+    test -n "$ITEMNAME" && printf '<DIV ID="%s"><H2>%s</H2></DIV>\n' "$(echo -n "$1" | md5sum | cut -d " " -f 1 )" "$ITEMNAME"
+    find "$1" -maxdepth 1 -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*" |while read btn; do printhtmlbuttonhash "$btn"; done
+}
+
+# Show the page.
 showpagehash()
 {
 if [ -f "$TEMPLATE" ]; then
     if [ -d "$DIR_AUDIOFILES" ]; then
+	# Sidebar 
 	SIDEBAR="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" ! -wholename "$DIR_AUDIOFILES" \) -not -path "*/.*"  -exec /bin/sh -c 'printf "<A HREF=\"#%s\">%s</A> <br />\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "$(basename "{}")"' \;)"
-	TROLLBODY=$(echo "$DIRHASHDB"| while read directoryhash directoryname; do # Make categories
-	    test "$directoryname" != $DIR_AUDIOFILES && printf "   <DIV ID=\"%s\"><H2>%s</H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
-	    echo "$FILEHASHDB" | while read filehash filename; do # Make buttons
-		test "$(dirname "$filename")" = "$directoryname" && 
-		    printf "    <BUTTON TYPE=\"BUTTON\" VALUE=\"Submit\" ID=\"%s\" NAME=\"%s\" CLASS=\"%s soundBtn\" ONCLICK=\"troll('%s')\">%s</BUTTON>\n" "$filehash" "$filehash" "$filehash" "$filehash" "$(basename "$filename")"
-	    done
-	done)
+	# Make categories
+	TROLLBODY="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -not -path "*/.*" | while read line; do printhtmlsectionhash "$line"; done)"
     fi
     # Prime the template variables and show the page
     export PAGETITLE ME TROLLBODY SIDEBAR SPEECHBAR FOOTER
@@ -134,10 +148,11 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	    err404 "$CSSFILE"
 	fi
 	;;
-    "$JSONMETHOD") # Dump a JSON version of the page
+    "$JSONMETHOD") # Dump a JSON version of the page. Must be rebuilt nearly from scratch.
 	printf 'Content-type: application/json\n\n'
 	printf '{\n	"Title:": "%s"' "$PAGETITLE"
 	if [ -d "$DIR_AUDIOFILES" ]; then
+	    DIRHASHDB="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -exec /bin/sh -c 'printf "%s %s\n" "`echo -n \"{}\"|md5sum| cut -d  \" \" -f 1`" "{}" ' \;)"
 	    printf ',\n		"buttons": {\n		"RANDOM": "RANDOM"'
 	    echo "$DIRHASHDB"| while read directoryhash directoryname; do 
 		test "$directoryname" != "$DIR_AUDIOFILES" && jdirectoryname="$(basename "$directoryname")"
@@ -166,7 +181,6 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 		        ;;
 		    "$POSTSPEAKMETHOD") # Speech synth method.
 			SPEECHTEXT="$(echo "$POSTDATA" | cut -d '=' -f 2-)"
-#			printf 'Coming soon..., got the following text: &quot;%s&quot;\n\n' "$SPEECHTEXT"
 			test -n "$SPEECHMETHOD" && $SPEECHMETHOD "$SPEECHTEXT"
 			;;
 		    *)# The rest...
