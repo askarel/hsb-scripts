@@ -24,7 +24,7 @@ program blackknightio;
 
 // This is a quick hack to check if everything works
 
-uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile;
+uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile, unix;
 
 CONST   SHITBITS=63;
 
@@ -298,44 +298,26 @@ end;
 // Buzzer functions ?
 // Needed functions:  buzzer handling
 
-procedure logexec (msgindex: byte; var flags: TLotsOfBits; msg: string);
+// Log an event and run external script
+procedure log_door_event (var currentstateflags: TLotsOfBits; msgindex: byte; currentbitstate, expectedbitstate: boolean; msgtext: pchar);
+const externalscript: pchar = 'blackknightio.sh';
+var pid: Tpid;
 begin
-
-end;
-
-{
-// Log an event (NEED REWRITE)
-procedure log_door_event (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits; doorevent:TLogItem; debugmode: boolean; extratext: string);
-var logstring: string;
-begin
- logstring:=FormatDateTime ('YYYY-MM-DD HH:MM:SS', now) + ' ';
- if use_alt_msg then
-  if flags[msgindex] then // Alternate message
-   begin
-    flags[msgindex]:=false;
-    logstring:=logstring + LOGPREFIXES[doorevent[msgindex].altlevel] +  ': ' + doorevent[msgindex].altmsg;
-    if extratext = '' then writeln (logstring)
-                      else writeln (logstring, ' (', extratext, ')');
-   end
-   else
-   begin
-   end
- else
-  if not flags[msgindex] then
-   begin
-    flags[msgindex]:=true;
-    logstring:=logstring + LOGPREFIXES[doorevent[msgindex].msglevel] + ': ' + doorevent[msgindex].msg;
-    if extratext = '' then writeln (logstring)
-                      else writeln (logstring, ' (', extratext, ')');
-   end;
-end;
- }
-// Reset a log event
-procedure log_door_reset (msgindex: byte; use_alt_msg: boolean; var flags: TLotsOfBits);
-begin
- if use_alt_msg
-  then flags[msgindex]:=true
-  else flags[msgindex]:=false;
+ if currentstateflags[msgindex] <> currentbitstate then
+  begin
+   if currentbitstate = expectedbitstate then
+    begin
+     syslog (log_warning, 'message %d: %s', [msgindex, msgtext]);
+     pid:=fpFork;
+     if pid = 0 then
+      begin
+      fpsystem (paramstr (0) + '.sh' + ' ' + inttostr (msgindex) + ' ''' + msgtext + '''');
+      syslog (LOG_WARNING, 'Process returned: error code: %d', [FpGetErrNo]);
+      halt(0);
+      end;
+    end;
+   currentstateflags[msgindex]:=currentbitstate;
+  end;
 end;
 
 procedure dump_config (bits: TLotsofbits; textdetail:TConfigTextArray );
@@ -531,7 +513,7 @@ var shmname: string;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
     open_wait, beepdelay: longint;
-    open_order: boolean;
+    open_order, initrun: boolean;
 begin
  outputs:=word2bits (0);
  open_order:=false;
@@ -640,6 +622,10 @@ begin
       outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT]; // The buzzer might be active elsewhere
       // Do switch monitoring
 
+      // Process the log/action bits
+              log_door_event (msgflags, 0, open_order, true, 'Door is unlocked');
+//              log_door_event (msgflags, 1, open_order, false, 'Door is locked');
+//      log_door_event (msgflags, 42, true, true, 'true true');
   //    syslog (log_info, 'Doing daemon shit...'#10, []);
     //  sleep (300);
 
@@ -657,12 +643,6 @@ begin
  if not CurrentState[S_DEMOMODE] then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
  sleep (100); // Give time for the monitor to die before yanking the segment
  shmctl (shmid, IPC_RMID, nil); // Destroy shared memory segment upon leaving
-end;
-
-// Fork process from main daemon and run something
-function runstuff (command, parameter: string; actionindex: word): integer;
-begin
-
 end;
 
 // Do something on signal
