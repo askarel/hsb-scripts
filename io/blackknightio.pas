@@ -311,7 +311,8 @@ begin
      pid:=fpFork;
      if pid = 0 then
       begin
-      fpsystem (paramstr (0) + '.sh' + ' ' + inttostr (msgindex) + ' ''' + msgtext + '''');
+//      fpsystem (paramstr (0) + '.sh' + ' ' + inttostr (msgindex) + ' ''' + msgtext + '''');
+      fpexecl (paramstr (0) + '.sh', [inttostr (msgindex), msgtext] );
       syslog (LOG_WARNING, 'Process returned: error code: %d', [FpGetErrNo]);
       halt(0);
       end;
@@ -654,6 +655,12 @@ begin
  end;
 end;
 
+// Collect and dispose of the dead bodies
+procedure children_of_bodom (sig: longint); cdecl;
+var childexitcode: cint;
+begin
+ syslog (log_info, 'Grim reaper: child %d exited with code: %d', [ FpWait (childexitcode), childexitcode]);
+end;
 
 // For IPC stuff (sending commands)
 Procedure senddaemoncommand (daemonpid: TPid; cmd: byte; comment: string);
@@ -685,7 +692,7 @@ end;
 
 ///////////// MAIN BLOCK /////////////
 var     shmname, pidname :string;
-        aOld, aTerm, aHup : pSigActionRec;
+        aOld, aTerm, aHup, aChild : pSigActionRec;
         zerosigs : sigset_t;
         ps1 : psigset;
         sSet : cardinal;
@@ -730,13 +737,14 @@ begin
       begin
        fpsigemptyset(zerosigs);
        { block all signals except -HUP & -TERM }
-       sSet := $ffffbffe;
+       sSet := $fffebffe;
        ps1 := @sSet;
        fpsigprocmask(sig_block,ps1,nil);
        { setup the signal handlers }
        new(aOld);
        new(aHup);
        new(aTerm);
+       new(aChild);
        aTerm^.sa_handler := SigactionHandler(@signalhandler);
        aTerm^.sa_mask := zerosigs;
        aTerm^.sa_flags := 0;
@@ -745,8 +753,13 @@ begin
        aHup^.sa_mask := zerosigs;
        aHup^.sa_flags := 0;
        aHup^.sa_restorer := nil;
+       aChild^.sa_handler := SigactionHandler(@children_of_bodom);
+       aChild^.sa_mask := zerosigs;
+       aChild^.sa_flags := 0;
+       aChild^.sa_restorer := nil;
        fpSigAction(SIGTERM,aTerm,aOld);
        fpSigAction(SIGHUP,aHup,aOld);
+       fpSigAction(SIGCHLD,aChild,aOld);
 
        pid := fpFork;
        if pid = 0 then

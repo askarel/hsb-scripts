@@ -120,6 +120,7 @@ printhtmlbuttonhash()
 
 # Make a section with anchor for a category
 # Parameter 1: path to generate buttons for
+# Parameter 2: maximum depth
 printhtmlsectionhash()
 {
     local ITEMNAME="${1#$DIR_AUDIOFILES}"
@@ -135,7 +136,7 @@ if [ -f "$TEMPLATE" ]; then
 	# Sidebar 
 	SIDEBAR="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" ! -wholename "$DIR_AUDIOFILES" \) -not -path "*/.*"  -exec /bin/sh -c \
 	    'printf "<A HREF=\"#%s\">%s</A> <br />\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "$(basename "{}")"' \;)"
-	# Make categories
+	# Make categories. Skip anything hidden
 	TROLLBODY="$(find "$DIR_AUDIOFILES" -xtype d \( -iname "*" ! -iname ".*" \) -not -path "*/.*" | while read line; do printhtmlsectionhash "$line"; done)"
     fi
     # Prime the template variables and show the page
