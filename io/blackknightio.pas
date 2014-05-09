@@ -61,64 +61,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         // Hardware bug: i got the address lines reversed while building the board.
         // Using a lookup table to mirror the address bits
         BITMIRROR: array[0..15] of byte=(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15);
-{
-        // Log level consts for the logging function
-        LOG_DEBUGMODE=false;
-        LOG_NONE=0; LOG_DEBUG=1; LOG_EMAIL=2; LOG_CRIT=3; LOG_ERR=4; LOG_WARN=5; LOG_INFO=6;
-        LOGPREFIXES: ARRAY [0..LOG_INFO] of string[10]=('', 'DEBUG', 'Mail', 'CRITICAL', 'ERROR', 'Warning', 'Info');
-
-        LOG_MSG_STOP=0; LOG_MSG_START=1; LOG_MSG_BOXTAMPER=2; LOG_MSG_TRIPWIRE=3; LOG_MSG_PANIC=4; LOG_MSG_HALLWAYLIGHT=5; LOG_MSG_MAIL=6;
-        LOG_MSG_TUESDAY=7; LOG_MSG_MAG1LOCKED=8; LOG_MSG_MAG2LOCKED=9; LOG_MSG_DOORLEAFSWITCH=10; LOG_MSG_MAGLOCK1ON=11; LOG_MSG_MAGLOCK2ON=12;
-        LOG_MSG_STRIKEON=13; LOG_MSG_DOORISLOCKED=14; LOG_MSG_SOFTOPEN=15; LOG_MSG_SWITCHOPEN=16; LOG_MSG_HANDLEOPEN=17; LOG_MSG_HANDLELIGHTOPEN=18;
-
-        LOG_MSG:TLogItem=( (msglevel: LOG_CRIT; msg: 'Application is exiting !!'; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_CRIT; msg: 'TAMPER ALERT: CONTROL BOX IS BEING OPENED !!'; altlevel: LOG_DEBUG; altmsg: 'Control box is closed.'),
-                           (msglevel: LOG_CRIT; msg: 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN !!'; altlevel: LOG_DEBUG; altmsg: 'Tripwire loop ok'),
-                           (msglevel: LOG_CRIT; msg: 'PANIC SWITCH PRESSED: MAGLOCKS PHYSICALLY DISCONNECTED'; altlevel: LOG_DEBUG; altmsg: 'Don''t panic'),
-                           (msglevel: LOG_INFO; msg: 'Hallway light is on'; altlevel: LOG_INFO; altmsg: 'Hallway light is off'),
-                           (msglevel: LOG_EMAIL; msg: 'We have mail in the mailbox.'; altlevel: LOG_INFO; altmsg: 'No mail.'),
-                           (msglevel: LOG_EMAIL; msg: 'Tuesday mode: ring doorbell to enter'; altlevel: LOG_EMAIL; altmsg: 'Leaving tuesday mode'),
-                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 1'; altlevel: LOG_ERR; altmsg: 'Maglock 1 shoe NOT detected !!'),
-                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 2'; altlevel: LOG_ERR; altmsg: 'Maglock 2 shoe NOT detected !!'),
-                           (msglevel: LOG_INFO; msg: 'Door is open.'; altlevel: LOG_INFO; altmsg: 'Door is closed (does not mean locked).'),
-                           (msglevel: LOG_INFO; msg: 'Maglock 1 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 1 is off'),
-                           (msglevel: LOG_INFO; msg: 'Maglock 2 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 2 is off'),
-                           (msglevel: LOG_INFO; msg: 'Door strike is on'; altlevel: LOG_DEBUG; altmsg: 'Door strike is off'),
-                           (msglevel: LOG_INFO; msg: 'Door is locked'; altlevel: LOG_EMAIL; altmsg: 'DOOR IS NOT LOCKED !!'),
-                           (msglevel: LOG_EMAIL; msg: 'Door opening request from system'; altlevel: LOG_NONE; altmsg: 'system is quiet'),
-                           (msglevel: LOG_EMAIL; msg: 'Door opening request from button'; altlevel: LOG_NONE; altmsg: 'No button touched'),
-                           (msglevel: LOG_EMAIL; msg: 'Door opening request from handle'; altlevel: LOG_NONE; altmsg: 'handle not touched'),
-                           (msglevel: LOG_INFO; msg: 'Door opening request, light+handle'; altlevel: LOG_NONE; altmsg: 'Light+handle conditions not met'),
-                           (msglevel: LOG_CRIT; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''), (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_ERR; msg: 'System is disabled in software'; altlevel: LOG_NONE; altmsg: 'System is enabled'),
-                           (msglevel: LOG_ERR; msg: 'Check wiring or leaf switch: door is maglocked, but i see it open.'; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_ERR; msg: 'Check wiring or maglock 1: Disabled in config, but i see it locked.'; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_ERR; msg: 'Check wiring or maglock 2: Disabled in config, but i see it locked.'; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: ''),
-                           (msglevel: LOG_NONE; msg: ''; altlevel: LOG_NONE; altmsg: '')
-                           );
- }       // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
+        // Various timers, in milliseconds (won't be accurate at all, but time is not critical)
         COPENWAIT=4000; // How long to leave the door unlocked after receiving open order
         LOCKWAIT=2000; // Maximum delay between leaf switch closure and maglock feedback switch closure (if delay expired, alert that the door is not closed properly
         BUZZERCHIRP=150; // Small beep delay
@@ -311,7 +254,6 @@ begin
      pid:=fpFork;
      if pid = 0 then
       begin
-//      fpsystem (paramstr (0) + '.sh' + ' ' + inttostr (msgindex) + ' ''' + msgtext + '''');
       fpexecl (paramstr (0) + '.sh', [inttostr (msgindex), msgtext] );
       syslog (LOG_WARNING, 'Process returned: error code: %d', [FpGetErrNo]);
       halt(0);
@@ -513,8 +455,8 @@ var shmname: string;
     shmid: longint;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
-    open_wait, beepdelay: longint;
-    open_order, initrun: boolean;
+    open_wait, beepdelay, Mag1CloseWait, Mag2CloseWait : longint;
+    open_order, door_is_locked: boolean;
 begin
  outputs:=word2bits (0);
  open_order:=false;
@@ -561,6 +503,7 @@ begin
        CMD_STOP: CurrentState[S_STOP]:=true;
        CMD_OPEN: open_order:=true;
        CMD_BEEP: beepdelay:=BUZZERCHIRP; // Small beep
+       CMD_TUESDAY: if CurrentState[S_TUESDAY] then CurrentState[S_TUESDAY]:=false else CurrentState[S_TUESDAY]:=true;
       end;
       SHMPointer^.command:=CMD_NONE;
       SHMPointer^.shmmsg:='';
@@ -618,18 +561,45 @@ begin
          end;
        end;
 (********************************************************************************************************)
-      // Process beep command
+      // Process timers
       busy_delay_tick (beepdelay, 16); // tick...
+      // Process beep command
       outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT]; // The buzzer might be active elsewhere
       // Do switch monitoring
 
-      // Process the log/action bits
-              log_door_event (msgflags, 0, open_order, true, 'Door is unlocked');
-//              log_door_event (msgflags, 1, open_order, false, 'Door is locked');
-//      log_door_event (msgflags, 42, true, true, 'true true');
-  //    syslog (log_info, 'Doing daemon shit...'#10, []);
-    //  sleep (300);
+      // ???
 
+      // Process the log/action bits
+      log_door_event (msgflags, 0, open_order, true, 'Door is unlocked');
+      log_door_event (msgflags, 1, ((inputs[MAILBOX] = IS_CLOSED) and STATIC_CONFIG[SC_MAILBOX]), true, 'There is mail in the mailbox');
+      log_door_event (msgflags, 2, (inputs[PANIC_SENSE] = IS_OPEN), true, 'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED');
+      log_door_event (msgflags, 3, ((inputs[TRIPWIRE_LOOP] = IS_OPEN) and STATIC_CONFIG[SC_TRIPWIRE_LOOP]), true, 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN');
+      log_door_event (msgflags, 4, ((inputs[BOX_TAMPER_SWITCH] = IS_OPEN) and STATIC_CONFIG[SC_BOX_TAMPER_SWITCH]), true, 'Control box is being opened');
+      log_door_event (msgflags, 5, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and not outputs[MAGLOCK1_RELAY] and STATIC_CONFIG[SC_MAGLOCK1]), true, 'Check maglock 1 and it''s wiring: maglock is off but i see it closed');
+      log_door_event (msgflags, 6, ((inputs[MAGLOCK2_RETURN] = IS_CLOSED) and not outputs[MAGLOCK2_RELAY] and STATIC_CONFIG[SC_MAGLOCK2]), true, 'Check maglock 2 and it''s wiring: maglock is off but i see it closed');
+      log_door_event (msgflags, 7, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and not outputs[MAGLOCK1_RELAY] and not STATIC_CONFIG[SC_MAGLOCK1]), true, 'Wiring error: maglock 1 is disabled in configuration but i see it closed');
+      log_door_event (msgflags, 8, ((inputs[MAGLOCK2_RETURN] = IS_CLOSED) and not outputs[MAGLOCK2_RELAY] and not STATIC_CONFIG[SC_MAGLOCK2]), true, 'Wiring error: maglock 2 is disabled in configuration but i see it closed');
+      log_door_event (msgflags, 9, CurrentState[S_TUESDAY], true, 'Tuesday mode active');
+{     This will go away. Logging items
+-                            (msglevel: LOG_CRIT; msg: 'Application is exiting !!'; altlevel: LOG_NONE; altmsg: ''),
+-                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
+-                           (msglevel: LOG_INFO; msg: 'Hallway light is on'; altlevel: LOG_INFO; altmsg: 'Hallway light is off'),
+-                           (msglevel: LOG_EMAIL; msg: 'Tuesday mode: ring doorbell to enter'; altlevel: LOG_EMAIL; altmsg: 'Leaving tuesday mode'),
+-                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 1'; altlevel: LOG_ERR; altmsg: 'Maglock 1 shoe NOT detected !!'),
+-                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 2'; altlevel: LOG_ERR; altmsg: 'Maglock 2 shoe NOT detected !!'),
+-                           (msglevel: LOG_INFO; msg: 'Door is open.'; altlevel: LOG_INFO; altmsg: 'Door is closed (does not mean locked).'),
+-                           (msglevel: LOG_INFO; msg: 'Maglock 1 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 1 is off'),
+-                           (msglevel: LOG_INFO; msg: 'Maglock 2 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 2 is off'),
+-                           (msglevel: LOG_INFO; msg: 'Door strike is on'; altlevel: LOG_DEBUG; altmsg: 'Door strike is off'),
+-                           (msglevel: LOG_INFO; msg: 'Door is locked'; altlevel: LOG_EMAIL; altmsg: 'DOOR IS NOT LOCKED !!'),
+-                           (msglevel: LOG_EMAIL; msg: 'Door opening request from system'; altlevel: LOG_NONE; altmsg: 'system is quiet'),
+-                           (msglevel: LOG_EMAIL; msg: 'Door opening request from button'; altlevel: LOG_NONE; altmsg: 'No button touched'),
+-                           (msglevel: LOG_EMAIL; msg: 'Door opening request from handle'; altlevel: LOG_NONE; altmsg: 'handle not touched'),
+-                           (msglevel: LOG_INFO; msg: 'Door opening request, light+handle'; altlevel: LOG_NONE; altmsg: 'Light+handle conditions not met'),
+-                           (msglevel: LOG_ERR; msg: 'System is disabled in software'; altlevel: LOG_NONE; altmsg: 'System is enabled'),
+-                           (msglevel: LOG_ERR; msg: 'Check wiring or leaf switch: door is maglocked, but i see it open.'; altlevel: LOG_NONE; altmsg: ''),
+
+}
 (********************************************************************************************************)
       SHMPointer^.inputs:=inputs;
       SHMPointer^.outputs:=outputs;
@@ -697,7 +667,6 @@ var     shmname, pidname :string;
         ps1 : psigset;
         sSet : cardinal;
         oldpid, sid, pid: TPid;
-        //shmkey,
         shmoldkey: TKey;
         shmid: longint;
         iamrunning: boolean;
