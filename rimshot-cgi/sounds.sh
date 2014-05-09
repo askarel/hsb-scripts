@@ -23,7 +23,6 @@
 
 DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
 PAGETITLE="Rimshot and other shit"
-#DIR_AUDIOFILES="./filez"
 ME=$(basename $0)
 CSSDIR="$DIR_AUDIOFILES/.CSS"
 TEMPLATE="$CSSDIR/$ME-template.html"
@@ -99,13 +98,17 @@ pickfile()
 # Pick a file using the filename hash
 # Return full path to the file if in database.
 # Return nothing if there is no match
-# parameter 1: requested file hash
+# parameter 1: target directory
+# parameter 2: requested file hash
+# parameter 3: Program to run. If empty, just print it out
 # THIS FUNCTION IS EXPOSED TO USER INPUT
 pickfilehash()
 {
-    find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/sh -c \
+    trollcmd='echo'
+    test -n "$3" && trollcmd="$3"
+    find "$1" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/sh -c \
 	'printf "%s %s\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "{}"' \; | while read trollhash trollfile; do 
-	    test "$trollhash" = "$1" && echo "$trollfile"
+	    test "$trollhash" = "$2" && $trollcmd "$trollfile"
 	 done
 }
 
@@ -176,8 +179,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 			test -n "$SPEECHMETHOD" && $SPEECHMETHOD "$SPEECHTEXT" &
 			;;
 		    *)# The rest...
-			MYPLAYFILE="$(pickfilehash "$POSTDATAVAR")"
-		        test -n "$MYPLAYFILE" && $PLAYPROG "$MYPLAYFILE" &
+			pickfilehash "$DIR_AUDIOFILES" "$POSTDATAVAR" "$PLAYPROG"
 			;;
 		esac
 	    fi
