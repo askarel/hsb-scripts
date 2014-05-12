@@ -455,17 +455,16 @@ var shmname: string;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
     open_wait, beepdelay, Mag1CloseWait, Mag2CloseWait : longint;
-    open_order, door_is_locked: boolean;
+    sys_open_order, door_is_locked: boolean;
 begin
  outputs:=word2bits (0);
- open_order:=false;
  dryrun:=MAXBOUNCES+2;
  Mag1CloseWait:=MAGWAIT;
  Mag2CloseWait:=MAGWAIT;
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
- open_wait:=COPENWAIT; beepdelay:=0; // Initialize some timers
+ open_wait:=0; beepdelay:=0; // Initialize some timers
  CurrentState[SC_DISABLED]:=STATIC_CONFIG[SC_DISABLED]; // Get default state from config
  shmname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@shmname[1]), daemonpid);
@@ -486,6 +485,7 @@ begin
     end;
 
    repeat
+    sys_open_order:=false;
     if CurrentState[S_DEMOMODE] then // I/O cycle
      begin // Fake I/O
       inputs:=debounceinput (SHMPointer^.fakeinputs, MAXBOUNCES);
@@ -502,7 +502,7 @@ begin
        CMD_ENABLE: CurrentState[SC_DISABLED]:=false;
        CMD_DISABLE: CurrentState[SC_DISABLED]:=true;
        CMD_STOP: CurrentState[S_STOP]:=true;
-       CMD_OPEN: open_order:=true;
+       CMD_OPEN: sys_open_order:=true;
        CMD_BEEP: beepdelay:=BUZZERCHIRP; // Small beep
        CMD_TUESDAY: if CurrentState[S_TUESDAY] then CurrentState[S_TUESDAY]:=false else CurrentState[S_TUESDAY]:=true;
       end;
@@ -515,7 +515,8 @@ begin
       if CurrentState[SC_DISABLED] then
        begin // System is software-disabled
         outputs:=word2bits (0); // Set all outputs to zero.
-        open_order:=false;      // Deny open order (we're disabled)
+        sys_open_order:=false;  // Deny open order (we're disabled)
+        open_wait:=0;
        end
       else
        begin // System is enabled. Process outputs
@@ -525,37 +526,34 @@ begin
          begin // PANIC MODE (topmost priority)
           outputs[MAGLOCK1_RELAY]:=false;
           outputs[MAGLOCK2_RELAY]:=false;
-          open_order:=false;
+          sys_open_order:=false;
+          open_wait:=0;
          end
         else // no panic
          begin
-          if open_order or (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED))
+          if sys_open_order or (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED))
            or (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED))
            or (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))
            or (CurrentState[S_TUESDAY] and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))) then
-           begin // Open order received
-            if not busy_delay_is_expired (open_wait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then
-             begin // Open !!
-              busy_delay_tick (open_wait, 16); // tick...
-              open_order:=true;
-              outputs[MAGLOCK1_RELAY]:=false;
-              outputs[MAGLOCK2_RELAY]:=false;
-              outputs[DOOR_STRIKE_RELAY]:=true;
-              if STATIC_CONFIG[SC_BUZZER] then outputs[BUZZER_OUTPUT]:=true;
-             end
-            else
-             begin
-              syslog (LOG_INFO, 'relocking door.', []);
-              open_wait:=COPENWAIT;
-              open_order:=false;
-             end;
-           end
-          else
-           begin // No open order (lock mode)
+           open_wait:=COPENWAIT; // Start open timer
+
+          if inputs[DOOR_CLOSED_SWITCH] = IS_OPEN then open_wait:=0; // Kill timer if door is open
+
+          if busy_delay_is_expired (open_wait) then
+           begin // Clear open order and re-lock
+//            syslog (LOG_INFO, 'Open order cleared.', []);
            if STATIC_CONFIG[SC_MAGLOCK1] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK1_RELAY]:=true;
            if STATIC_CONFIG[SC_MAGLOCK2] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK2_RELAY]:=true;
            outputs[DOOR_STRIKE_RELAY]:=false;
            outputs[BUZZER_OUTPUT]:=false;
+           end
+          else
+           begin // Open !!
+            busy_delay_tick (open_wait, 16); // tick...
+            outputs[MAGLOCK1_RELAY]:=false;
+            outputs[MAGLOCK2_RELAY]:=false;
+            outputs[DOOR_STRIKE_RELAY]:=true;
+            if STATIC_CONFIG[SC_BUZZER] then outputs[BUZZER_OUTPUT]:=true;
            end;
          end;
        end;
@@ -584,8 +582,8 @@ begin
        end;
       if (not STATIC_CONFIG[SC_MAGLOCK1]) and (not STATIC_CONFIG[SC_MAGLOCK2]) then // No maglock installed. Not recommended. (msg 21-25)
        begin
-        log_door_event (msgflags, 21, open_order,  'No magnetic lock installed. This configuration is NOT recommended.', '');
-
+        log_door_event (msgflags, 21, true,  'No magnetic lock installed. This configuration is NOT recommended.', '');
+        log_door_event (msgflags, 22, (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED), 'Door is closed. Cannot see if it is locked', '');
        end;
 
       // Process the log/action bits (msg 26-50)
@@ -597,14 +595,16 @@ begin
       log_door_event (msgflags, 32, (busy_delay_is_expired (Mag2CloseWait) and STATIC_CONFIG[SC_MAGLOCK2]), 'Check maglock 2 and it''s wiring: maglock is off but i see it closed', '');
       log_door_event (msgflags, 33, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and not outputs[MAGLOCK1_RELAY] and not STATIC_CONFIG[SC_MAGLOCK1]), 'Wiring error: maglock 1 is disabled in configuration but i see it closed', '');
       log_door_event (msgflags, 34, ((inputs[MAGLOCK2_RETURN] = IS_CLOSED) and not outputs[MAGLOCK2_RELAY] and not STATIC_CONFIG[SC_MAGLOCK2]), 'Wiring error: maglock 2 is disabled in configuration but i see it closed', '');
-      log_door_event (msgflags, 35, CurrentState[S_TUESDAY], 'Tuesday mode active. Ring doorbell to enter', '');
-      log_door_event (msgflags, 36, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
-      log_door_event (msgflags, 37, not CurrentState[SC_DISABLED], 'Door System is enabled', '');
-      log_door_event (msgflags, 38, CurrentState[SC_DISABLED], 'Door System is disabled in software', '');
-      log_door_event (msgflags, 39, (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED)),'Door opened from button', '');
-      log_door_event (msgflags, 40, (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (not STATIC_CONFIG[SC_HANDLE]) and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)), 'Door opened from handle with the light on', '');
-      log_door_event (msgflags, 41, (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)), 'Door opened from handle', '');
-      log_door_event (msgflags, 42, open_order,  'Door opened from system', @SHMPointer^.shmmsg[1]);
+      if msgflags[36] then log_door_event (msgflags, 35, (not CurrentState[S_TUESDAY]), 'Tuesday mode inactive', '');
+      log_door_event (msgflags, 36, CurrentState[S_TUESDAY], 'Tuesday mode active. Ring doorbell to enter', '');
+      log_door_event (msgflags, 37, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
+      log_door_event (msgflags, 38, not CurrentState[SC_DISABLED], 'Door System is enabled', '');
+      log_door_event (msgflags, 39, CurrentState[SC_DISABLED], 'Door System is disabled in software', '');
+      log_door_event (msgflags, 40, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED)),'Door opened from button', '');
+      log_door_event (msgflags, 41, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLEANDLIGHT] and (not STATIC_CONFIG[SC_HANDLE]) and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)),
+      'Door opened from handle with the light on', '');
+      log_door_event (msgflags, 42, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)), 'Door opened from handle', '');
+      log_door_event (msgflags, 43, sys_open_order,  'Order from system', @SHMPointer^.shmmsg[1]);
 {     This will go away. Potential Logging items
 -                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
 -                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 1'; altlevel: LOG_ERR; altmsg: 'Maglock 1 shoe NOT detected !!'),
@@ -612,7 +612,6 @@ begin
 -                           (msglevel: LOG_INFO; msg: 'Door is open.'; altlevel: LOG_INFO; altmsg: 'Door is closed (does not mean locked).'),
 -                           (msglevel: LOG_INFO; msg: 'Maglock 1 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 1 is off'),
 -                           (msglevel: LOG_INFO; msg: 'Maglock 2 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 2 is off'),
--                           (msglevel: LOG_INFO; msg: 'Door strike is on'; altlevel: LOG_DEBUG; altmsg: 'Door strike is off'),
 -                           (msglevel: LOG_INFO; msg: 'Door is locked'; altlevel: LOG_EMAIL; altmsg: 'DOOR IS NOT LOCKED !!'),
 -                           (msglevel: LOG_ERR; msg: 'Check wiring or leaf switch: door is maglocked, but i see it open.'; altlevel: LOG_NONE; altmsg: ''),
 }
