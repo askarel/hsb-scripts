@@ -605,6 +605,8 @@ begin
       'Door opened from handle with the light on', '');
       log_door_event (msgflags, 42, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)), 'Door opened from handle', '');
       log_door_event (msgflags, 43, sys_open_order,  'Order from system', @SHMPointer^.shmmsg[1]);
+      log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
+
 {     This will go away. Potential Logging items
 -                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
 -                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 1'; altlevel: LOG_ERR; altmsg: 'Maglock 1 shoe NOT detected !!'),
