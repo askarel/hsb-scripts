@@ -32,21 +32,13 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TRegisterbits=bitpacked array [0..15] of boolean; // Like a word: a 16 bits bitfield
         TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
         TSHMVariables=RECORD // What items should be exposed for IPC.
-//                PIDofmain:TPid;
                 Inputs, outputs, fakeinputs: TRegisterbits;
                 state, Config :TLotsofbits;
                 Command: byte;
                 SHMMsg:string;
-//                lastcommandstatus: byte;
                 end;
         TConfigTextArray=ARRAY [0..SHITBITS] of string[20];
-{        TLogItem=ARRAY [0..SHITBITS] OF RECORD // Log and debug text, with alternative and levels
-                msglevel: byte;
-                msg: string;
-                altlevel: byte;
-                altmsg: string;
-                end;
- }
+
 CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
         DATAPIN=25;
@@ -67,6 +59,13 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         MAGWAIT=1500;   // Reaction delay of the maglock output relay (the PCB has capacitors)
         BUZZERCHIRP=150; // Small beep delay
 //        SND_MISTERCASH: ARRAY OF WORD=(200, 200, 200, 200, 200, 200, 0, 0);
+        // Places to look for the external script
+        SCRIPTNAMES: array [0..5] of string=('/etc/blackknightio/blackknightio.sh',
+                                             '/usr/local/etc/blackknightio/blackknightio.sh',
+                                             '/usr/local/etc/blackknightio.sh',
+                                             '/usr/local/bin/blackknightio.sh',
+                                             '/usr/bin/blackknightio.sh',
+                                             '/root/blackknightio.sh');
 
         // Available outputs on 74LS673. Outputs Q0 to Q3 are connected to the address inputs of the 74150
         Q15=0; Q14=1; Q13=2; Q12=3; Q11=4; Q10=5; Q9=6; Q8=7; Q7=8; Q6=9; Q5=10; Q4=11;
@@ -244,7 +243,6 @@ end;
 
 // Log an event and run external script
 procedure log_door_event (var currentstateflags: TLotsOfBits; msgindex: byte; currentbitstate: boolean; msgtext: pchar);
-const externalscript: pchar = 'blackknightio.sh';
 var pid: Tpid;
 begin
  if currentstateflags[msgindex] <> currentbitstate then
