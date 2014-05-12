@@ -6,4 +6,4 @@ ME="$(basename $0)"
 
 logger -t $ME "$# Command line parameter received: '$1' '$2' '$3'"
 
-test -x "$(which flite)" && flite -t "$2"
+test -x "$(which flite)" && flite -t "$2 $3"
