@@ -456,14 +456,14 @@ var shmname: string;
     shmid: longint;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
-    open_wait, beepdelay, Mag1OpenWait, Mag2OpenWait : longint;
+    open_wait, beepdelay, Mag1CloseWait, Mag2CloseWait : longint;
     open_order, door_is_locked: boolean;
 begin
  outputs:=word2bits (0);
  open_order:=false;
  dryrun:=MAXBOUNCES+2;
- Mag1OpenWait:=MAGWAIT;
- Mag2OpenWait:=MAGWAIT;
+ Mag1CloseWait:=MAGWAIT;
+ Mag2CloseWait:=MAGWAIT;
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
@@ -540,7 +540,6 @@ begin
              begin // Open !!
               busy_delay_tick (open_wait, 16); // tick...
               open_order:=true;
-//              log_door_event (LOG_MSG_SWITCHOPEN, inputs[SC_DOORUNLOCKBUTTON], msgflags, LOG_MSG, LOG_DEBUGMODE, '');
               outputs[MAGLOCK1_RELAY]:=false;
               outputs[MAGLOCK2_RELAY]:=false;
               outputs[DOOR_STRIKE_RELAY]:=true;
@@ -569,29 +568,43 @@ begin
       outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT]; // The buzzer might be active elsewhere
       // The maglocks sensing circuit has capacitors. They may still be charged when we turn them off,
       // leaving the return contact closed when we turn the magnet off. Wait a bit before raising an alarm.
-      if outputs[MAGLOCK1_RELAY] then Mag1OpenWait:=MAGWAIT
-       else if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) then busy_delay_tick (Mag1OpenWait, 16);
-      if outputs[MAGLOCK2_RELAY] then Mag2OpenWait:=MAGWAIT
-       else if (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then busy_delay_tick (Mag2OpenWait, 16);
+      if (inputs[MAGLOCK1_RETURN] = IS_OPEN) then Mag1CloseWait:=MAGWAIT else if not outputs[MAGLOCK1_RELAY] then busy_delay_tick (Mag1CloseWait, 16);
+      if (inputs[MAGLOCK2_RETURN] = IS_OPEN) then Mag2CloseWait:=MAGWAIT else if not outputs[MAGLOCK2_RELAY] then busy_delay_tick (Mag2CloseWait, 16);
+
       // Do switch monitoring
+      if STATIC_CONFIG[SC_MAGLOCK1] and STATIC_CONFIG[SC_MAGLOCK2] then // Two maglocks installed (msg 6-10)
+       begin
 
-      // ???
+       end;
+      if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) then // Maglock 1 installed alone (msg 11-15)
+       begin
 
-      // Process the log/action bits
-      log_door_event (msgflags, 0, open_order,  'Door is unlocked');
-      log_door_event (msgflags, 1, ((inputs[MAILBOX] = IS_CLOSED) and STATIC_CONFIG[SC_MAILBOX]), 'There is mail in the mailbox');
-      log_door_event (msgflags, 2, (inputs[PANIC_SENSE] = IS_OPEN), 'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED');
-      log_door_event (msgflags, 3, ((inputs[TRIPWIRE_LOOP] = IS_OPEN) and STATIC_CONFIG[SC_TRIPWIRE_LOOP]), 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN');
-      log_door_event (msgflags, 4, ((inputs[BOX_TAMPER_SWITCH] = IS_OPEN) and STATIC_CONFIG[SC_BOX_TAMPER_SWITCH]), 'Control box is being opened');
-      log_door_event (msgflags, 5, (busy_delay_is_expired (Mag1OpenWait) and STATIC_CONFIG[SC_MAGLOCK1]), 'Check maglock 1 and it''s wiring: maglock is off but i see it closed');
-      log_door_event (msgflags, 6, (busy_delay_is_expired (Mag2OpenWait) and STATIC_CONFIG[SC_MAGLOCK2]), 'Check maglock 2 and it''s wiring: maglock is off but i see it closed');
-      log_door_event (msgflags, 7, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and not outputs[MAGLOCK1_RELAY] and not STATIC_CONFIG[SC_MAGLOCK1]), 'Wiring error: maglock 1 is disabled in configuration but i see it closed');
-      log_door_event (msgflags, 8, ((inputs[MAGLOCK2_RETURN] = IS_CLOSED) and not outputs[MAGLOCK2_RELAY] and not STATIC_CONFIG[SC_MAGLOCK2]), 'Wiring error: maglock 2 is disabled in configuration but i see it closed');
-      log_door_event (msgflags, 9, CurrentState[S_TUESDAY], 'Tuesday mode active. Ring doorbell to enter');
-{     This will go away. Logging items
--                           (msglevel: LOG_CRIT; msg: 'Application is exiting !!'; altlevel: LOG_NONE; altmsg: ''),
+       end;
+      if (not STATIC_CONFIG[SC_MAGLOCK1]) and STATIC_CONFIG[SC_MAGLOCK2] then // Maglock 2 installed alone (msg 16-20)
+       begin
+
+       end;
+      if (not STATIC_CONFIG[SC_MAGLOCK1]) and (not STATIC_CONFIG[SC_MAGLOCK2]) then // No maglock installed. Not recommended. (msg 21-25)
+       begin
+
+       end;
+
+      // Process the log/action bits (msg 26-40)
+      log_door_event (msgflags, 26, open_order,  'Door is unlocked');
+      log_door_event (msgflags, 27, ((inputs[MAILBOX] = IS_CLOSED) and STATIC_CONFIG[SC_MAILBOX]), 'There is mail in the mailbox');
+      log_door_event (msgflags, 28, (inputs[PANIC_SENSE] = IS_OPEN), 'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED');
+      log_door_event (msgflags, 29, ((inputs[TRIPWIRE_LOOP] = IS_OPEN) and STATIC_CONFIG[SC_TRIPWIRE_LOOP]), 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN');
+      log_door_event (msgflags, 30, ((inputs[BOX_TAMPER_SWITCH] = IS_OPEN) and STATIC_CONFIG[SC_BOX_TAMPER_SWITCH]), 'Control box is being opened');
+      log_door_event (msgflags, 31, (busy_delay_is_expired (Mag1CloseWait) and STATIC_CONFIG[SC_MAGLOCK1]), 'Check maglock 1 and it''s wiring: maglock is off but i see it closed');
+      log_door_event (msgflags, 32, (busy_delay_is_expired (Mag2CloseWait) and STATIC_CONFIG[SC_MAGLOCK2]), 'Check maglock 2 and it''s wiring: maglock is off but i see it closed');
+      log_door_event (msgflags, 33, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and not outputs[MAGLOCK1_RELAY] and not STATIC_CONFIG[SC_MAGLOCK1]), 'Wiring error: maglock 1 is disabled in configuration but i see it closed');
+      log_door_event (msgflags, 34, ((inputs[MAGLOCK2_RETURN] = IS_CLOSED) and not outputs[MAGLOCK2_RELAY] and not STATIC_CONFIG[SC_MAGLOCK2]), 'Wiring error: maglock 2 is disabled in configuration but i see it closed');
+      log_door_event (msgflags, 35, CurrentState[S_TUESDAY], 'Tuesday mode active. Ring doorbell to enter');
+      log_door_event (msgflags, 36, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on');
+      log_door_event (msgflags, 37, not CurrentState[SC_DISABLED], 'Door System is enabled');
+      log_door_event (msgflags, 38, CurrentState[SC_DISABLED], 'Door System is disabled in software');
+{     This will go away. Potential Logging items
 -                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
--                           (msglevel: LOG_INFO; msg: 'Hallway light is on'; altlevel: LOG_INFO; altmsg: 'Hallway light is off'),
 -                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 1'; altlevel: LOG_ERR; altmsg: 'Maglock 1 shoe NOT detected !!'),
 -                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 2'; altlevel: LOG_ERR; altmsg: 'Maglock 2 shoe NOT detected !!'),
 -                           (msglevel: LOG_INFO; msg: 'Door is open.'; altlevel: LOG_INFO; altmsg: 'Door is closed (does not mean locked).'),
@@ -603,7 +616,6 @@ begin
 -                           (msglevel: LOG_EMAIL; msg: 'Door opening request from button'; altlevel: LOG_NONE; altmsg: 'No button touched'),
 -                           (msglevel: LOG_EMAIL; msg: 'Door opening request from handle'; altlevel: LOG_NONE; altmsg: 'handle not touched'),
 -                           (msglevel: LOG_INFO; msg: 'Door opening request, light+handle'; altlevel: LOG_NONE; altmsg: 'Light+handle conditions not met'),
--                           (msglevel: LOG_ERR; msg: 'System is disabled in software'; altlevel: LOG_NONE; altmsg: 'System is enabled'),
 -                           (msglevel: LOG_ERR; msg: 'Check wiring or leaf switch: door is maglocked, but i see it open.'; altlevel: LOG_NONE; altmsg: ''),
 }
 (********************************************************************************************************)
@@ -615,7 +627,8 @@ begin
     else dryrun:=dryrun-1;
    until CurrentState[S_STOP];
   end;
- syslog (log_crit,'Daemon is exiting. Clearing outputs', []);
+ log_door_event (msgflags, 63, true, 'Door controller is bailing out. Clearing outputs');
+// syslog (log_crit,'Daemon is exiting. Clearing outputs', []);
  outputs:=word2bits (0);
  if not CurrentState[S_DEMOMODE] then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
  sleep (100); // Give time for the monitor to die before yanking the segment
