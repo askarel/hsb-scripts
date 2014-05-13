@@ -37,6 +37,11 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                 Command: byte;
                 SHMMsg:string;
                 end;
+        TBusyBuzzerScratch=RECORD
+                TimeIndex: longint;
+                offset: longint;
+                end;
+        TBuzzPattern= ARRAY [0..20] OF LONGINT;
         TConfigTextArray=ARRAY [0..SHITBITS] of string[20];
 
 CONST   CLOCKPIN=7;  // 74LS673 pins
@@ -58,7 +63,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         LOCKWAIT=2000;  // Maximum delay between leaf switch closure and maglock feedback switch closure (if delay expired, alert that the door is not closed properly
         MAGWAIT=1500;   // Reaction delay of the maglock output relay (the PCB has capacitors)
         BUZZERCHIRP=150; // Small beep delay
-//        SND_MISTERCASH: ARRAY OF WORD=(200, 200, 200, 200, 200, 200, 0, 0);
+        SND_MISTERCASH: TBuzzPattern=(150, 50, 150, 50, 150, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         // Places to look for the external script
         SCRIPTNAMES: array [0..5] of string=('/etc/blackknightio/blackknightio.sh',
                                              '/usr/local/etc/blackknightio/blackknightio.sh',
@@ -160,6 +165,7 @@ VAR     GPIO_Driver: TIODriver;
         debounceinput_array: ARRAY[false..true, 0..15] of byte; // That one has to be global. No way around it.
         CurrentState,   // Reason for global: it is modified by the signal handler
         msgflags: TLotsOfBits; // Reason for global: message state must be preserved (avoid spamming the syslog)
+        BuzzerTracker: TBusyBuzzerScratch;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
 
@@ -238,11 +244,21 @@ begin
                  else busy_delay_is_expired:=false;
 end;
 
-// Buzzer functions ?
-// Needed functions:  buzzer handling
-function busy_buzzer (pattern: pointer; ticklength: word): boolean;
+// Play a beep pattern
+function busy_buzzer (var scratchspace: TBusyBuzzerScratch; pattern: TBuzzpattern; ticklength: word): boolean;
 begin
-
+ if (pattern[scratchspace.offset] = 0) then busy_buzzer:=false // End of pattern: shut up.
+  else
+  begin
+   if (scratchspace.TimeIndex <= 0) then scratchspace.TimeIndex:=pattern[scratchspace.offset];
+   busy_buzzer:=((scratchspace.offset and 1) = 0);// Beep !!
+   busy_delay_tick (scratchspace.TimeIndex, ticklength);
+   if busy_delay_is_expired (scratchspace.TimeIndex) then
+    begin
+     inc (scratchspace.offset); // Next !!
+     scratchspace.TimeIndex:=pattern[scratchspace.offset];
+    end;
+  end
 end;
 
 // Log an event and run external script
@@ -468,6 +484,7 @@ begin
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
+ fillchar (buzzertracker, sizeof (buzzertracker), 0);
  CurrentState[SC_DISABLED]:=STATIC_CONFIG[SC_DISABLED]; // Get default state from config
  shmname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@shmname[1]), daemonpid);
@@ -507,7 +524,7 @@ begin
        CMD_STOP: CurrentState[S_STOP]:=true;
        CMD_OPEN: sys_open_order:=true;
        CMD_BEEP: beepdelay:=BUZZERCHIRP; // Small beep
-       CMD_TUESDAY: if CurrentState[S_TUESDAY] then CurrentState[S_TUESDAY]:=false else CurrentState[S_TUESDAY]:=true;
+//       CMD_TUESDAY: if CurrentState[S_TUESDAY] then CurrentState[S_TUESDAY]:=false else CurrentState[S_TUESDAY]:=true;
       end;
       SHMPointer^.command:=CMD_NONE;
       SHMPointer^.shmmsg:='';
@@ -555,10 +572,6 @@ begin
          end;
        end;
 (********************************************************************************************************)
-      // Process timers
-      busy_delay_tick (beepdelay, 16); // tick...
-      // Process beep command
-      outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT]; // The buzzer might be active elsewhere
       // The maglocks sensing circuit has capacitors. They may still be charged when we turn them off,
       // leaving the return contact closed when we turn the magnet off. Wait a bit before raising an alarm.
       if (inputs[MAGLOCK1_RETURN] = IS_OPEN) then Mag1CloseWait:=MAGWAIT else if not outputs[MAGLOCK1_RELAY] then busy_delay_tick (Mag1CloseWait, 16);
@@ -585,27 +598,22 @@ begin
          'Partial lock detected: Maglock 1 did not latch.', '');
         log_door_event (msgflags, 7, (busy_delay_is_expired (Mag2LockWait) and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
          'Partial lock detected: Maglock 2 did not latch.', '');
-        door_is_locked:=((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and
-                         outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED));
-        log_door_event (msgflags, 8, door_is_locked, 'Door is fully locked.', '');
-        log_door_event (msgflags, 9, (door_is_locked and outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_OPEN)),
-         'Magnetic lock 1 or its wiring failed. Please repair.', '');
-        log_door_event (msgflags, 10, (door_is_locked and outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_OPEN)),
-         'Magnetic lock 2 or its wiring failed. Please repair.', '');
+        log_door_event (msgflags, 8, (busy_delay_is_expired (Mag1LockWait) and busy_delay_is_expired (Mag2LockWait) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
+         'No maglock latched: Door is not locked.', '');
+        if ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY])
+         and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then door_is_locked:=true;
        end;
       if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) then // Maglock 1 installed alone (msg 11-15)
        begin
-        log_door_event (msgflags, 11, (busy_delay_is_expired (Mag1LockWait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED)),
+        log_door_event (msgflags, 11, (busy_delay_is_expired (Mag1LockWait)),
          'Maglock 1 did not latch: Door is not locked', '');
-        door_is_locked:=(outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED));
-        log_door_event (msgflags, 12, door_is_locked, 'Door is locked.', '');
+        if (outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED)) then door_is_locked:=true;
        end;
       if (not STATIC_CONFIG[SC_MAGLOCK1]) and STATIC_CONFIG[SC_MAGLOCK2] then // Maglock 2 installed alone (msg 16-20)
        begin
-        log_door_event (msgflags, 16, (busy_delay_is_expired (Mag2LockWait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED)),
+        log_door_event (msgflags, 16, (busy_delay_is_expired (Mag2LockWait)),
          'Maglock 2 did not latch: Door is not locked', '');
-        door_is_locked:=(outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED));
-        log_door_event (msgflags, 17, door_is_locked, 'Door is locked.', '');
+        if (outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED)) then door_is_locked:=true;
        end;
       if (not STATIC_CONFIG[SC_MAGLOCK1]) and (not STATIC_CONFIG[SC_MAGLOCK2]) then // No maglock installed. Not recommended. (msg 21-25)
        begin
@@ -614,12 +622,18 @@ begin
        end;
 
       { Corner cases to fix:
-        - Maglock switch opening when it's on and has been validated before
         - tuesday mode: make it time delayed
-
       }
 
+      // Process beep commands
+      if door_is_locked and STATIC_CONFIG[SC_BUZZER] then
+       outputs[BUZZER_OUTPUT]:=(busy_buzzer (buzzertracker, SND_MISTERCASH, 16) or outputs[BUZZER_OUTPUT])
+       else fillchar (buzzertracker, sizeof (buzzertracker), 0);
+      busy_delay_tick (beepdelay, 16); // tick...
+      outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT]; // The buzzer might be active elsewhere
+
       // Process the log/action bits (msg 26-50)
+      log_door_event (msgflags, 26, door_is_locked, 'Door is locked.', '');
       log_door_event (msgflags, 27, ((inputs[MAILBOX] = IS_CLOSED) and STATIC_CONFIG[SC_MAILBOX]), 'There is mail in the mailbox', '');
       log_door_event (msgflags, 28, (inputs[PANIC_SENSE] = IS_OPEN), 'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED', '');
       log_door_event (msgflags, 29, ((inputs[TRIPWIRE_LOOP] = IS_OPEN) and STATIC_CONFIG[SC_TRIPWIRE_LOOP]), 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN', '');
@@ -646,9 +660,10 @@ begin
       log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
       log_door_event (msgflags, 45, (door_is_locked and (inputs [DOOR_CLOSED_SWITCH] = IS_OPEN)),
        'Check wiring of door switch: door is locked but i see it open', '');
-{     This will go away. Potential Logging items
--                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
-}
+      log_door_event (msgflags, 46, (door_is_locked and outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_OPEN) and STATIC_CONFIG[SC_MAGLOCK1]),
+       'Magnetic lock 1 or its wiring failed. Please repair.', '');
+      log_door_event (msgflags, 47, (door_is_locked and outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_OPEN) and STATIC_CONFIG[SC_MAGLOCK2]),
+       'Magnetic lock 2 or its wiring failed. Please repair.', '');
 (********************************************************************************************************)
       SHMPointer^.inputs:=inputs;
       SHMPointer^.outputs:=outputs;
