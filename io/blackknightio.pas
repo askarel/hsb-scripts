@@ -454,17 +454,15 @@ var shmname: string;
     shmid: longint;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
-    open_wait, beepdelay, Mag1CloseWait, Mag2CloseWait : longint;
+    open_wait, beepdelay, Mag1CloseWait, Mag2CloseWait, Mag1LockWait, Mag2LockWait: longint;
     sys_open_order, door_is_locked: boolean;
 begin
  outputs:=word2bits (0);
  dryrun:=MAXBOUNCES+2;
- Mag1CloseWait:=MAGWAIT;
- Mag2CloseWait:=MAGWAIT;
+ open_wait:=0; beepdelay:=0; Mag1CloseWait:=MAGWAIT; Mag2CloseWait:=MAGWAIT; Mag1LockWait:=LOCKWAIT; Mag2LockWait:=LOCKWAIT; // Initialize some timers
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
- open_wait:=0; beepdelay:=0; // Initialize some timers
  CurrentState[SC_DISABLED]:=STATIC_CONFIG[SC_DISABLED]; // Get default state from config
  shmname:=paramstr (0) + #0;
  shmkey:=ftok (pchar (@shmname[1]), daemonpid);
@@ -531,21 +529,12 @@ begin
          end
         else // no panic
          begin
-          if sys_open_order or (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED))
-           or (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED))
-           or (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))
-           or (CurrentState[S_TUESDAY] and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))) then
-           open_wait:=COPENWAIT; // Start open timer
-
-          if inputs[DOOR_CLOSED_SWITCH] = IS_OPEN then open_wait:=0; // Kill timer if door is open
-
           if busy_delay_is_expired (open_wait) then
-           begin // Clear open order and re-lock
-//            syslog (LOG_INFO, 'Open order cleared.', []);
-           if STATIC_CONFIG[SC_MAGLOCK1] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK1_RELAY]:=true;
-           if STATIC_CONFIG[SC_MAGLOCK2] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK2_RELAY]:=true;
-           outputs[DOOR_STRIKE_RELAY]:=false;
-           outputs[BUZZER_OUTPUT]:=false;
+           begin // re-lock
+            if STATIC_CONFIG[SC_MAGLOCK1] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK1_RELAY]:=true;
+            if STATIC_CONFIG[SC_MAGLOCK2] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK2_RELAY]:=true;
+            outputs[DOOR_STRIKE_RELAY]:=false;
+            outputs[BUZZER_OUTPUT]:=false;
            end
           else
            begin // Open !!
@@ -566,19 +555,36 @@ begin
       // leaving the return contact closed when we turn the magnet off. Wait a bit before raising an alarm.
       if (inputs[MAGLOCK1_RETURN] = IS_OPEN) then Mag1CloseWait:=MAGWAIT else if not outputs[MAGLOCK1_RELAY] then busy_delay_tick (Mag1CloseWait, 16);
       if (inputs[MAGLOCK2_RETURN] = IS_OPEN) then Mag2CloseWait:=MAGWAIT else if not outputs[MAGLOCK2_RELAY] then busy_delay_tick (Mag2CloseWait, 16);
+      // Reset closing timers when magnets are off
+      if not outputs[MAGLOCK1_RELAY] then Mag1LockWait:=LOCKWAIT;
+      if not outputs[MAGLOCK2_RELAY] then Mag2LockWait:=LOCKWAIT;
+      // Start the closing timers when the magnets are on. Stop ticking when the shoe is on the magnet -> door is locked.
+      if outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_OPEN) then busy_delay_tick (Mag1LockWait, 16);
+      if outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_OPEN) then busy_delay_tick (Mag2LockWait, 16);
 
       // Do switch monitoring
+      if (inputs[PANIC_SENSE] = IS_CLOSED) and (sys_open_order  // Open from system
+       or (STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)) // Open from handle only
+       or (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)) // Open from handle and light
+       or (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))// Open from unlock button
+       or (CurrentState[S_TUESDAY] and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)))) // Open from doorbell
+        then
+         open_wait:=COPENWAIT; // Start open timer
+      if inputs[DOOR_CLOSED_SWITCH] = IS_OPEN then open_wait:=0; // Kill timer if door is open
+
       if STATIC_CONFIG[SC_MAGLOCK1] and STATIC_CONFIG[SC_MAGLOCK2] then // Two maglocks installed (msg 6-10)
        begin
 
        end;
       if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) then // Maglock 1 installed alone (msg 11-15)
        begin
-
+        log_door_event (msgflags, 11, busy_delay_is_expired (Mag1LockWait), 'Maglock 1 did not latch: Door is not locked', '');
+        log_door_event (msgflags, 12, (outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_CLOSED)), 'Door is locked.', '');
        end;
       if (not STATIC_CONFIG[SC_MAGLOCK1]) and STATIC_CONFIG[SC_MAGLOCK2] then // Maglock 2 installed alone (msg 16-20)
        begin
-
+        log_door_event (msgflags, 16, busy_delay_is_expired (Mag2LockWait), 'Maglock 2 did not latch: Door is not locked', '');
+        log_door_event (msgflags, 17, (outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED)), 'Door is locked.', '');
        end;
       if (not STATIC_CONFIG[SC_MAGLOCK1]) and (not STATIC_CONFIG[SC_MAGLOCK2]) then // No maglock installed. Not recommended. (msg 21-25)
        begin
@@ -609,12 +615,6 @@ begin
 
 {     This will go away. Potential Logging items
 -                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
--                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 1'; altlevel: LOG_ERR; altmsg: 'Maglock 1 shoe NOT detected !!'),
--                           (msglevel: LOG_INFO; msg: 'Door is locked by maglock 2'; altlevel: LOG_ERR; altmsg: 'Maglock 2 shoe NOT detected !!'),
--                           (msglevel: LOG_INFO; msg: 'Door is open.'; altlevel: LOG_INFO; altmsg: 'Door is closed (does not mean locked).'),
--                           (msglevel: LOG_INFO; msg: 'Maglock 1 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 1 is off'),
--                           (msglevel: LOG_INFO; msg: 'Maglock 2 is on'; altlevel: LOG_INFO; altmsg: 'Maglock 2 is off'),
--                           (msglevel: LOG_INFO; msg: 'Door is locked'; altlevel: LOG_EMAIL; altmsg: 'DOOR IS NOT LOCKED !!'),
 -                           (msglevel: LOG_ERR; msg: 'Check wiring or leaf switch: door is maglocked, but i see it open.'; altlevel: LOG_NONE; altmsg: ''),
 }
 (********************************************************************************************************)
