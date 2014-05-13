@@ -459,11 +459,12 @@ var shmname: string;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
     open_wait, beepdelay, Mag1CloseWait, Mag2CloseWait, Mag1LockWait, Mag2LockWait: longint;
-    sys_open_order: boolean;
+    sys_open_order, door_is_locked: boolean;
 begin
  outputs:=word2bits (0);
  dryrun:=MAXBOUNCES+2;
  open_wait:=0; beepdelay:=0; Mag1CloseWait:=MAGWAIT; Mag2CloseWait:=MAGWAIT; Mag1LockWait:=LOCKWAIT; Mag2LockWait:=LOCKWAIT; // Initialize some timers
+ door_is_locked:=false;
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
@@ -519,6 +520,7 @@ begin
         outputs:=word2bits (0); // Set all outputs to zero.
         sys_open_order:=false;  // Deny open order (we're disabled)
         open_wait:=0;
+        door_is_locked:=false;
        end
       else
        begin // System is enabled. Process outputs
@@ -529,6 +531,7 @@ begin
           outputs[MAGLOCK1_RELAY]:=false;
           outputs[MAGLOCK2_RELAY]:=false;
           sys_open_order:=false;
+          door_is_locked:=false;
           open_wait:=0;
          end
         else // no panic
@@ -547,6 +550,7 @@ begin
             outputs[MAGLOCK2_RELAY]:=false;
             outputs[DOOR_STRIKE_RELAY]:=true;
             if STATIC_CONFIG[SC_BUZZER] then outputs[BUZZER_OUTPUT]:=true;
+            door_is_locked:=false;
            end;
          end;
        end;
@@ -572,8 +576,7 @@ begin
        or (STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)) // Open from handle and light
        or (STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED))// Open from unlock button
        or (CurrentState[S_TUESDAY] and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)))) // Open from doorbell
-        then
-         open_wait:=COPENWAIT; // Start open timer
+        then open_wait:=COPENWAIT; // Start open timer
       if inputs[DOOR_CLOSED_SWITCH] = IS_OPEN then open_wait:=0; // Kill timer if door is open
 
       if STATIC_CONFIG[SC_MAGLOCK1] and STATIC_CONFIG[SC_MAGLOCK2] then // Two maglocks installed (msg 6-10)
@@ -582,18 +585,27 @@ begin
          'Partial lock detected: Maglock 1 did not latch.', '');
         log_door_event (msgflags, 7, (busy_delay_is_expired (Mag2LockWait) and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
          'Partial lock detected: Maglock 2 did not latch.', '');
-        log_door_event (msgflags, 8, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
-         'Door is fully locked.', '');
+        door_is_locked:=((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and
+                         outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED));
+        log_door_event (msgflags, 8, door_is_locked, 'Door is fully locked.', '');
+        log_door_event (msgflags, 9, (door_is_locked and outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_OPEN)),
+         'Magnetic lock 1 or its wiring failed. Please repair.', '');
+        log_door_event (msgflags, 10, (door_is_locked and outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_OPEN)),
+         'Magnetic lock 2 or its wiring failed. Please repair.', '');
        end;
       if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) then // Maglock 1 installed alone (msg 11-15)
        begin
-        log_door_event (msgflags, 11, busy_delay_is_expired (Mag1LockWait), 'Maglock 1 did not latch: Door is not locked', '');
-        log_door_event (msgflags, 12, (outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_CLOSED)), 'Door is locked.', '');
+        log_door_event (msgflags, 11, (busy_delay_is_expired (Mag1LockWait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED)),
+         'Maglock 1 did not latch: Door is not locked', '');
+        door_is_locked:=(outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED));
+        log_door_event (msgflags, 12, door_is_locked, 'Door is locked.', '');
        end;
       if (not STATIC_CONFIG[SC_MAGLOCK1]) and STATIC_CONFIG[SC_MAGLOCK2] then // Maglock 2 installed alone (msg 16-20)
        begin
-        log_door_event (msgflags, 16, busy_delay_is_expired (Mag2LockWait), 'Maglock 2 did not latch: Door is not locked', '');
-        log_door_event (msgflags, 17, (outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED)), 'Door is locked.', '');
+        log_door_event (msgflags, 16, (busy_delay_is_expired (Mag2LockWait) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED)),
+         'Maglock 2 did not latch: Door is not locked', '');
+        door_is_locked:=(outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED));
+        log_door_event (msgflags, 17, door_is_locked, 'Door is locked.', '');
        end;
       if (not STATIC_CONFIG[SC_MAGLOCK1]) and (not STATIC_CONFIG[SC_MAGLOCK2]) then // No maglock installed. Not recommended. (msg 21-25)
        begin
@@ -601,30 +613,41 @@ begin
         log_door_event (msgflags, 22, (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED), 'Door is closed. Cannot see if it is locked', '');
        end;
 
+      { Corner cases to fix:
+        - Maglock switch opening when it's on and has been validated before
+        - tuesday mode: make it time delayed
+
+      }
+
       // Process the log/action bits (msg 26-50)
       log_door_event (msgflags, 27, ((inputs[MAILBOX] = IS_CLOSED) and STATIC_CONFIG[SC_MAILBOX]), 'There is mail in the mailbox', '');
       log_door_event (msgflags, 28, (inputs[PANIC_SENSE] = IS_OPEN), 'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED', '');
       log_door_event (msgflags, 29, ((inputs[TRIPWIRE_LOOP] = IS_OPEN) and STATIC_CONFIG[SC_TRIPWIRE_LOOP]), 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN', '');
       log_door_event (msgflags, 30, ((inputs[BOX_TAMPER_SWITCH] = IS_OPEN) and STATIC_CONFIG[SC_BOX_TAMPER_SWITCH]), 'Control box is being opened', '');
-      log_door_event (msgflags, 31, (busy_delay_is_expired (Mag1CloseWait) and STATIC_CONFIG[SC_MAGLOCK1]), 'Check maglock 1 and it''s wiring: maglock is off but i see it closed', '');
-      log_door_event (msgflags, 32, (busy_delay_is_expired (Mag2CloseWait) and STATIC_CONFIG[SC_MAGLOCK2]), 'Check maglock 2 and it''s wiring: maglock is off but i see it closed', '');
-      log_door_event (msgflags, 33, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and not outputs[MAGLOCK1_RELAY] and not STATIC_CONFIG[SC_MAGLOCK1]), 'Wiring error: maglock 1 is disabled in configuration but i see it closed', '');
-      log_door_event (msgflags, 34, ((inputs[MAGLOCK2_RETURN] = IS_CLOSED) and not outputs[MAGLOCK2_RELAY] and not STATIC_CONFIG[SC_MAGLOCK2]), 'Wiring error: maglock 2 is disabled in configuration but i see it closed', '');
+      log_door_event (msgflags, 31, (busy_delay_is_expired (Mag1CloseWait) and STATIC_CONFIG[SC_MAGLOCK1]),
+       'Check maglock 1 and it''s wiring: maglock is off but i see it closed', '');
+      log_door_event (msgflags, 32, (busy_delay_is_expired (Mag2CloseWait) and STATIC_CONFIG[SC_MAGLOCK2]),
+       'Check maglock 2 and it''s wiring: maglock is off but i see it closed', '');
+      log_door_event (msgflags, 33, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and not outputs[MAGLOCK1_RELAY] and not STATIC_CONFIG[SC_MAGLOCK1]),
+       'Wiring error: maglock 1 is disabled in configuration but i see it closed', '');
+      log_door_event (msgflags, 34, ((inputs[MAGLOCK2_RETURN] = IS_CLOSED) and not outputs[MAGLOCK2_RELAY] and not STATIC_CONFIG[SC_MAGLOCK2]),
+       'Wiring error: maglock 2 is disabled in configuration but i see it closed', '');
       if msgflags[36] then log_door_event (msgflags, 35, (not CurrentState[S_TUESDAY]), 'Tuesday mode inactive', '');
       log_door_event (msgflags, 36, CurrentState[S_TUESDAY], 'Tuesday mode active. Ring doorbell to enter', '');
       log_door_event (msgflags, 37, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
       log_door_event (msgflags, 38, not CurrentState[SC_DISABLED], 'Door System is enabled', '');
       log_door_event (msgflags, 39, CurrentState[SC_DISABLED], 'Door System is disabled in software', '');
-      log_door_event (msgflags, 40, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED)),'Door opened from button', '');
+      log_door_event (msgflags, 40, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED)),
+       'Door opened from button', '');
       log_door_event (msgflags, 41, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLEANDLIGHT] and (not STATIC_CONFIG[SC_HANDLE]) and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)),
        'Door opened from handle with the light on', '');
       log_door_event (msgflags, 42, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)), 'Door opened from handle', '');
       log_door_event (msgflags, 43, sys_open_order,  'Order from system', @SHMPointer^.shmmsg[1]);
       log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
-
+      log_door_event (msgflags, 45, (door_is_locked and (inputs [DOOR_CLOSED_SWITCH] = IS_OPEN)),
+       'Check wiring of door switch: door is locked but i see it open', '');
 {     This will go away. Potential Logging items
 -                           (msglevel: LOG_EMAIL; msg: 'Application is starting...'; altlevel: LOG_NONE; altmsg: ''),
--                           (msglevel: LOG_ERR; msg: 'Check wiring or leaf switch: door is maglocked, but i see it open.'; altlevel: LOG_NONE; altmsg: ''),
 }
 (********************************************************************************************************)
       SHMPointer^.inputs:=inputs;
