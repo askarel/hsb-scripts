@@ -101,8 +101,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DOOR_OPEN_BUTTON=IN1;
         IS_CLOSED=false;
         IS_OPEN=true;
-        DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
-        DBGOUTSTATESTR: Array [false..true] of string[5]=('On', 'Off');
+//        DBGINSTATESTR: Array [IS_CLOSED..IS_OPEN] of string[5]=('closed', 'open');
+//        DBGOUTSTATESTR: Array [false..true] of string[5]=('On', 'Off');
         CFGSTATESTR: Array [false..true] of string[8]=('Disabled','Enabled');
         DBGOUT: TDbgArray=('Green LED', 'Red LED', 'Q13 not used', 'Q12 not used', 'relay not used', 'strike', 'mag1 power', 'mag2 power', 'not used',
                                 'light', 'bell inhib.', 'Buzzer', '74150 A3', '74150 A2', '74150 A1', '74150 A0');
@@ -240,6 +240,10 @@ end;
 
 // Buzzer functions ?
 // Needed functions:  buzzer handling
+function busy_buzzer (pattern: pointer; ticklength: word): boolean;
+begin
+
+end;
 
 // Log an event and run external script
 procedure log_door_event (var currentstateflags: TLotsOfBits; msgindex: byte; currentbitstate: boolean; msgtext, extratext: pchar);
@@ -455,7 +459,7 @@ var shmname: string;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
     open_wait, beepdelay, Mag1CloseWait, Mag2CloseWait, Mag1LockWait, Mag2LockWait: longint;
-    sys_open_order, door_is_locked: boolean;
+    sys_open_order: boolean;
 begin
  outputs:=word2bits (0);
  dryrun:=MAXBOUNCES+2;
@@ -574,7 +578,12 @@ begin
 
       if STATIC_CONFIG[SC_MAGLOCK1] and STATIC_CONFIG[SC_MAGLOCK2] then // Two maglocks installed (msg 6-10)
        begin
-
+        log_door_event (msgflags, 6, (busy_delay_is_expired (Mag1LockWait) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
+         'Partial lock detected: Maglock 1 did not latch.', '');
+        log_door_event (msgflags, 7, (busy_delay_is_expired (Mag2LockWait) and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
+         'Partial lock detected: Maglock 2 did not latch.', '');
+        log_door_event (msgflags, 8, ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
+         'Door is fully locked.', '');
        end;
       if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) then // Maglock 1 installed alone (msg 11-15)
        begin
@@ -608,7 +617,7 @@ begin
       log_door_event (msgflags, 39, CurrentState[SC_DISABLED], 'Door System is disabled in software', '');
       log_door_event (msgflags, 40, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED)),'Door opened from button', '');
       log_door_event (msgflags, 41, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLEANDLIGHT] and (not STATIC_CONFIG[SC_HANDLE]) and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)),
-      'Door opened from handle with the light on', '');
+       'Door opened from handle with the light on', '');
       log_door_event (msgflags, 42, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)), 'Door opened from handle', '');
       log_door_event (msgflags, 43, sys_open_order,  'Order from system', @SHMPointer^.shmmsg[1]);
       log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
