@@ -1,0 +1,98 @@
+#!/bin/bash
+# CONFIG AREA ##############################################
+SQLHOST='localhost'
+SQLUSER='rfid_web_user'
+SQLPASS='ChangeMe'
+SQLDB='rfid_db_hsbxl'
+
+#############################################################
+ME="$(basename $0)"
+
+# Function to call when we bail out
+# Parameter 1: text to output
+# Parameter 2: exitcode when leaving. Set to 1 if empty
+die()
+{
+    echo "$ME: $1. Exit" >&2
+    test -n "$2" && exit $2
+    exit 1
+}
+
+
+# run a SQL command.
+# Parameter 1: SQL request
+# Parameter 2: if set, do not bail out on error
+# output: tab-separated data
+# exit code 0: request successful
+runsql ()
+{
+    test -z "$1" && die "Empty SQL request"
+    test -z "$2" && mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names -e "$1" || die "$ME: Failed query: '$1'" # Fix your junk !
+    test -n "$2" && mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names -e "$1" 2>&1 # We want the error
+}
+
+
+helptext()
+{
+cat << HELPTEXT
+Usage: $ME [adduser|edituser|addtag|rmtag|revoketag|showlog|gettaginfo]
+
+    adduser		Add a user to the system
+    edituser		Change user parameters
+    blacklistuser user	Put a user and his tags to a blacklist
+    addtag user	taghash	Add a tag ID to a user
+    rmtag user taghash	Remove a tag from user
+    revoketag taghash	Blacklist a tag
+    showlog		Show logs
+    gettaginfo		Get user infos from tag
+HELPTEXT
+exit 1
+}
+
+adduser()
+{
+    test -z "$1" && die "You need to supply the username to create"
+    test -n "$(runsql "select login from users where login like '$1'")" && die "User $1 already exists"
+    runsql "Insert into users values ('$1', 'Blaah', 'NORMAL_USE', 0)"
+}
+
+addtag()
+{
+    test -z "$1" && die "Specify the username and the tag hash"
+    test -z "$2" && die "Specify the tag hash"
+    test -z "$(runsql "select login from users where login like '$1'")" && die "User $1 do not exist"
+    test -n "$(runsql "select status from tags where uid like '$2' and (status like 'STOLEN' or status like 'LOST')")" && die "Tag $2 cannot be used. Current status: $(runsql "select status from tags where uid like '$2'")" #"
+    test -n "$(runsql "select user_login from users_vs_tags where tag_UID like '$2'")" && die "Tag $2 belong to user $(runsql "select user_login from users_vs_tags where tag_UID like '$2'")"
+#    runsql "delete from users_vs_tags where tag_UID like '$2';delete from tags where UID like '$2'" # Might be marked deactivated
+    runsql "insert into tags values ('$2', 'ACTIVE'); insert into users_vs_tags values ('$1', '$2')" 
+}
+
+gettaginfo()
+{
+    test -z "$1" && die "Specify the tag hash"
+    runsql "select user_login from users_vs_tags where tag_UID like '$1'"
+}
+
+revoketag()
+{
+    test -z "$1" && die "Specify the tag hash"
+
+}
+
+case "$1" in
+    "adduser")
+	adduser $2
+	;;
+    "addtag")
+	addtag "$2" "$3"
+	;;
+    "gettaginfo")
+	gettaginfo "$2"
+	;;
+    "revoketag")
+	revoketag "$2"
+	;;
+    *)
+	helptext
+	;;
+esac
