@@ -34,6 +34,7 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TSHMVariables=RECORD // What items should be exposed for IPC.
                 Inputs, outputs, fakeinputs: TRegisterbits;
                 state, Config :TLotsofbits;
+                senderpid: TPid;
                 Command: byte;
                 SHMMsg:string;
                 end;
@@ -154,7 +155,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                    false, false,
+                                    false,
+                                    false, // Unused
                                     false, // Unused
                                     false, // Unused
                                     false  // Unused
@@ -332,7 +334,7 @@ begin
    shmid:=shmget (shmkey, sizeof (TSHMVariables), 0);
    // Add test for shmget error here ?
    SHMPointer:=shmat (shmid, nil, 0);
-
+   SHMPointer^.senderpid:=FpGetPid;
    oldin:=word2bits (0);
    oldout:=word2bits (1);
    quitcmd:=false;
@@ -516,8 +518,7 @@ begin
     if CurrentState[S_HUP] then // Process HUP signal
      begin
       SHMPointer^.shmmsg:=SHMPointer^.shmmsg + #0; // Make sure the string is null terminated
-      syslog (log_info, 'HUP received. Command: "%s" parameter: %s', [ CMD_NAME[SHMPointer^.command], @SHMPointer^.shmmsg[1]]);
-      CurrentState[S_HUP]:=false; // Reset HUP signal
+      syslog (log_info, 'HUP received from PID %d. Command: "%s" with parameter: "%s"', [ SHMPointer^.senderpid, CMD_NAME[SHMPointer^.command], @SHMPointer^.shmmsg[1]]);
       case SHMPointer^.command of
        CMD_ENABLE: CurrentState[SC_DISABLED]:=false;
        CMD_DISABLE: CurrentState[SC_DISABLED]:=true;
@@ -527,7 +528,9 @@ begin
 //       CMD_TUESDAY: if CurrentState[S_TUESDAY] then CurrentState[S_TUESDAY]:=false else CurrentState[S_TUESDAY]:=true;
       end;
       SHMPointer^.command:=CMD_NONE;
-      SHMPointer^.shmmsg:='';
+      CurrentState[S_HUP]:=false; // Reset HUP signal
+      SHMPointer^.senderpid:=0; // Reset sender PID: If zero, we may have a race condition
+//      fillchar (SHMPointer^.shmmsg, sizeof (SHMPointer^.shmmsg), 0);// Kill the buffer data
      end;
 
     if dryrun = 0 then // Make a dry run to let inputs settle
@@ -557,6 +560,7 @@ begin
            begin // re-lock
             if STATIC_CONFIG[SC_MAGLOCK1] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK1_RELAY]:=true;
             if STATIC_CONFIG[SC_MAGLOCK2] and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then outputs[MAGLOCK2_RELAY]:=true;
+//            sys_open_order:=false;
             outputs[DOOR_STRIKE_RELAY]:=false;
             outputs[BUZZER_OUTPUT]:=false;
            end
@@ -717,6 +721,7 @@ begin
    // Add test for shmget error here ?
    SHMPointer:=shmat (shmid, nil, 0);
    writeln (paramstr (0),': Sending command ', CMD_NAME[cmd], ' to PID ', daemonpid);
+   SHMPointer^.senderpid:=FpGetPid;
    SHMPointer^.command:=cmd;
    if comment = '' then SHMPointer^.SHMMsg:='<no message provided>'
                    else SHMPointer^.SHMMsg:=comment;
