@@ -65,6 +65,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         MAGWAIT=1500;   // Reaction delay of the maglock output relay (the PCB has capacitors)
         BUZZERCHIRP=150; // Small beep delay
         SND_MISTERCASH: TBuzzPattern=(150, 50, 150, 50, 150, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        SND_DOORNOTCLOSED: TBuzzPattern=(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, -1, 0); // Be a noisy asshole
         // Places to look for the external script
         SCRIPTNAMES: array [0..5] of string=('/etc/blackknightio/blackknightio.sh',
                                              '/usr/local/etc/blackknightio/blackknightio.sh',
@@ -627,6 +628,8 @@ begin
 
       { Corner cases to fix:
         - tuesday mode: make it time delayed
+        - 'Trigger happy' filtering
+        - Stuck closed detection
       }
 
       // Process beep commands
