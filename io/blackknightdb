@@ -35,16 +35,17 @@ runsql ()
 helptext()
 {
 cat << HELPTEXT
-Usage: $ME [adduser|edituser|addtag|rmtag|revoketag|showlog|gettaginfo]
+Usage: $ME [adduser|addtag|gettaginfo|revoketag|listusers|listusertags|listalltags|edituser|showlog]
 
-    adduser		Add a user to the system
-    edituser		Change user parameters
-    blacklistuser user	Put a user and his tags to a blacklist
-    addtag user	taghash	Add a tag ID to a user
-    rmtag user taghash	Remove a tag from user
-    revoketag taghash	Blacklist a tag
-    showlog		Show logs
-    gettaginfo		Get user infos from tag
+    adduser			Add a user to the system
+    addtag user [taghash]	Add a tag ID to a user. If taghash empty, try to read it from RFID reader
+    gettaginfo taghash		Get user infos from tag
+    revoketag taghash		Blacklist a tag. Add STOLEN or LOST to make the ban permanent
+    listusers			Output a list of users
+    listusertags user		List all tags used by user
+    listalltags			List all tags, broken down by user
+    edituser			Change user parameters
+    showlog			Show logs
 HELPTEXT
 exit 1
 }
@@ -70,13 +71,27 @@ addtag()
 gettaginfo()
 {
     test -z "$1" && die "Specify the tag hash"
-    runsql "select user_login from users_vs_tags where tag_UID like '$1'"
+    echo "$(runsql "select status from tags where uid like '$1'") $(runsql "select user_login from users_vs_tags where tag_UID like '$1'")"
 }
 
 revoketag()
 {
     test -z "$1" && die "Specify the tag hash"
+    test -z "$(runsql "select status from tags where UID like '$1'")" && die "Tag $1 not in database"
+    TAGSTATE='DISABLED'
+    test "$2" = "STOLEN" -o "$2" = "LOST" && TAGSTATE="$2"
+    runsql "update tags set status='$TAGSTATE' where UID like '$1'"
+}
 
+listusertags()
+{
+    test -z "$1" && die "Specify the user name"
+    runsql "select tag_UID from users_vs_tags where user_login like '$1'"
+}
+
+listusers()
+{
+    runsql "select login from users"
 }
 
 case "$1" in
@@ -90,7 +105,16 @@ case "$1" in
 	gettaginfo "$2"
 	;;
     "revoketag")
-	revoketag "$2"
+	revoketag "$2" "$3"
+	;;
+    "listusers")
+	listusers
+	;;
+    "listusertags")
+	listusertags "$2"
+	;;
+    "listalltags")
+	listusers|while read myuser; do echo "User $myuser:"; listusertags "$myuser"; done
 	;;
     *)
 	helptext
