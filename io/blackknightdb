@@ -7,6 +7,7 @@ SQLDB='rfid_db_hsbxl'
 
 #############################################################
 ME="$(basename $0)"
+PAUSEFILE="/tmp/RFID.register"
 
 # Function to call when we bail out
 # Parameter 1: text to output
@@ -31,6 +32,13 @@ runsql ()
     test -n "$2" && mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names -e "$1" 2>&1 # We want the error
 }
 
+# Make sure we remove the pause file when bailing out
+cleanup()
+{
+    rm -f "$PAUSEFILE"
+} 
+
+trap cleanup EXIT
 
 helptext()
 {
@@ -44,10 +52,38 @@ Usage: $ME [adduser|addtag|gettaginfo|revoketag|listusers|listusertags|listallta
     listusers			Output a list of users
     listusertags user		List all tags used by user
     listalltags			List all tags, broken down by user
-    edituser			Change user parameters
-    showlog			Show logs
+    edituser			Change user parameters*
+    showlog			Show logs*
+
+* not implemented
 HELPTEXT
 exit 1
+}
+
+gettaghash()
+{
+    unset HASH # make sure variable is empty
+    echo "Waiting for RFID card..." >&2
+    touch $PAUSEFILE
+    while test -z "$HASH"; do
+	ATRHASH="$(echo "reset" | scriptor 2> /dev/null | tail -n 1 | md5sum | cut -d ' ' -f 1)"
+	if [ "$ATRHASH" != 'd41d8cd98f00b204e9800998ecf8427e' ] ; then # d41d8cd98f00b204e9800998ecf8427e is the empty string hash
+		# Ask the card UID and hash the result (i don't care about the garbage)
+		CARDHASH="$(echo 'ffca000000'|scriptor 2> /dev/null|tail -n 1 | md5sum | cut -d ' ' -f 1)"
+		if [ "$ATRHASH" != 'd41d8cd98f00b204e9800998ecf8427e' ] ; then # d41d8cd98f00b204e9800998ecf8427e is the empty string hash
+		    HASH="$(echo -n "$CARDHASH $ATRHASH"| md5sum | cut -d ' ' -f 1)"
+		fi
+	else
+	    unset ATRHASH
+	fi
+    done
+    # Wait until the card is gone
+    while test -z "$CARDREMOVED"; do
+	echo "reset"|scriptor > /dev/null 2>&1
+	test "${PIPESTATUS[1]}" -ne "0" && CARDREMOVED="yes"
+    done
+    rm $PAUSEFILE
+    echo "$HASH"
 }
 
 adduser()
@@ -60,12 +96,14 @@ adduser()
 addtag()
 {
     test -z "$1" && die "Specify the username and the tag hash"
-    test -z "$2" && die "Specify the tag hash"
     test -z "$(runsql "select login from users where login like '$1'")" && die "User $1 do not exist"
-    test -n "$(runsql "select status from tags where uid like '$2' and (status like 'STOLEN' or status like 'LOST')")" && die "Tag $2 cannot be used. Current status: $(runsql "select status from tags where uid like '$2'")" #"
-    test -n "$(runsql "select user_login from users_vs_tags where tag_UID like '$2'")" && die "Tag $2 belong to user $(runsql "select user_login from users_vs_tags where tag_UID like '$2'")"
+    MYTAGHASH="$2"
+    test -z "$MYTAGHASH" && MYTAGHASH="$(gettaghash)"
+    test -n "$(runsql "select status from tags where uid like '$MYTAGHASH' and (status like 'STOLEN' or status like 'LOST')")" && die "Tag $MYTAGHASH cannot be used. Current status: $(runsql "select status from tags where uid like '$MYTAGHASH'")" #"
+    test -n "$(runsql "select user_login from users_vs_tags where tag_UID like '$MYTAGHASH'")" && die "Tag $MYTAGHASH belong to user $(runsql "select user_login from users_vs_tags where tag_UID like '$MYTAGHASH'")"
 #    runsql "delete from users_vs_tags where tag_UID like '$2';delete from tags where UID like '$2'" # Might be marked deactivated
-    runsql "insert into tags values ('$2', 'ACTIVE'); insert into users_vs_tags values ('$1', '$2')" 
+    runsql "insert into tags values ('$MYTAGHASH', 'ACTIVE'); insert into users_vs_tags values ('$1', '$MYTAGHASH')" 
+    echo "Added tag $MYTAGHASH to user '$1'"
 }
 
 gettaginfo()

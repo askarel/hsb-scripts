@@ -1,7 +1,7 @@
 #!/bin/sh
 
 ME=$(basename $0)
-PAUSEFILE="/tmp/$ME.register"
+PAUSEFILE="/tmp/RFID.register"
 #set -x
 
 # Kill pause file
@@ -17,7 +17,8 @@ while true; do
   if [ "$ATRHASH" != 'd41d8cd98f00b204e9800998ecf8427e' ] ; then # d41d8cd98f00b204e9800998ecf8427e is the empty string hash
    if [ "$CARDHASH" = '' ]; then
     # Ask the card UID and hash the result (i don't care about the garbage)
-    CARDHASH=$( (echo 'ffca000000'|scriptor 2> /dev/null|tail -n 1 | md5sum | cut -d ' ' -f 1; echo " $ATRHASH") | md5sum |cut -d ' ' -f 1)
+    UIDHASH="$(echo 'ffca000000'|scriptor 2> /dev/null|tail -n 1 | md5sum | cut -d ' ' -f 1)"
+    CARDHASH="$(echo -n "$UIDHASH $ATRHASH" | md5sum |cut -d ' ' -f 1)"
     logger -t "$ME" "Card scanned: hash: $CARDHASH"
 
     ./blackknightio beep "RFID tag seen. Hash: $CARDHASH"

@@ -102,8 +102,8 @@ CREATE TABLE `logs_door` (
 
   grant select on rfid_db_hsbxl.* to 'rfid_web_user'@'localhost' identified by 'ChangeMe';
   grant insert on rfid_db_hsbxl.tags to 'rfid_web_user'@'localhost';
-  grant insert on rfid_db_hsbxl.logs_door to 'rfid_web_user'@'localhost';
-  grant insert on rfid_db_hsbxl.logs_bell to 'rfid_web_user'@'localhost';
+  grant insert on rfid_db_hsbxl.logs_door to 'api'@'localhost';
+  grant insert on rfid_db_hsbxl.logs_bell to 'api'@'localhost';
   grant insert on rfid_db_hsbxl.users to 'rfid_web_user'@'localhost';
   grant insert on rfid_db_hsbxl.users_vs_tags to 'rfid_web_user'@'localhost';
   grant update on rfid_db_hsbxl.tags to 'rfid_web_user'@'localhost';
