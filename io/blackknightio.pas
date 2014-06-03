@@ -663,7 +663,7 @@ begin
       log_door_event (msgflags, 41, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLEANDLIGHT] and (not STATIC_CONFIG[SC_HANDLE]) and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)),
        'Door opened from handle with the light on', '');
       log_door_event (msgflags, 42, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)), 'Door opened from handle', '');
-      log_door_event (msgflags, 43, sys_open_order,  'Order from system', @SHMPointer^.shmmsg[1]);
+      log_door_event (msgflags, 43, sys_open_order,  'Order from system', pchar (@SHMPointer^.shmmsg[1]));
       log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
       log_door_event (msgflags, 45, (door_is_locked and (inputs [DOOR_CLOSED_SWITCH] = IS_OPEN)),
        'Check wiring of door switch: door is locked but i see it open', '');
