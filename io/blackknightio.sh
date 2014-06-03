@@ -36,10 +36,11 @@ if [ "$1" = "43" ]; then
     echo "$3"| read DESC CARDHASH
     if [ "$DESC" = "tag" ]; then
 	RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.getuserfromtag('"$CARDHASH"');" rfid_db_hsbxl`
+	sleep 15
 	case "$RES" in
-#	"") 
-#	    speakup "Intruder alert"
-#	    ;;
+	"") 
+	    speakup "who are you"
+	    ;;
 	"landlord")
 	    speakup "Hide, The landlord is coming in"
 	    ;;
