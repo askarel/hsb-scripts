@@ -25,7 +25,7 @@ while true; do
 
     RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.checktag('"$CARDHASH"');" rfid_db_hsbxl`
     if [ -n "$RES" ]; then
-      ./blackknightio open "Open using tag $CARDHASH"
+      ./blackknightio open "tag $CARDHASH"
     else
      logger -t $ME "WARNING: UNKNOWN TAG: $CARDHASH"
     fi
