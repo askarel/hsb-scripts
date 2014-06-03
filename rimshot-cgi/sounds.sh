@@ -21,22 +21,22 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
-PAGETITLE="Rimshot and other shit"
-ME=$(basename $0)
-CSSDIR="$DIR_AUDIOFILES/.CSS"
-TEMPLATE="$CSSDIR/$ME-template.html"
+readonly DIR_AUDIOFILES="/srv/sharedfolder/trolling_page"
+readonly PAGETITLE="Rimshot and other shit"
+readonly ME=$(basename $0)
+readonly CSSDIR="$DIR_AUDIOFILES/.CSS"
+readonly TEMPLATE="$CSSDIR/$ME-template.html"
 # buttons definition
 SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
 HTMLTROLLBUTTON='<BUTTON TYPE="BUTTON" VALUE="Submit" ID="%s" NAME="%s" CLASS="%s soundBtn" ONCLICK="troll('\''%s'\'')">%s</BUTTON>\n'
 # HTMLSIDEBAR='<A HREF="#%s">%s</A> <br />\n'
 #internals
-CSSMETHOD="CSS"
-JSONMETHOD="JSON"
-POSTSPEAKMETHOD="SPEAK"
-POSTRANDOMMETHOD="RANDOM"
-PLAYPROG="paplay"
-SPEECHMETHOD="flitemethod"
+readonly CSSMETHOD="CSS"
+readonly JSONMETHOD="JSON"
+readonly POSTSPEAKMETHOD="SPEAK"
+readonly POSTRANDOMMETHOD="RANDOM"
+readonly PLAYPROG="paplay"
+readonly SPEECHMETHOD="flitemethod"
 #DEBUG=blaah
 
 # Speech method: using flite
