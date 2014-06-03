@@ -20,7 +20,7 @@
 
 PAGEURL="http://gate/cgi-bin/sounds.sh"
 
-ME="$(basename $0)"
+readonly ME="$(basename $0)"
 
 case "$1" in
     "random")
