@@ -36,6 +36,7 @@ runsql ()
 cleanup()
 {
     rm -f "$PAUSEFILE"
+    exit
 } 
 
 trap cleanup EXIT

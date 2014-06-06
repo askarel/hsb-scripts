@@ -2,6 +2,19 @@
 
 ME=$(basename $0)
 PAUSEFILE="/tmp/RFID.register"
+
+cleanup()
+{
+    logger -t "$ME" "Bailing out."
+    rm -f "$PAUSEFILE"
+    echo
+    exit
+} 
+
+trap cleanup KILL TERM QUIT INT
+
+
+logger -t "$ME" "Starting up."
 #set -x
 
 # Kill pause file
@@ -21,11 +34,11 @@ while true; do
     CARDHASH="$(echo -n "$UIDHASH $ATRHASH" | md5sum |cut -d ' ' -f 1)"
     logger -t "$ME" "Card scanned: hash: $CARDHASH"
 
-    ./blackknightio beep "RFID tag seen. Hash: $CARDHASH"
+    ./blackknightio beep "RFID tag seen. Hash: $CARDHASH" > /dev/null
 
     RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.checktag('"$CARDHASH"');" rfid_db_hsbxl`
     if [ -n "$RES" ]; then
-      ./blackknightio open "tag $CARDHASH"
+      ./blackknightio open "tag $CARDHASH" > /dev/null
     else
      logger -t $ME "WARNING: UNKNOWN TAG: $CARDHASH"
     fi
@@ -38,3 +51,4 @@ while true; do
  fi
 
 done
+
