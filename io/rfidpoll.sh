@@ -1,7 +1,27 @@
 #!/bin/sh
+#
+#	The RFID scanner
+#
+#	(c) 2014 Frederic Pasteleurs <frederic@askarel.be>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
 
-ME=$(basename $0)
-PAUSEFILE="/tmp/RFID.register"
+readonly ME=$(basename $0)
+readonly PAUSEFILE="/tmp/RFID.register"
+readonly BLACKKNIGHT="./blackknightio"
+
 
 cleanup()
 {
@@ -34,11 +54,11 @@ while true; do
     CARDHASH="$(echo -n "$UIDHASH $ATRHASH" | md5sum |cut -d ' ' -f 1)"
     logger -t "$ME" "Card scanned: hash: $CARDHASH"
 
-    ./blackknightio beep "RFID tag seen. Hash: $CARDHASH" > /dev/null
+    $BLACKKNIGHT beep "RFID tag seen. Hash: $CARDHASH" > /dev/null
 
     RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.checktag('"$CARDHASH"');" rfid_db_hsbxl`
     if [ -n "$RES" ]; then
-      ./blackknightio open "tag $CARDHASH" > /dev/null
+      $BLACKKNIGHT open "tag $CARDHASH" > /dev/null
     else
      logger -t $ME "WARNING: UNKNOWN TAG: $CARDHASH"
     fi
