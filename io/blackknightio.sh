@@ -17,7 +17,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+# Sample script to illustrate the calling feature of the door controller
+readonly ME="$(basename $0)"
 
+logger -t $ME "$# Command line parameter received: '$1' '$2' '$3'"
 
 # Prepare the greeting depending of the time of the day
 HOUR="$(date '+%H')"
@@ -33,45 +36,46 @@ speakup()
 
 }
 
-# door bell rang
-test "$1" = "44" && wget -q -O - "http://127.0.0.1:8080/api/notify/bell" > /dev/null 
-
-# opened door from inside with button
-test "$1" = "40" && wget -q -O - "http://127.0.0.1:8080/api/notify/door/open" > /dev/null
-
-# opened door from system (card / webinterface)
-test "$1" = "43" && wget -q -O - "http://127.0.0.1:8080/api/notify/door/open" > /dev/null
-
-
-# Sample script to illustrate the calling feature of the door controller
-
-ME="$(basename $0)"
-
-logger -t $ME "$# Command line parameter received: '$1' '$2' '$3'"
-
-if [ "$1" = "43" ]; then
-    CARDHASH="$(echo "$3"| cut -d ' ' -f 3)"
-    DESC="$(echo "$3"| cut -d ' ' -f 2)"
-    echo "$3"| read DESC CARDHASH
-    if [ "$DESC" = "tag" ]; then
-	RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.getuserfromtag('"$CARDHASH"');" rfid_db_hsbxl`
-	sleep 15
-	case "$RES" in
-	"") 
-	    speakup "who are you"
-	    ;;
-	"landlord")
-	    speakup "The landlord is coming in. Hide."
-	    ;;
-	*)
-	    speakup "$GREETING $RES"
-	    ;;
-	esac
-    else
+case "$1" in
+    "26")
+	true
+	;;
+    "40")
+	# opened door from inside with button
+	wget -q -O - "http://127.0.0.1:8080/api/notify/door/open" > /dev/null
 	speakup "$2"
-    fi
-else
-    speakup "$2"
-fi
+	;;
+    "43")
+	# opened door from system (card / webinterface)
+	wget -q -O - "http://127.0.0.1:8080/api/notify/door/open" > /dev/null
+        CARDHASH="$(echo "$3"| cut -d ' ' -f 3)"
+        DESC="$(echo "$3"| cut -d ' ' -f 2)"
+        echo "$3"| read DESC CARDHASH
+	if [ "$DESC" = "tag" ]; then
+	    RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.getuserfromtag('"$CARDHASH"');" rfid_db_hsbxl`
+	    sleep 15
+	    case "$RES" in
+	    "") 
+		speakup "who are you"
+		;;
+	    "landlord")
+		speakup "The landlord is coming in. Hide."
+		;;
+	    *)
+		speakup "$GREETING $RES"
+		;;
+	    esac
+	else
+	    speakup "$2"
+	fi
 
-
+	;;
+    "44")
+	# door bell rang
+	wget -q -O - "http://127.0.0.1:8080/api/notify/bell" > /dev/null 
+	speakup "$2"
+	;;
+    *)
+	speakup "$2"
+	;;
+esac
