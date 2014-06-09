@@ -20,7 +20,8 @@
 
 readonly ME=$(basename $0)
 readonly PAUSEFILE="/tmp/RFID.register"
-readonly BLACKKNIGHT="./blackknightio"
+test -x ./blackknightio && BLACKKNIGHT="./blackknightio"
+test -x /usr/local/bin/blackknightio && BLACKKNIGHT="/usr/local/bin/blackknightio"
 
 
 cleanup()
