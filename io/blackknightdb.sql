@@ -64,6 +64,8 @@ CREATE TABLE `logs_door` (
   create table tags_status (
    status_name varchar(20),
    status_is_valid boolean not null,
+    validitystart timestamp default current_timestamp,
+    validityend timestamp,
    primary key (status_name)
   ) ENGINE=InnoDB CHARACTER SET utf8 COLLATE utf8_general_ci;
 
