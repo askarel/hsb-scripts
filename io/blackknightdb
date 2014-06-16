@@ -123,7 +123,7 @@ addtag()
     test -n "$(runsql "select status from tags where uid like '$MYTAGHASH' and (status like 'STOLEN' or status like 'LOST')")" && die "Tag $MYTAGHASH cannot be used. Current status: $(runsql "select status from tags where uid like '$MYTAGHASH'")" #"
     test -n "$(runsql "select user_login from users_vs_tags where tag_UID like '$MYTAGHASH'")" && die "Tag $MYTAGHASH belong to user $(runsql "select user_login from users_vs_tags where tag_UID like '$MYTAGHASH'")"
 #    runsql "delete from users_vs_tags where tag_UID like '$2';delete from tags where UID like '$2'" # Might be marked deactivated
-    runsql "insert into tags values ('$MYTAGHASH', 'ACTIVE'); insert into users_vs_tags values ('$1', '$MYTAGHASH')" 
+    runsql "insert into tags (UID, status) values ('$MYTAGHASH', 'ACTIVE'); insert into users_vs_tags values ('$1', '$MYTAGHASH')" 
     echo "Added tag $MYTAGHASH to user '$1'"
 }
 
