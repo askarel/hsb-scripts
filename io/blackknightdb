@@ -73,6 +73,7 @@ Usage: $ME [adduser|addtag|gettaginfo|revoketag|listusers|listusertags|listallta
     listusers			Output a list of users
     listusertags user		List all tags used by user
     listalltags			List all tags, broken down by user
+    dumpflat			Dump a flat text version of the valid tags data (for embedded use)
     edituser			Change user parameters*
     showlog			Show logs*
 
@@ -153,6 +154,11 @@ listusers()
     runsql "select login from users"
 }
 
+dumpflat()
+{
+    runsql "call getflattags"
+}
+
 case "$1" in
     "adduser")
 	adduser $2
@@ -174,6 +180,10 @@ case "$1" in
 	;;
     "listalltags")
 	listusers|while read myuser; do echo "User $myuser:"; listusertags "$myuser"; done
+	;;
+    "dumpflat")
+	SQLUSER='rfid_shell_user'
+	dumpflat
 	;;
     *)
 	helptext
