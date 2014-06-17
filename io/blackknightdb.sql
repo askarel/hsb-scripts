@@ -119,6 +119,15 @@ CREATE TABLE `logs_door` (
   $$
   DELIMITER ;
 
+  drop procedure IF EXISTS rfid_db_hsbxl.getflattags;
+  DELIMITER $$
+  create procedure rfid_db_hsbxl.getflattags ()
+  BEGIN
+    select uid, unix_timestamp (validitystart), unix_timestamp (validityend), 0, 0, users_vs_tags.user_login from tags, users_vs_tags where uid=tag_uid;
+  END;
+  $$
+  DELIMITER ;
+
 
   DELIMITER $$
   CREATE TRIGGER user_desactivated before update on users FOR EACH ROW 
@@ -145,3 +154,4 @@ CREATE TABLE `logs_door` (
   grant update on rfid_db_hsbxl.users_vs_tags to 'rfid_web_user'@'localhost';
   grant execute on procedure rfid_db_hsbxl.checktag to 'rfid_shell_user'@'localhost' identified by 'ChangeMe';
   grant execute on procedure rfid_db_hsbxl.getuserfromtag to 'rfid_shell_user'@'localhost';
+  grant execute on procedure rfid_db_hsbxl.getflattags to 'rfid_shell_user'@'localhost';
