@@ -23,6 +23,9 @@ CONFIGFILE="$0.conf"
 BANKHISTORY="$(dirname $0)/bank"
 # Default path for the SQL files
 SQLDIR="$(dirname $0)/../concierge/sql/"
+# Default path to mail templates
+TEMPLATEDIR="$(dirname $0)/../concierge/templates"
+
 
 # Build the prompt array (SQL)
 # Format of the structure: SQLINPUT[number]="fieldname|field description|RESULT"
