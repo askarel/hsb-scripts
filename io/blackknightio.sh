@@ -19,6 +19,7 @@
 #
 # Sample script to illustrate the calling feature of the door controller
 readonly ME="$(basename $0)"
+readonly DBFILE="/var/tmp/rfidpoll.txt"
 
 logger -t $ME "$# Command line parameter received: '$1' '$2' '$3'"
 
@@ -33,7 +34,6 @@ speakup()
 {
 #    test -x /home/pi/troll-remote && /home/pi/troll-remote speak "$1"
     test -x "$(which flite)" && flite -t "$1"
-
 }
 
 case "$1" in
@@ -52,7 +52,7 @@ case "$1" in
         DESC="$(echo "$3"| cut -d ' ' -f 2)"
         echo "$3"| read DESC CARDHASH
 	if [ "$DESC" = "tag" ]; then
-	    RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.getuserfromtag('"$CARDHASH"');" rfid_db_hsbxl`
+	    RES="$(test -f "$DBFILE" && cat "$DBFILE"| awk "\$1 == \"$CARDHASH\""|cut -f 6)"
 	    sleep 15
 	    case "$RES" in
 	    "") 
