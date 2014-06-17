@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 #	The RFID scanner
 #
@@ -19,34 +19,30 @@
 #
 
 readonly ME=$(basename $0)
-readonly PAUSEFILE="/tmp/RFID.register"
+readonly DBFILE="/var/tmp/rfidpoll.txt"
+readonly AR_HASH=0
+readonly AR_STARTTIME=1
+readonly AR_ENDTIME=2
+readonly AR_FLAGS=3
+readonly AR_REVOKED=4
+readonly AR_NICK=5
 test -x ./blackknightio && BLACKKNIGHT="./blackknightio"
 test -x /usr/local/bin/blackknightio && BLACKKNIGHT="/usr/local/bin/blackknightio"
-
 
 cleanup()
 {
     logger -t "$ME" "Bailing out."
-    rm -f "$PAUSEFILE"
-    echo
     exit
 } 
 
 trap cleanup KILL TERM QUIT INT
 
-
 logger -t "$ME" "Starting up."
 #set -x
 
-# Kill pause file
-rm -f $PAUSEFILE
 test -z "$(which scriptor)" && echo "Scriptor not found !" && exit 1
 
 while true; do
- if [ -f "$PAUSEFILE" ]; then
-  logger -t $ME "Paused: about to add a user to the database"
-  sleep 1
- else
   ATRHASH=$(echo "reset" | scriptor 2> /dev/null | tail -n 1 | md5sum | cut -d ' ' -f 1)
   if [ "$ATRHASH" != 'd41d8cd98f00b204e9800998ecf8427e' ] ; then # d41d8cd98f00b204e9800998ecf8427e is the empty string hash
    if [ "$CARDHASH" = '' ]; then
@@ -54,22 +50,31 @@ while true; do
     UIDHASH="$(echo 'ffca000000'|scriptor 2> /dev/null|tail -n 1 | md5sum | cut -d ' ' -f 1)"
     CARDHASH="$(echo -n "$UIDHASH $ATRHASH" | md5sum |cut -d ' ' -f 1)"
     logger -t "$ME" "Card scanned: hash: $CARDHASH"
-
     $BLACKKNIGHT beep "RFID tag seen. Hash: $CARDHASH" > /dev/null
-
-    RES=`mysql -u rfid_shell_user -p'ChangeMe' --skip-column-names -B -e "call rfid_db_hsbxl.checktag('"$CARDHASH"');" rfid_db_hsbxl`
-    if [ -n "$RES" ]; then
-      $BLACKKNIGHT open "tag $CARDHASH" > /dev/null
-    else
-     logger -t $ME "WARNING: UNKNOWN TAG: $CARDHASH"
+    # If tag exist in file, fill array with data
+    myhash=( $(test -f "$DBFILE" && cat "$DBFILE"| awk "\$1 == \"$CARDHASH\"") )
+    test "$CARDHASH" != "${myhash[AR_HASH]}" && logger -t $ME "WARNING: UNKNOWN TAG: $CARDHASH"
+    if [ "$CARDHASH" = "${myhash[AR_HASH]}" ]; then # Got hash ? Tell me more...
+	if [ "$(date '+%s')" -ge "${myhash[AR_STARTTIME]}" ]; then # Is currentdate > startdate ?
+	    if [ "${myhash[AR_REVOKED]}" = "0" ]; then # Is it revoked ?
+		case "${myhash[AR_ENDTIME]}" in
+		    "0"|"NULL") # End date is NULL or 0: card must be valid
+			$BLACKKNIGHT open "tag $CARDHASH" > /dev/null
+			;;
+		    *) # There is an end date: check it
+			test "$(date '+%s')" -le "${myhash[AR_ENDTIME]}" && $BLACKKNIGHT open "tag $CARDHASH" > /dev/null || logger -t "$ME" "Card ${myhash[AR_HASH]} is expired"
+			;;
+		esac
+	    else
+		logger -t $ME "Card ${myhash[AR_HASH]} is revoked !"
+	    fi
+	else
+	    logger -t $ME "Card ${myhash[AR_HASH]} not yet valid"
+	fi
     fi
    fi
-  else
-   unset CARDHASH
   fi
+  test "$ATRHASH" = 'd41d8cd98f00b204e9800998ecf8427e' && unset CARDHASH  # ATR has changed: card has disappeared
   unset ATRHASH
   sleep 0.5
- fi
-
 done
-
