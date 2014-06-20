@@ -168,7 +168,7 @@ VAR     GPIO_Driver: TIODriver;
         debounceinput_array: ARRAY[false..true, 0..15] of byte; // That one has to be global. No way around it.
         CurrentState,   // Reason for global: it is modified by the signal handler
         msgflags: TLotsOfBits; // Reason for global: message state must be preserved (avoid spamming the syslog)
-        BuzzerTracker: TBusyBuzzerScratch;
+        LockBuzzerTracker, BuzzerTracker: TBusyBuzzerScratch;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
 
@@ -250,7 +250,7 @@ end;
 // Play a beep pattern
 function busy_buzzer (var scratchspace: TBusyBuzzerScratch; pattern: TBuzzpattern; ticklength: word): boolean;
 begin
- if (pattern[scratchspace.offset] = 0) then busy_buzzer:=false // End of pattern: shut up.
+ if (pattern[scratchspace.offset] = 0) or (pattern[scratchspace.offset] = -1) then busy_buzzer:=false // End of pattern: shut up.
   else
   begin
    if (scratchspace.TimeIndex <= 0) then scratchspace.TimeIndex:=pattern[scratchspace.offset];
@@ -259,6 +259,7 @@ begin
    if busy_delay_is_expired (scratchspace.TimeIndex) then
     begin
      inc (scratchspace.offset); // Next !!
+     if pattern[scratchspace.offset] = -1 then scratchspace.offset:=0; // Did we ask pattern repetition ?
      scratchspace.TimeIndex:=pattern[scratchspace.offset];
     end;
   end
@@ -544,7 +545,7 @@ begin
         door_is_locked:=false;
        end
       else
-       begin // System is enabled. Process outputs
+       begin // System is enabled. Process outputs (This crap should be replaced by a finite state machine)
 (********************************************************************************************************)
         // Do lock logic shit !!
         if inputs[PANIC_SENSE] = IS_OPEN then
@@ -618,7 +619,14 @@ begin
        begin
         log_door_event (msgflags, 16, (busy_delay_is_expired (Mag2LockWait)),
          'Maglock 2 did not latch: Door is not locked', '');
-        if (outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED)) then door_is_locked:=true;
+        if (outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED)) then
+         begin
+          door_is_locked:=true;
+          fillchar (lockbuzzertracker, sizeof (buzzertracker), 0);
+          outputs[BUZZER_OUTPUT]:=false;
+         end;
+        if STATIC_CONFIG[SC_BUZZER] and busy_delay_is_expired (Mag2LockWait) and not door_is_locked then outputs[BUZZER_OUTPUT]:=(busy_buzzer (lockbuzzertracker, SND_DOORNOTCLOSED, 16) or outputs[BUZZER_OUTPUT]);
+
        end;
       if (not STATIC_CONFIG[SC_MAGLOCK1]) and (not STATIC_CONFIG[SC_MAGLOCK2]) then // No maglock installed. Not recommended. (msg 21-25)
        begin
