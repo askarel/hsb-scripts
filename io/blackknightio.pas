@@ -54,7 +54,6 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         CMD_NONE=0; CMD_OPEN=1; CMD_TUESDAY=2; CMD_ENABLE=3; CMD_DISABLE=4; CMD_BEEP=5; CMD_STOP=6;
         CMD_NAME: ARRAY [CMD_NONE..CMD_STOP] of pchar=('NoCMD','open','tuesday','enable','disable','beep','stop');
 
-        bits:array [false..true] of char=('0', '1');
         // Hardware bug: i got the address lines reversed while building the board.
         // Using a lookup table to mirror the address bits
         BITMIRROR: array[0..15] of byte=(0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15);
@@ -170,31 +169,6 @@ VAR     GPIO_Driver: TIODriver;
         LockBuzzerTracker, BuzzerTracker: TBusyBuzzerScratch;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
-
-// Return gray-encoded input
-function graycode (inp: longint): longint;
-begin
- graycode:=(inp shr 1) xor inp;
-end;
-
-function word2bits (inputword: word): TRegisterbits;
-begin
- word2bits:=TRegisterbits (inputword); // TRegisterbits is a word-sized array of bits
-end;
-
-function bits2word (inputbits: TRegisterbits): word;
-begin
- bits2word:=word (inputbits);
-end;
-
-function bits2str (inputbits: TRegisterbits): string;
-var i: byte;
-    s: string;
-begin
- s:='';
- for i:=(bitsizeof (TRegisterbits)-1) downto 0 do s:=s+bits[inputbits[i]];
- bits2str:=s;
-end;
 
 // TODO: glitch counter
 function debounceinput (inputbits: TRegisterbits; samplesize: byte): TRegisterbits;

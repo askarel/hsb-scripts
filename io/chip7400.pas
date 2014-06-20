@@ -22,9 +22,46 @@ UNIT chip7400;
 
 INTERFACE
 TYPE    TRegisterbits=bitpacked array [0..15] of boolean; // Like a word: a 16 bits bitfield
+        TRegister8bits=bitpacked array [0..7] of boolean; // Like a byte: a 8 bits bitfield (for smaller chips)
+        TSetBit=procedure (bitstate:boolean); // Callback to set a bit
+        TGetBit=function: boolean; // Callback to read a bit
+
+CONST   SETB=true; RESETB=false;
+        bits:array [false..true] of char=('0', '1');
+
+
+function graycode (inp: longint): longint;
+function word2bits (inputword: word): TRegisterbits;
+function bits2word (inputbits: TRegisterbits): word;
+function bits2str (inputbits: TRegisterbits): string;
 
 
 IMPLEMENTATION
 
+// Return gray-encoded input
+function graycode (inp: longint): longint;
+begin
+ graycode:=(inp shr 1) xor inp;
+end;
+
+function word2bits (inputword: word): TRegisterbits;
+begin
+ word2bits:=TRegisterbits (inputword); // TRegisterbits is a word-sized array of bits
+end;
+
+function bits2word (inputbits: TRegisterbits): word;
+begin
+ bits2word:=word (inputbits);
+end;
+
+function bits2str (inputbits: TRegisterbits): string;
+var i: byte;
+    s: string;
+begin
+ s:='';
+ for i:=(bitsizeof (TRegisterbits)-1) downto 0 do s:=s+bits[inputbits[i]];
+ bits2str:=s;
+end;
 
 END.
+
