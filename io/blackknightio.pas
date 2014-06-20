@@ -24,12 +24,11 @@ program blackknightio;
 
 // This is a quick hack to check if everything works
 
-uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile, unix;
+uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile, unix, chip7400;
 
 CONST   SHITBITS=63;
 
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
-        TRegisterbits=bitpacked array [0..15] of boolean; // Like a word: a 16 bits bitfield
         TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
         TSHMVariables=RECORD // What items should be exposed for IPC.
                 Inputs, outputs, fakeinputs: TRegisterbits;
