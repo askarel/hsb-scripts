@@ -38,3 +38,10 @@ Copy it to final destination, set SUID bit mand make it owned by root
 # chown root:root /usr/local/bin/blackknightio
 Copy the init script to the system init directory
 # cp blackknight /etc/init.d
+
+Data layout
+-----------
+There is a database schema to be used with MySQL, this schema still need some work and integration to the 
+member management system. The handler script can make a simplified text dump with all the needed data for
+on-door management.
+
