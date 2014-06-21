@@ -34,6 +34,7 @@ function graycode (inp: longint): longint;
 function word2bits (inputword: word): TRegisterbits;
 function bits2word (inputbits: TRegisterbits): word;
 function bits2str (inputbits: TRegisterbits): string;
+procedure wastecpucycles (waste: word);
 
 
 IMPLEMENTATION
@@ -62,6 +63,18 @@ begin
  for i:=(bitsizeof (TRegisterbits)-1) downto 0 do s:=s+bits[inputbits[i]];
  bits2str:=s;
 end;
+
+// Apparently, despite the crappy CPU on the raspberry pi, it is too fast for the shift register.
+// This should help the shift register to settle
+procedure wastecpucycles (waste: word);
+var i: word;
+begin
+ for i:=0 to waste do
+  asm
+   nop // How handy... This is portable ASM... :-)
+  end;
+end;
+
 
 END.
 

@@ -194,17 +194,6 @@ begin
   end;
 end;
 
-// Apparently, despite the crappy CPU on the raspberry pi, it is too fast for the shift register.
-// This should help the shift register to settle
-procedure wastecpucycles (waste: word);
-var i: word;
-begin
- for i:=0 to waste do
-  asm
-   nop // How handy... This is portable ASM... :-)
-  end;
-end;
-
 // Decrement the timer variable
 procedure busy_delay_tick (var waitvar: longint; ticklength: word);
 var mytick: word;
@@ -390,13 +379,29 @@ begin
   end;
 end;
 
-///////////// CHIP HANDLING FUNCTIONS /////////////
+///////////// CALLBACKS FOR UNIT CHIP7400 /////////////
 
 procedure setregclock (state: boolean);
 begin
-if state then GpF.SetBit (clockpin) else GpF.ClearBit (clockpin);
+if state then GpF.SetBit (CLOCKPIN) else GpF.ClearBit (CLOCKPIN);
 end;
 
+procedure setregdata (state: boolean);
+begin
+if state then GpF.SetBit (DATAPIN) else GpF.ClearBit (DATAPIN);
+end;
+
+procedure setregstrobe (state: boolean);
+begin
+if state then GpF.SetBit (STROBEPIN) else GpF.ClearBit (STROBEPIN);
+end;
+
+function getgpioinput: boolean;
+begin
+ getgpioinput:=GpF.GetBit (READOUTPIN);
+end;
+
+///////////// CHIP HANDLING FUNCTIONS /////////////
 
 // Send out a word to the 74LS673
 procedure write74673 (clockpin, datapin, strobepin: byte; data: TRegisterbits);
