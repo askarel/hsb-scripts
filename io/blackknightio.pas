@@ -392,6 +392,12 @@ end;
 
 ///////////// CHIP HANDLING FUNCTIONS /////////////
 
+procedure setregclock (state: boolean);
+begin
+if state then GpF.SetBit (clockpin) else GpF.ClearBit (clockpin);
+end;
+
+
 // Send out a word to the 74LS673
 procedure write74673 (clockpin, datapin, strobepin: byte; data: TRegisterbits);
 var i: byte;
@@ -428,6 +434,7 @@ end;
 // Return true if the GPIO pins have been successfully initialized
 function initgpios (clockpin, datapin, strobepin, readout: byte): boolean;
 begin
+ Gpio_Driver:=TIODriver.create;
  if GPIO_Driver.MapIo then
   begin
    GpF := GpIo_Driver.CreatePort(GPIO_BASE, CLOCK_BASE, GPIO_PWM);
@@ -667,6 +674,7 @@ begin
  if not CurrentState[S_DEMOMODE] then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
  sleep (100); // Give time for the monitor to die before yanking the segment
  shmctl (shmid, IPC_RMID, nil); // Destroy shared memory segment upon leaving
+ GpIo_Driver.destroy;
 end;
 
 // Do something on signal
