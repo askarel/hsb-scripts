@@ -383,17 +383,17 @@ end;
 
 procedure setregclock (state: boolean);
 begin
-if state then GpF.SetBit (CLOCKPIN) else GpF.ClearBit (CLOCKPIN);
+ if state then GpF.SetBit (CLOCKPIN) else GpF.ClearBit (CLOCKPIN);
 end;
 
 procedure setregdata (state: boolean);
 begin
-if state then GpF.SetBit (DATAPIN) else GpF.ClearBit (DATAPIN);
+ if state then GpF.SetBit (DATAPIN) else GpF.ClearBit (DATAPIN);
 end;
 
 procedure setregstrobe (state: boolean);
 begin
-if state then GpF.SetBit (STROBEPIN) else GpF.ClearBit (STROBEPIN);
+ if state then GpF.SetBit (STROBEPIN) else GpF.ClearBit (STROBEPIN);
 end;
 
 function getgpioinput: boolean;
