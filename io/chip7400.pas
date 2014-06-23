@@ -25,6 +25,7 @@ TYPE    TRegisterbits=bitpacked array [0..15] of boolean; // Like a word: a 16 b
         TRegister8bits=bitpacked array [0..7] of boolean; // Like a byte: a 8 bits bitfield (for smaller chips)
         TSetBit=procedure (bitstate:boolean); // Callback to set a bit
         TGetBit=function: boolean; // Callback to read a bit
+        TSetAddress=procedure (address: word); // Callback to set address lines
 
 CONST   SETB=true; RESETB=false;
         bits:array [false..true] of char=('0', '1');
@@ -35,6 +36,8 @@ function word2bits (inputword: word): TRegisterbits;
 function bits2word (inputbits: TRegisterbits): word;
 function bits2str (inputbits: TRegisterbits): string;
 procedure wastecpucycles (waste: word);
+procedure ls673_write (pin2, pin6, pin5: TSetBit; data: TRegisterbits);
+function ls150_read (address:TSetAddress): TRegisterbits;
 
 
 IMPLEMENTATION
@@ -75,6 +78,31 @@ begin
   end;
 end;
 
+// Send out a word to the 74LS673
+procedure ls673_write (pin2, pin6, pin5: TSetBit; data: TRegisterbits);
+CONST WASTE=4;
+var i: byte;
+begin
+ for i:=0 to 15 do
+ begin
+  pin2 (true);
+  wastecpucycles (WASTE);
+  pin6 (data[i]);
+  wastecpucycles (WASTE);
+  pin2 (false);
+  wastecpucycles (WASTE);
+ end;
+ pin5 (true);
+ wastecpucycles (WASTE);
+ pin5 (false);
+end;
+
+// Read all inputs from 74LS150. Setting the address of the multiplexer
+// is implementation specific, use a callback to set the address.
+function ls150_read (address:TSetAddress): TRegisterbits;
+begin
+
+end;
 
 END.
 
