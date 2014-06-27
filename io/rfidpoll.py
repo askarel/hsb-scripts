@@ -1,14 +1,33 @@
 #!/usr/bin/env python
+#
+#	The RFID scanner
+#
+#	(c) 2014 Frederic Pasteleurs <frederic@askarel.be>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
 
 DATAFILE='/var/local/rfidpoll.txt'
-#DATAFILE='rfidpoll.txt'
+DATAFILE='rfidpoll.txt'
 AR_HASH=0
 AR_STARTTIME=1
 AR_ENDTIME=2
 AR_FLAGS=3
 AR_REVOKED=4
 AR_NICK=5
-BLACKKNIGHTIO='./blackknightio'
+BLACKKNIGHTIO='blackknightio'
 BLACKKNIGHTIO='/bin/echo'
 MYAPDU= [ 0xff, 0xca, 0x0, 0x0, 0x0 ]
 
