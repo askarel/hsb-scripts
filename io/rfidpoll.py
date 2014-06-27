@@ -43,6 +43,13 @@ from smartcard.CardRequest import CardRequest
 from smartcard.CardConnection import CardConnection
 from smartcard.util import toHexString
 
+def blackknightexec (cmd):
+ try:
+  call (cmd)
+ except:
+  syslog.syslog ( "Cannot execute command: "+ cmd[0])
+
+
 #r=readers()
 syslog.syslog ("RFID reader handler started")
 
@@ -67,11 +74,11 @@ while True:
        if int(l[AR_STARTTIME]) < int(time.time()): # Is it active yet ?
         if int(l[AR_REVOKED]) == 0: # Is it still active ?
          if l[AR_ENDTIME] == 'NULL': # NULL expiration (valid)
-          call([BLACKKNIGHTIO, 'open', 'tag '+ l[AR_HASH]])
+          blackknightexec([BLACKKNIGHTIO, 'open', 'tag '+ l[AR_HASH]])
          elif l[AR_ENDTIME] == '0': # Zero expiration (valid)
-          call([BLACKKNIGHTIO, 'open', 'tag '+ l[AR_HASH]])
+          blackknightexec([BLACKKNIGHTIO, 'open', 'tag '+ l[AR_HASH]])
          elif int(l[AR_ENDTIME]) > int(time.time()): # Did it expire ?
-          call([BLACKKNIGHTIO, 'open', 'tag '+ l[AR_HASH]])
+          blackknightexec([BLACKKNIGHTIO, 'open', 'tag '+ l[AR_HASH]])
          else:
           syslog.syslog (format ( "Card %s is expired. User: %s" %  (l[AR_HASH], l[AR_NICK])))
         else:
