@@ -380,6 +380,7 @@ begin
 end;
 
 ///////////// CALLBACKS FOR UNIT CHIP7400 /////////////
+// These procedures know how to *access* the chips, but not how to talk to them.
 
 procedure setregclock (state: boolean);
 begin
@@ -403,24 +404,6 @@ end;
 
 ///////////// CHIP HANDLING FUNCTIONS /////////////
 
-// Send out a word to the 74LS673
-procedure write74673 (clockpin, datapin, strobepin: byte; data: TRegisterbits);
-var i: byte;
-begin
- for i:=0 to 15 do
- begin
-  GpF.SetBit (clockpin);
-  wastecpucycles (4);
-  if data[i] then GpF.SetBit (datapin) else GpF.Clearbit (datapin);
-  wastecpucycles (4);
-  GpF.ClearBit (clockpin);
-  wastecpucycles (4);
- end;
- GpF.SetBit (strobepin);
- wastecpucycles (4);
- GpF.Clearbit (strobepin);
-end;
-
 // Do an I/O cycle on the board
 function io_673_150 (clockpin, datapin, strobepin, readout: byte; data:TRegisterbits): TRegisterbits;
 var i: byte;
@@ -429,7 +412,7 @@ begin
  gpioword:=0;
  for i:=0 to 15 do
   begin
-   write74673 (clockpin, datapin, strobepin, word2bits ((bits2word (data) and $0fff) or (BITMIRROR[graycode (i)] shl $0c)) );
+   ls673_write (@setregclock, @setregdata, @setregstrobe, word2bits ((bits2word (data) and $0fff) or (BITMIRROR[graycode (i)] shl $0c)) );
    sleep (1); // Give the electronics time for propagation
    gpioword:=(gpioword or (ord (GpF.GetBit (readout)) shl graycode(i) ) );
   end;
@@ -457,6 +440,7 @@ end;
 ///////////// DAEMON STUFF /////////////
 
 procedure godaemon (daemonpid: Tpid);
+TYPE doorstates=(DS_DISABLED, DS_PANIC);
 var shmname: string;
     inputs, outputs : TRegisterbits;
     shmkey: TKey;
@@ -676,7 +660,7 @@ begin
  log_door_event (msgflags, 63, true, 'Door controller is bailing out. Clearing outputs', '');
 // syslog (log_crit,'Daemon is exiting. Clearing outputs', []);
  outputs:=word2bits (0);
- if not CurrentState[S_DEMOMODE] then write74673 (CLOCKPIN, DATAPIN, STROBEPIN, outputs);
+ if not CurrentState[S_DEMOMODE] then ls673_write (@setregclock, @setregdata, @setregstrobe,  outputs);
  sleep (100); // Give time for the monitor to die before yanking the segment
  shmctl (shmid, IPC_RMID, nil); // Destroy shared memory segment upon leaving
  GpIo_Driver.destroy;
