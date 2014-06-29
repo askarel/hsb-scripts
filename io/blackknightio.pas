@@ -62,8 +62,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         LOCKWAIT=2000;  // Maximum delay between leaf switch closure and maglock feedback switch closure (if delay expired, alert that the door is not closed properly
         MAGWAIT=1500;   // Reaction delay of the maglock output relay (the PCB has capacitors)
         BUZZERCHIRP=150; // Small beep delay
-        SND_MISTERCASH: TBuzzPattern=(150, 50, 150, 50, 150, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        SND_DOORNOTCLOSED: TBuzzPattern=(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, -1, 0); // Be a noisy asshole
+        SND_MISTERCASH: TBuzzPattern=(50, 100, 50, 100, 50, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        SND_DOORNOTCLOSED: TBuzzPattern=(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, -1); // Be a noisy asshole
         // Places to look for the external script
         SCRIPTNAMES: array [0..5] of string=('/etc/blackknightio/blackknightio.sh',
                                              '/usr/local/etc/blackknightio/blackknightio.sh',
@@ -216,7 +216,7 @@ begin
   else
   begin
    if (scratchspace.TimeIndex <= 0) then scratchspace.TimeIndex:=pattern[scratchspace.offset];
-   busy_buzzer:=((scratchspace.offset and 1) = 0);// Beep !!
+   busy_buzzer:=((scratchspace.offset and 1) = 1);// Beep !!
    busy_delay_tick (scratchspace.TimeIndex, ticklength);
    if busy_delay_is_expired (scratchspace.TimeIndex) then
     begin
@@ -405,7 +405,7 @@ end;
 ///////////// CHIP HANDLING FUNCTIONS /////////////
 
 // Do an I/O cycle on the board
-function io_673_150 (clockpin, datapin, strobepin, readout: byte; data:TRegisterbits): TRegisterbits;
+function io_673_150 (data:TRegisterbits): TRegisterbits;
 var i: byte;
     gpioword: word;
 begin
@@ -414,7 +414,7 @@ begin
   begin
    ls673_write (@setregclock, @setregdata, @setregstrobe, word2bits ((bits2word (data) and $0fff) or (BITMIRROR[graycode (i)] shl $0c)) );
    sleep (1); // Give the electronics time for propagation
-   gpioword:=(gpioword or (ord (GpF.GetBit (readout)) shl graycode(i) ) );
+   gpioword:=(gpioword or (ord (GetGPIOinput) shl graycode(i) ) );
   end;
  io_673_150:=word2bits (gpioword);
 end;
@@ -485,7 +485,7 @@ begin
       sleep (16); // Emulate the real deal
      end
     else // Real I/O
-     inputs:=debounceinput (io_673_150 (CLOCKPIN, DATAPIN, STROBEPIN, READOUTPIN, outputs), MAXBOUNCES);
+     inputs:=debounceinput (io_673_150 (outputs), MAXBOUNCES);
     if CurrentState[S_HUP] then // Process HUP signal
      begin
       SHMPointer^.shmmsg:=SHMPointer^.shmmsg + #0; // Make sure the string is null terminated
