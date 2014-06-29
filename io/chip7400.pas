@@ -81,7 +81,7 @@ end;
 // Send out a word to the 74LS673
 // This procedure know how to *talk* to the chips, but not how to access them
 procedure ls673_write (pin2, pin6, pin5: TSetBit; data: TRegisterbits);
-CONST WASTE=4;
+CONST WASTE=10;
 var i: byte;
 begin
  for i:=0 to 15 do
