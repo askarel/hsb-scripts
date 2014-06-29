@@ -98,10 +98,10 @@ end;
 
 function getpidname: string;
 begin
- if fpGetUid = 0 then
-  getpidname:='/run/' + ApplicationName + '.PID'
- else
-  getpidname:=getEnvironmentVariable ('HOME') + '/.' + ApplicationName + '.PID';
+// if fpGetUid = 0 then
+  getpidname:='/run/lock/' + ApplicationName + '.PID'
+// else
+//  getpidname:=getEnvironmentVariable ('HOME') + '/.' + ApplicationName + '.PID';
 end;
 
 
