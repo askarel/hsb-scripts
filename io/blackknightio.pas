@@ -379,6 +379,28 @@ begin
   end;
 end;
 
+// The full screen shell is difficult to use in a script.
+// Still need to figure out how to implement this.
+procedure debug_shell;
+const shell_prefix='blackknightio >>';
+      runningstr:array [false..true] of string=('no','yes');
+var cmd: string;
+begin
+ repeat
+  write (shell_prefix); readln (cmd);
+  case cmd of
+   'help':      writeln ('Available commands: exit help quit running');
+   'start':     writeln ('Add code for function ',cmd);
+   'stop':      writeln ('Add code for function ',cmd);
+   'running':   writeln ('Add code for function ',cmd);
+   'disable':      writeln ('Add code for function ',cmd);
+   'enable':      writeln ('Add code for function ',cmd);
+   'open':      writeln ('Add code for function ',cmd);
+   'beep':      writeln ('Add code for function ',cmd);
+  end;
+ until (cmd='exit') or (cmd='quit');
+end;
+
 ///////////// CALLBACKS FOR UNIT CHIP7400 /////////////
 // These procedures know how to *access* the chips, but not how to talk to them.
 
@@ -440,20 +462,22 @@ end;
 ///////////// DAEMON STUFF /////////////
 
 procedure godaemon (daemonpid: Tpid);
-TYPE doorstates=(DS_DISABLED, DS_PANIC);
+TYPE Tdoorstates=(DS_ENTRY, DS_DISABLED, DS_ENABLED, DS_PANIC, DS_OPEN, DS_CLOSED, DS_NONE, DS_LOCKED);
 var shmname: string;
     inputs, outputs : TRegisterbits;
     shmkey: TKey;
     shmid: longint;
     SHMPointer: ^TSHMVariables;
     dryrun: byte;
+    doorstate: TDoorstates;
     open_wait, beepdelay, Mag1CloseWait, Mag2CloseWait, Mag1LockWait, Mag2LockWait: longint;
     sys_open_order, door_is_locked: boolean;
 begin
- outputs:=word2bits (0);
+ doorstate:=DS_NONE; // doorstate:=DS_ENTRY;
+ outputs:=word2bits (0);// <-- To remove once state machine is effective
  dryrun:=MAXBOUNCES+2;
  open_wait:=0; beepdelay:=0; Mag1CloseWait:=MAGWAIT; Mag2CloseWait:=MAGWAIT; Mag1LockWait:=LOCKWAIT; Mag2LockWait:=LOCKWAIT; // Initialize some timers
- door_is_locked:=false;
+ door_is_locked:=false;// <-- To remove once state machine is effective
  fillchar (CurrentState, sizeof (CurrentState), 0);
  fillchar (msgflags, sizeof (msgflags), 0);
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
@@ -484,8 +508,8 @@ begin
       inputs:=debounceinput (SHMPointer^.fakeinputs, MAXBOUNCES);
       sleep (16); // Emulate the real deal
      end
-    else // Real I/O
-     inputs:=debounceinput (io_673_150 (outputs), MAXBOUNCES);
+     else // Real I/O
+      inputs:=debounceinput (io_673_150 (outputs), MAXBOUNCES);
     if CurrentState[S_HUP] then // Process HUP signal
      begin
       SHMPointer^.shmmsg:=SHMPointer^.shmmsg + #0; // Make sure the string is null terminated
@@ -501,11 +525,40 @@ begin
       SHMPointer^.command:=CMD_NONE;
       CurrentState[S_HUP]:=false; // Reset HUP signal
       SHMPointer^.senderpid:=0; // Reset sender PID: If zero, we may have a race condition
-//      fillchar (SHMPointer^.shmmsg, sizeof (SHMPointer^.shmmsg), 0);// Kill the buffer data
      end;
 
     if dryrun = 0 then // Make a dry run to let inputs settle
      begin
+      // Let's start to grow the finite state machine
+      case doorstate of
+       DS_ENTRY: // First thing to run
+        begin
+         outputs:=word2bits (0); // Set all outputs to zero.
+         if CurrentState[SC_DISABLED] then doorstate:=DS_DISABLED else doorstate:=DS_ENABLED;
+
+        end;
+       DS_DISABLED: // System disabled
+        begin
+         outputs:=word2bits (0); // Set all outputs to zero.
+         if not CurrentState[SC_DISABLED] then doorstate:=DS_ENABLED;
+        end;
+       DS_ENABLED: // System enabled
+        begin
+         if CurrentState[SC_DISABLED] then doorstate:=DS_DISABLED;
+//           if inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED then doorstate:=DS_CLOSED else doorstate:=DS_OPEN;
+
+        end;
+       DS_PANIC:
+        begin
+         outputs[MAGLOCK1_RELAY]:=false;
+         outputs[MAGLOCK2_RELAY]:=false;
+
+        end;
+       DS_NONE: // Empty state
+        begin
+        end;
+       end;
+      // End of finite state machine
       if CurrentState[SC_DISABLED] then
        begin // System is software-disabled
         outputs:=word2bits (0); // Set all outputs to zero.
@@ -742,6 +795,7 @@ begin
   end;
 
  case lowercase (paramstr (1)) of
+  'shell':     debug_shell;
   'running':   if iamrunning then halt (0) else halt (1);
   'stop':      if iamrunning then fpkill (oldpid, SIGTERM);
   'beep':      senddaemoncommand (oldpid, CMD_BEEP, paramstr (2));
@@ -785,7 +839,7 @@ begin
        if pid = 0 then
         Begin // we're in the child
          openlog (pchar (format (ApplicationName + '[%d]', [fpgetpid])), LOG_NOWAIT, LOG_DAEMON);
-         syslog (log_info, 'Spawned new process: %d'#10, [fpgetpid]);
+         syslog (log_info, 'Spawned new process: %d. Build date/time: %s'#10, [fpgetpid, {$I %DATE%} + ' ' + {$I %TIME%}]);
          Close(system.input); // close stdin
          Close(system.output); // close stdout
          Assign(system.output,'/dev/null');
