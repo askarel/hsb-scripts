@@ -462,7 +462,7 @@ end;
 ///////////// DAEMON STUFF /////////////
 
 procedure godaemon (daemonpid: Tpid);
-TYPE Tdoorstates=(DS_ENTRY, DS_DISABLED, DS_ENABLED, DS_PANIC, DS_OPEN, DS_CLOSED, DS_NONE, DS_LOCKED);
+TYPE Tdoorstates=(DS_ENTRY, DS_DISABLED, DS_ENABLED, DS_PANIC, DS_OPEN, DS_CLOSED, DS_NONE, DS_LOCKED, DS_UNLOCKED);
 var shmname: string;
     inputs, outputs : TRegisterbits;
     shmkey: TKey;
@@ -529,13 +529,12 @@ begin
 
     if dryrun = 0 then // Make a dry run to let inputs settle
      begin
-      // Let's start to grow the finite state machine
+//////// Let's start to grow the finite state machine ////////
       case doorstate of
        DS_ENTRY: // First thing to run
         begin
          outputs:=word2bits (0); // Set all outputs to zero.
          if CurrentState[SC_DISABLED] then doorstate:=DS_DISABLED else doorstate:=DS_ENABLED;
-
         end;
        DS_DISABLED: // System disabled
         begin
@@ -545,8 +544,7 @@ begin
        DS_ENABLED: // System enabled
         begin
          if CurrentState[SC_DISABLED] then doorstate:=DS_DISABLED;
-//           if inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED then doorstate:=DS_CLOSED else doorstate:=DS_OPEN;
-
+         if inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED then doorstate:=DS_CLOSED else doorstate:=DS_OPEN;
         end;
        DS_PANIC:
         begin
@@ -554,11 +552,48 @@ begin
          outputs[MAGLOCK2_RELAY]:=false;
 
         end;
-       DS_NONE: // Empty state
+       DS_OPEN: // Door is open
+        begin
+         if inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED then doorstate:=DS_CLOSED;
+         outputs[BUZZER_OUTPUT]:=false;
+         outputs[DOOR_STRIKE_RELAY]:=false;
+         Mag1LockWait:=LOCKWAIT;
+         Mag2LockWait:=LOCKWAIT;
+        end;
+       DS_CLOSED: // Door is closed
+        begin
+         if STATIC_CONFIG[SC_MAGLOCK1] then outputs[MAGLOCK1_RELAY]:=true;
+         if STATIC_CONFIG[SC_MAGLOCK2] then outputs[MAGLOCK2_RELAY]:=true;
+         outputs[DOOR_STRIKE_RELAY]:=false;
+         open_wait:=COPENWAIT;
+         // Start the closing timers when the magnets are on. Stop ticking when the shoe is on the magnet -> door is locked.
+         if (inputs[MAGLOCK1_RETURN] = IS_OPEN) then busy_delay_tick (Mag1LockWait, 16);
+         if (inputs[MAGLOCK2_RETURN] = IS_OPEN) then busy_delay_tick (Mag2LockWait, 16);
+
+        end;
+       DS_UNLOCKED: // Door unlock order received
+        begin
+         busy_delay_tick (open_wait, 16); // tick...
+         outputs[MAGLOCK1_RELAY]:=false;
+         outputs[MAGLOCK2_RELAY]:=false;
+         outputs[DOOR_STRIKE_RELAY]:=true;
+         if STATIC_CONFIG[SC_BUZZER] then outputs[BUZZER_OUTPUT]:=true;
+         if inputs[DOOR_CLOSED_SWITCH] = IS_OPEN then doorstate:=DS_OPEN;
+         if busy_delay_is_expired (open_wait) then
+          begin // Door did not open: it stayed closed.
+           doorstate:=DS_CLOSED;
+           outputs[BUZZER_OUTPUT]:=false;
+          end;
+        end;
+       DS_LOCKED: // Door is locked
+        begin
+
+        end;
+       DS_NONE: // Empty state (for transition)
         begin
         end;
        end;
-      // End of finite state machine
+//////// End of finite state machine, start of legacy stuff ////////
       if CurrentState[SC_DISABLED] then
        begin // System is software-disabled
         outputs:=word2bits (0); // Set all outputs to zero.
