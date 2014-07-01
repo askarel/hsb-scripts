@@ -149,7 +149,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     true,  // SC_HANDLEANDLIGHT (The light must be on to unlock with the handle)
                                     true,  // SC_DOORUNLOCKBUTTON (A push button to open the door)
                                     false, // SC_HANDLE (Unlock with the handle only: not recommended in HSBXL)
-                                    true, // SC_DISABLED (system is software-disabled)
+                                    false, // SC_DISABLED (system is software-disabled)
                                     false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
@@ -462,7 +462,7 @@ end;
 ///////////// DAEMON STUFF /////////////
 
 procedure godaemon (daemonpid: Tpid);
-TYPE Tdoorstates=(DS_ENTRY, DS_DISABLED, DS_ENABLED, DS_PANIC, DS_OPEN, DS_CLOSED, DS_NONE, DS_LOCKED, DS_UNLOCKED);
+TYPE Tdoorstates=(DS_ENTRY, DS_DISABLED, DS_ENABLED, DS_PANIC, DS_OPEN, DS_CLOSED, DS_NONE, DS_LOCKED, DS_UNLOCKED, DS_PARTIAL1, DS_PARTIAL2);
 var shmname: string;
     inputs, outputs : TRegisterbits;
     shmkey: TKey;
