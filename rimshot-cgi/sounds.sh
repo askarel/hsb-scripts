@@ -33,6 +33,7 @@ HTMLTROLLBUTTON='<BUTTON TYPE="BUTTON" VALUE="Submit" ID="%s" NAME="%s" CLASS="%
 #internals
 readonly CSSMETHOD="CSS"
 readonly JSONMETHOD="JSON"
+readonly JSMETHOD="JS"
 readonly POSTSPEAKMETHOD="SPEAK"
 readonly POSTRANDOMMETHOD="RANDOM"
 readonly PLAYPROG="paplay"
@@ -160,6 +161,15 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	    cat "$( pickfile "$CSSDIR" "$CSSFILE" )"
 	else
 	    err404 "$CSSFILE"
+	fi
+	;;
+    "$JSMETHOD")
+	JSFILE="$( echo "$QUERY_STRING"|cut -d '=' -f 2 )"
+	if [ -n "$( pickfile "$CSSDIR" "$JSFILE" )" ]; then
+	    printf "Content-type: text/javascript\n\n"
+	    cat "$( pickfile "$CSSDIR" "$JSFILE" )"
+	else
+	    err404 "$JSFILE"
 	fi
 	;;
     *) # Catch-all method. Data is in the POST
