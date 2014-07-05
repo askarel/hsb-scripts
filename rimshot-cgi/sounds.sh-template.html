@@ -5,6 +5,7 @@
   <link rel="stylesheet" href="$ME?CSS=trollin.css" type="text/css" />
  </HEAD>
  <BODY>
+  <SCRIPT SRC="$ME?JS=fartscroll.js"></SCRIPT>
   <SCRIPT>
     function reqListener() {
 	console.log(this.responseText);
@@ -37,6 +38,7 @@
 <!-- The body, with buttons -->
    <DIV ID="trollbody">
    <DIV ID="pagetop"></DIV>
+   <SCRIPT>fartscroll(400);</SCRIPT>
     $TROLLBODY
 <!--
    <DIV ID=\"%s\"><H2>%s <A HREF=\"#TOP\">&uarr;</A></H2></DIV>\n" "$directoryhash" "$(basename "$directoryname")"
