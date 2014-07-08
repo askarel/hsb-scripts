@@ -462,7 +462,7 @@ end;
 ///////////// DAEMON STUFF /////////////
 
 procedure godaemon (daemonpid: Tpid);
-TYPE Tdoorstates=(DS_ENTRY, DS_DISABLED, DS_ENABLED, DS_PANIC, DS_OPEN, DS_CLOSED, DS_NONE, DS_LOCKED, DS_UNLOCKED, DS_PARTIAL1, DS_PARTIAL2);
+TYPE Tdoorstates=(DS_ENTRY, DS_DISABLED, DS_ENABLED, DS_PANIC, DS_OPEN, DS_CLOSED, DS_NONE, DS_LOCKED, DS_UNLOCKED, DS_PARTIAL1, DS_PARTIAL2, DS_NOMAG);
 var shmname: string;
     inputs, outputs : TRegisterbits;
     shmkey: TKey;
@@ -550,7 +550,7 @@ begin
         begin
          outputs[MAGLOCK1_RELAY]:=false;
          outputs[MAGLOCK2_RELAY]:=false;
-
+         if inputs[PANIC_SENSE] = IS_CLOSED then doorstate:=DS_ENABLED;
         end;
        DS_OPEN: // Door is open
         begin
@@ -565,11 +565,17 @@ begin
          if STATIC_CONFIG[SC_MAGLOCK1] then outputs[MAGLOCK1_RELAY]:=true;
          if STATIC_CONFIG[SC_MAGLOCK2] then outputs[MAGLOCK2_RELAY]:=true;
          outputs[DOOR_STRIKE_RELAY]:=false;
+         fillchar (buzzertracker, sizeof (buzzertracker), 0);
          open_wait:=COPENWAIT;
-         // Start the closing timers when the magnets are on. Stop ticking when the shoe is on the magnet -> door is locked.
+         // Start the closing timers. Stop ticking when the shoe is on the magnet -> door is locked.
          if (inputs[MAGLOCK1_RETURN] = IS_OPEN) then busy_delay_tick (Mag1LockWait, 16);
          if (inputs[MAGLOCK2_RETURN] = IS_OPEN) then busy_delay_tick (Mag2LockWait, 16);
-
+         if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED; // Mag 1 only
+         if (not STATIC_CONFIG[SC_MAGLOCK1]) and STATIC_CONFIG[SC_MAGLOCK2] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED; // Mag 2 only
+         if STATIC_CONFIG[SC_MAGLOCK1] and STATIC_CONFIG[SC_MAGLOCK2] then // Mag 1 and 2
+          begin
+           if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED;
+          end;
         end;
        DS_UNLOCKED: // Door unlock order received
         begin
@@ -585,8 +591,23 @@ begin
            outputs[BUZZER_OUTPUT]:=false;
           end;
         end;
+       DS_PARTIAL1: // Partial lock: magnet 1 catched, but not magnet 2
+        begin
+
+         if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED;
+        end;
+       DS_PARTIAL2: // Partial lock: magnet 1 catched, but not magnet 2
+        begin
+
+         if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED;
+        end;
+       DS_NOMAG: // No magnet installed (not recommended)
+        begin
+
+        end;
        DS_LOCKED: // Door is locked
         begin
+         if STATIC_CONFIG[SC_BUZZER] then outputs[BUZZER_OUTPUT]:=busy_buzzer (buzzertracker, SND_MISTERCASH, 16);
 
         end;
        DS_NONE: // Empty state (for transition)
