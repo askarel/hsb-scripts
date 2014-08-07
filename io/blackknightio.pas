@@ -24,7 +24,7 @@ program blackknightio;
 
 // This is a quick hack to check if everything works
 
-uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile, unix, chip7400;
+uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile, unix, chip7400, typinfo;
 
 CONST   SHITBITS=63;
 
@@ -45,10 +45,12 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                 end;
         TBuzzPattern= ARRAY [0..20] OF LONGINT;
         // Available error messages
-        TLogItems=(MSG_DEMO, MSG_MAG1PARTIAL, MSG_MAG2PARTIAL, MSG_2MAGSNOLATCH, MSG_MAG1_NOLATCH, MSG_MAG2_NOLATCH, MSG_NOMAG_CFG, MSG_CLOSED_NOMAG,
-                   MSG_DOORISLOCKED, MSG_MAILBOX, MSG_PANIC, MSG_TRIPWIRE, MSG_BOX_TAMPER, MSG_MAG1_WIRING, MSG_MAG2_WIRING, MSG_MAG1_DISABLED_BUT_CLOSED,
-                   MSG_MAG2_DISABLED_BUT_CLOSED, MSG_TUESDAY_INACTIVE, MSG_TUESDAY_ACTIVE, MSG_LIGHT_ON, MSG_SYS_ENABLED, MSG_SYS_DISABLED, MSG_OPEN_BUTTON,
+        TLogItems=(MSG_DEMO, MSG_SYS_DISABLED, MSG_SYS_ENABLED, MSG_PANIC, MSG_MAG1PARTIAL, MSG_MAG2PARTIAL, MSG_2MAGSNOLATCH, MSG_MAG1_NOLATCH, MSG_MAG2_NOLATCH,
+                   MSG_NOMAG_CFG, MSG_CLOSED_NOMAG,
+                   MSG_DOORISLOCKED, MSG_MAILBOX, MSG_TRIPWIRE, MSG_BOX_TAMPER, MSG_MAG1_WIRING, MSG_MAG2_WIRING, MSG_MAG1_DISABLED_BUT_CLOSED,
+                   MSG_MAG2_DISABLED_BUT_CLOSED, MSG_TUESDAY_INACTIVE, MSG_TUESDAY_ACTIVE, MSG_LIGHT_ON, MSG_OPEN_BUTTON,
                    MSG_OPEN_HANDLE_AND_LIGHT, MSG_OPEN_HANDLE, MSG_OPEN_SYSTEM, MSG_DOORBELL, MSG_DOORSWITCH_FAIL, MSG_MAG1_FAIL, MSG_MAG2_FAIL, MSG_BAILOUT);
+        TLogItemText= ARRAY[TLogItems] of pchar;
 
         TConfigTextArray=ARRAY [0..SHITBITS] of string[20];
 
@@ -60,17 +62,19 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
 
         CMD_NAME: ARRAY [TCommands] of pchar=('NoCMD','open','tuesday_start','tuesday_end','enable','disable','beep','stop');
 
-        LOG_ITEM_TEXT: ARRAY[TLogItems] of pchar=('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.',
-                                                  'Partial lock detected: Maglock 2 did not latch.',
-                                                  'Partial lock detected: Maglock 1 did not latch.',
-                                                  'No maglock latched: Door is not locked.',
-                                                  'Maglock 1 did not latch: Door is not locked',
+        LOG_ITEM_TEXT_EN: TLogItemText=('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.',
+                                        'Door System is disabled in software',
+                                        'Door System is enabled',
+                                         'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED',
+                                         'Partial lock detected: Maglock 2 did not latch.',
+                                         'Partial lock detected: Maglock 1 did not latch.',
+                                         'No maglock latched: Door is not locked.',
+                                         'Maglock 1 did not latch: Door is not locked',
                                                   'Maglock 2 did not latch: Door is not locked',
                                                   'No magnetic lock installed. This configuration is NOT recommended.',
                                                   'Door is closed. Cannot see if it is locked',
                                                   'Door is locked.',
                                                   'There is mail in the mailbox',
-                                                  'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED',
                                                   'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN',
                                                   'Control box is being opened',
                                                   'Check maglock 1 and it''s wiring: maglock is off but i see it closed',
@@ -80,8 +84,6 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                                   'Tuesday mode inactive',
                                                   'Tuesday mode active. Ring doorbell to enter',
                                                   'Hallway light is on',
-                                                  'Door System is enabled',
-                                                  'Door System is disabled in software',
                                                   'Door opened from button',
                                                   'Door opened from handle with the light on',
                                                   'Door opened from handle',
@@ -264,7 +266,7 @@ begin
     end;
   end
 end;
-
+{
 // Log an event and run external script
 procedure log_door_event (var currentstateflags: TLotsOfBits; msgindex: byte; currentbitstate: boolean; msgtext, extratext: pchar);
 var pid: Tpid;
@@ -285,16 +287,18 @@ begin
    currentstateflags[msgindex]:=currentbitstate;
   end;
 end;
-
+ }
 // Log a single event and run external script
-procedure log_single_door_event (msgindex: byte; msgtext, extratext: pchar);
+procedure log_single_door_event (msgindex: TLogItems; msgtext: TLogItemText; extratext: pchar);
 var pid: Tpid;
+    enumnamestr: string;
 begin
- syslog (log_warning, 'message %d: %s (%s)', [msgindex, msgtext, extratext]);
+ enumnamestr:=GetEnumName (typeinfo (TLogItems), ord (msgindex)) + #0;
+ syslog (log_warning, '%s: %s (%s)', [ @enumnamestr[1], msgtext[msgindex], extratext]);
  pid:=fpFork;
  if pid = 0 then
   begin
-   fpexecl (paramstr (0) + '.sh', [inttostr (msgindex), msgtext, extratext] );
+   fpexecl (paramstr (0) + '.sh', [ enumnamestr, msgtext[msgindex], extratext] );
    syslog (LOG_WARNING, 'Process returned: error code: %d', [FpGetErrNo]);
    halt(0);
   end;
@@ -388,7 +392,7 @@ begin
               SHMPointer^.senderpid:=FpGetPid;
               fpkill (daemonpid, SIGHUP);
              end;
-        'n': begin
+        'n': begin // BUG here
               if SHMPointer^.State[SC_DISABLED] then
                begin
                 SHMPointer^.command:=CMD_ENABLE;
@@ -553,7 +557,7 @@ begin
     CurrentState[S_DEMOMODE]:=false
    else
     begin
-     syslog (log_warning,'WARNING: Error mapping registry: GPIO code disabled, running in demo mode.', []);
+     log_single_door_event (MSG_DEMO, LOG_ITEM_TEXT_EN, '');
      CurrentState[S_DEMOMODE]:=true;
      inputs:=word2bits (65535); // Open contact = 1
     end;
@@ -588,7 +592,7 @@ begin
     if dryrun = 0 then // Make a dry run to let inputs settle
      begin
 //////// Let's start to grow the finite state machine ////////
-      if (inputs[PANIC_SENSE] = IS_OPEN) then doorstate:=DS_LOG_PANIC;
+      if (inputs[PANIC_SENSE] = IS_OPEN) and (doorstate<> DS_PANIC)then doorstate:=DS_LOG_PANIC;
       case doorstate of
        DS_ENTRY: // First thing to run
         begin
@@ -597,7 +601,7 @@ begin
         end;
        DS_LOG_DISABLED: // Log the door disabled event
         begin
-
+         log_single_door_event (MSG_SYS_DISABLED, LOG_ITEM_TEXT_EN, '');
          doorstate:=DS_DISABLED;
         end;
        DS_DISABLED: // System disabled
@@ -607,7 +611,7 @@ begin
         end;
        DS_LOG_ENABLED: // Log the door enabled event
         begin
-
+         log_single_door_event (MSG_SYS_ENABLED, LOG_ITEM_TEXT_EN, '');
          doorstate:=DS_ENABLED;
         end;
        DS_ENABLED: // System enabled
@@ -617,7 +621,7 @@ begin
         end;
        DS_LOG_PANIC: // Log the panic event
         begin
-
+         log_single_door_event (MSG_PANIC, LOG_ITEM_TEXT_EN, '');
          doorstate:=DS_PANIC;
         end;
        DS_PANIC: // In panic mode
@@ -900,8 +904,6 @@ begin
       if msgflags[36] then log_door_event (msgflags, 35, (not CurrentState[S_TUESDAY]), 'Tuesday mode inactive', '');
       log_door_event (msgflags, 36, CurrentState[S_TUESDAY], 'Tuesday mode active. Ring doorbell to enter', '');
       log_door_event (msgflags, 37, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
-      log_door_event (msgflags, 38, not CurrentState[SC_DISABLED], 'Door System is enabled', '');
-      log_door_event (msgflags, 39, CurrentState[SC_DISABLED], 'Door System is disabled in software', '');
       log_door_event (msgflags, 40, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED)),
        'Door opened from button', '');
       log_door_event (msgflags, 41, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLEANDLIGHT] and (not STATIC_CONFIG[SC_HANDLE]) and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)),
@@ -925,8 +927,7 @@ begin
     else dryrun:=dryrun-1;
    until CurrentState[S_STOP];
   end;
- log_door_event (msgflags, 63, true, 'Door controller is bailing out. Clearing outputs', '');
-// syslog (log_crit,'Daemon is exiting. Clearing outputs', []);
+ log_single_door_event (MSG_BAILOUT, LOG_ITEM_TEXT_EN, '');
  outputs:=word2bits (0);
  if not CurrentState[S_DEMOMODE] then ls673_write (@setregclock, @setregdata, @setregstrobe,  outputs);
  sleep (100); // Give time for the monitor to die before yanking the segment
