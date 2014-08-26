@@ -88,10 +88,10 @@ gettaghash()
     echo "Waiting for RFID card..." >&2
     touch $PAUSEFILE
     while test -z "$HASH"; do
-	ATRHASH="$(echo "reset" | scriptor 2> /dev/null | tail -n 1 | md5sum | cut -d ' ' -f 1)"
+	ATRHASH="$(echo "reset" | scriptor -r "ACS ACR122U PICC Interface 01 00" 2> /dev/null | tail -n 1 | md5sum | cut -d ' ' -f 1)"
 	if [ "$ATRHASH" != 'd41d8cd98f00b204e9800998ecf8427e' ] ; then # d41d8cd98f00b204e9800998ecf8427e is the empty string hash
 		# Ask the card UID and hash the result (i don't care about the garbage)
-		CARDHASH="$(echo 'ffca000000'|scriptor 2> /dev/null|tail -n 1 | md5sum | cut -d ' ' -f 1)"
+		CARDHASH="$(echo 'ffca000000'|scriptor -r "ACS ACR122U PICC Interface 01 00" 2> /dev/null|tail -n 1 | md5sum | cut -d ' ' -f 1)"
 		if [ "$ATRHASH" != 'd41d8cd98f00b204e9800998ecf8427e' ] ; then # d41d8cd98f00b204e9800998ecf8427e is the empty string hash
 		    HASH="$(echo -n "$CARDHASH $ATRHASH"| md5sum | cut -d ' ' -f 1)"
 		fi
@@ -140,7 +140,7 @@ revoketag()
     test -z "$(runsql "select status from tags where UID like '$1'")" && die "Tag $1 not in database"
     TAGSTATE='DISABLED'
     test "$2" = "STOLEN" -o "$2" = "LOST" && TAGSTATE="$2"
-    runsql "update tags set status='$TAGSTATE' where UID like '$1'"
+    runsql "update tags set status='$TAGSTATE', validityend=now() where UID like '$1'"
 }
 
 listusertags()

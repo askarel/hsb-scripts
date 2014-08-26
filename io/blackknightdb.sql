@@ -123,7 +123,7 @@ CREATE TABLE `logs_door` (
   DELIMITER $$
   create procedure rfid_db_hsbxl.getflattags ()
   BEGIN
-    select uid, unix_timestamp (validitystart), unix_timestamp (validityend), 0, 0, users_vs_tags.user_login from tags, users_vs_tags where uid=tag_uid;
+    select uid, unix_timestamp (validitystart), unix_timestamp (validityend), 0, 0, users_vs_tags.user_login from tags, users_vs_tags, tags_status where (uid=tag_uid) and tags_status.status_is_valid;
   END;
   $$
   DELIMITER ;
