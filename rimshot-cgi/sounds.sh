@@ -28,7 +28,7 @@ readonly CSSDIR="$DIR_AUDIOFILES/.CSS"
 readonly TEMPLATE="$CSSDIR/$ME-template.html"
 # buttons definition
 SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
-HTMLTROLLBUTTON='<BUTTON TYPE="BUTTON" VALUE="Submit" ID="%s" NAME="%s" CLASS="%s soundBtn" ONCLICK="troll('\''%s'\'')">%s</BUTTON>\n'
+HTMLTROLLBUTTON='<BUTTON TYPE="BUTTON" VALUE="Submit" CLASS="%s soundBtn" ONCLICK="troll('\''%s'\'')">%s</BUTTON>\n'
 # HTMLSIDEBAR='<A HREF="#%s">%s</A> <br />\n'
 #internals
 readonly CSSMETHOD="CSS"
@@ -38,6 +38,7 @@ readonly POSTSPEAKMETHOD="SPEAK"
 readonly POSTRANDOMMETHOD="RANDOM"
 readonly PLAYPROG="paplay"
 readonly SPEECHMETHOD="flitemethod"
+# readonly FOOTER="Proudly brought to you by Askarel and many contributors in HSBXL."
 #DEBUG=blaah
 
 # Speech method: using flite
@@ -74,15 +75,6 @@ printf 'Status: 404 not found\nContent-Type: text/html\n\n'
 htmlbombmsg "404 FILE \"$(basename "$1")\" NOT FOUND"
 }
 
-# Prepend the md5 hash of the pathname specified as parameter 1 
-# Sample output: "d5b8180a0a7fe1e9e661bfa1211066e5 /example"
-hashpath()
-{
-    test -z "$1" && echo "hashpath() requires a parameter." && exit 1
-    printf '%s %s\n' "$(echo -n "$1" | md5sum | cut -d " " -f 1 )" "$1"
-}
-export -f hashpath
-
 # Pick a file from specified directory
 # Secure handling of user-defined input: avoid the abuse of the '../' trick.
 # Return a full path to a file if a match is found in directory.
@@ -92,8 +84,8 @@ export -f hashpath
 pickfile()
 {
     ls -1 "$1" | while read line; do
-    test "$line" = "$2" && echo "$1/$line"
-    done
+	    test "$line" = "$2" && echo "$1/$line"
+	done
 }
 
 # Pick a file using the filename hash
@@ -105,11 +97,9 @@ pickfile()
 # THIS FUNCTION IS EXPOSED TO USER INPUT
 pickfilehash()
 {
-    trollcmd='echo'
-    test -n "$3" && trollcmd="$3"
     find "$1" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/sh -c \
 	'printf "%s %s\n" "$(echo -n "{}" | md5sum | cut -d " " -f 1 )" "{}"' \; | while read trollhash trollfile; do 
-	    test "$trollhash" = "$2" && $trollcmd "$trollfile"
+	    test "$trollhash" = "$2" && ${3:-echo} "$trollfile"
 	 done
 }
 
@@ -118,7 +108,7 @@ pickfilehash()
 printhtmlbuttonhash()
 {
     local btnhash="$(echo -n "$1" | md5sum | cut -d ' ' -f 1 )"
-    printf "    $HTMLTROLLBUTTON" "$btnhash" "$btnhash" "$btnhash" "$btnhash" "$(basename "$1")"
+    printf "    $HTMLTROLLBUTTON" "$btnhash" "$btnhash" "$(basename "$1")"
 }
 
 # Make a section with anchor for a category
@@ -172,6 +162,10 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	    err404 "$JSFILE"
 	fi
 	;;
+    "$JSONMETHOD")
+	printf "Content-type: text/javascript\n\n"
+	## TODO: Rewrite the trollbody generator
+	;;
     *) # Catch-all method. Data is in the POST
 	# Process POSTed data
 	printf 'Content-type: text/html\n\n'
@@ -198,5 +192,14 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	fi
 	;;
 esac
+
+## Prepend the md5 hash of the pathname specified as parameter 1 
+## Sample output: "d5b8180a0a7fe1e9e661bfa1211066e5 /example"
+#hashpath()
+#{
+#    test -z "$1" && echo "hashpath() requires a parameter." && exit 1
+#    printf '%s %s\n' "$(echo -n "$1" | md5sum | cut -d " " -f 1 )" "$1"
+#}
+#export -f hashpath
 
 #    find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/bash -c 'hashpath "{}"' \;
