@@ -20,21 +20,33 @@
 create table if not exists hsbmembers (id int not null auto_increment primary key, 
 				    entrydate date not null, 
 				    structuredcomm char(21) unique not null, 
-				    firstname char(30) not null, 
-				    name char(30) not null, 
+				    firstname char(40) not null, 
+				    name char(40) not null, 
 				    nickname char(30), 
-				    phonenumber char(15), 
-				    emailaddress char(60) not null, 
-				    exitdate date, 
+				    phonenumber char(20), 
+				    emailaddress char(255) not null, 
+--				    exitdate date, 
 				    passwordhash char(60) not null default 'mouh', 
-				    flags bigint not null default 0, 
+--				    flags bigint not null default 0,
 				    birthdate date, 
 				    openpgpkeyid char(20), 
-				    activateddate date, 
-				    mail_flags bigint not null default 0, 
+--				    activateddate date, 
+--				    mail_flags bigint not null default 0, 
 				    why_member text not null,
-				    json_data text,
+--				    json_data text,
 				    sshpubkeys text
+				    );
+
+create table if not exists member_sponsors (id int not null auto_increment primary key,
+				    member_id int not null,
+				    sponsor_id int
+				    );
+
+create table if not exists member_history (id int not null auto_increment primary key,
+				    member_id int not null,
+				    event_date date not null,
+				    event_code int not null,
+				    event_string text
 				    );
 
 create table if not exists bankstatements (id int not null auto_increment primary key,
