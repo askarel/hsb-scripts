@@ -192,14 +192,3 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 	fi
 	;;
 esac
-
-## Prepend the md5 hash of the pathname specified as parameter 1 
-## Sample output: "d5b8180a0a7fe1e9e661bfa1211066e5 /example"
-#hashpath()
-#{
-#    test -z "$1" && echo "hashpath() requires a parameter." && exit 1
-#    printf '%s %s\n' "$(echo -n "$1" | md5sum | cut -d " " -f 1 )" "$1"
-#}
-#export -f hashpath
-
-#    find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"  -exec /bin/bash -c 'hashpath "{}"' \;
