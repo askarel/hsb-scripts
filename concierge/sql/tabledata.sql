@@ -17,9 +17,6 @@
 --    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 --
 
--- Since we're coming with fresh data, don't hesitate to delete the whole table
--- It will be re-filled with fresh data
--- TRUNCATE TABLE validiban;
 
 INSERT INTO hsb_groups (shortdesc, fulldesc) VALUES 
 			('root', 'Root group: members have all access to this system'),
