@@ -18,7 +18,6 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-
 # First thing first: it's a modern script supposed to be used on
 # decent browsers.
 header ('Content-type: text/html; charset=utf8');
@@ -39,7 +38,7 @@ if (!file_exists($CONFIGFILE))
     {
 # 	Load configuration options
 	require_once ($CONFIGFILE);
-
+	require_once ('./lib/login.php');
 
     }
 
