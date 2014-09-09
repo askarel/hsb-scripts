@@ -1,5 +1,5 @@
 --
---	Concierge for Hackerspace Brussels - stored procedures definitions
+--	Concierge for Hackerspace Brussels - stored functions definitions
 --
 --	(c) 2013 Frederic Pasteleurs <frederic@askarel.be>
 --
