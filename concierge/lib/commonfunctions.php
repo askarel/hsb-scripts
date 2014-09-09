@@ -35,7 +35,7 @@ function html_header($TITLE, $EXTRAHEAD = '')
 
 function html_footer()
 {
-    echo ("\n </body>\n</html>\n");
+    echo ("\n <p>Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/tree/master/concierge\">Concierge</A></p>\n </body>\n</html>\n");
 }
 
 function dumparray($MYARRAY, $arrayname)
