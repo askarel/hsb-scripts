@@ -38,9 +38,14 @@ if (!file_exists($CONFIGFILE))
     {
 # 	Load configuration options
 	require_once ($CONFIGFILE);
-	require_once ('./lib/login.php');
-
+# New member request
+	if (isset ($_POST['newmember']))
+	{
+	    require ('./lib/newmember.php');
+	} else
+	{
+	    require_once ('./lib/login.php');
+        }
     }
-
 html_footer();
 ?>

@@ -27,15 +27,13 @@ if ( !isset ($CONFIGFILE))
     exit;
 }
 
-# New member request (TODO)
-
 # Is there a user name ?
 if (isset ($_POST['hsbuser']))
     {
-	if (($_POST['hsbuser'] == '') and (!isset ($_POST['newmember'])))
-	{
-	    $MissingUsrText = '<font color="red">Username is required</font>';
-	}
+	if ($_POST['hsbuser'] == '')
+	    {
+		$MissingUsrText = '<font color="red">Username is required</font>';
+	    }
     } else
     {
 	$MissingUsrText = '';
@@ -44,10 +42,10 @@ if (isset ($_POST['hsbuser']))
 # Is there a password ?
 if (isset ($_POST['hsbpass']))
     {
-	if (($_POST['hsbpass'] == '') and (!isset ($_POST['newmember'])) and (!isset ($_POST['lostpw'])))
-	{
-	    $MissingPwText = '<font color="red">Password is required</font>';
-	}
+	if (($_POST['hsbpass'] == '') and (!isset ($_POST['lostpw'])))
+	    {
+		$MissingPwText = '<font color="red">Password is required</font>';
+	    }
     } else
     {
 	$MissingPwText = '';
