@@ -25,6 +25,7 @@ create table if not exists hsbmembers (id int not null auto_increment primary ke
 				    nickname char(30), 
 				    phonenumber char(20), 
 				    emailaddress char(255) not null, 
+				    remind_membership_on date,
 --				    exitdate date, 
 				    passwordhash char(60) not null default 'mouh', 
 --				    flags bigint not null default 0,
@@ -47,6 +48,16 @@ create table if not exists member_history (id int not null auto_increment primar
 				    event_date date not null,
 				    event_code int not null,
 				    event_string text
+				    );
+
+create table if not exists member_groups (id int not null auto_increment primary key,
+				    member_id int not null,
+				    group_id int not null
+				    );
+
+create table if not exists hsb_groups (id int not null auto_increment primary key,
+				    shortdesc char(50) unique not null,
+				    fulldesc text
 				    );
 
 create table if not exists bankstatements (id int not null auto_increment primary key,
@@ -83,5 +94,3 @@ create table if not exists expenses (id int not null auto_increment primary key,
 				    category int not null, -- should be enum
 				    in_year_seq_no int not null);
 
--- Needed for seamless upgrade from previous versions. Do nothing if new field length is current.
-alter table bankstatements modify other_account_name char(50);
