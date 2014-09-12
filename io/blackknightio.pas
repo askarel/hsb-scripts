@@ -26,10 +26,10 @@ program blackknightio;
 
 uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile, unix, chip7400, typinfo;
 
-CONST   SHITBITS=63;
+CONST   SHITBITS=63; // Should go away at some point
 
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
-        TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-)
+        TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-) Should go away at some point.
         // Available commands for IPC (subject to change)
         TCommands=(CMD_NONE, CMD_OPEN, CMD_TUESDAY_START, CMD_TUESDAY_STOP, CMD_ENABLE, CMD_DISABLE, CMD_BEEP, CMD_STOP);
         TSHMVariables=RECORD // What items should be exposed for IPC.
@@ -51,8 +51,10 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                    MSG_MAG2_DISABLED_BUT_CLOSED, MSG_TUESDAY_INACTIVE, MSG_TUESDAY_ACTIVE, MSG_LIGHT_ON, MSG_OPEN_BUTTON,
                    MSG_OPEN_HANDLE_AND_LIGHT, MSG_OPEN_HANDLE, MSG_OPEN_SYSTEM, MSG_DOORBELL, MSG_DOORSWITCH_FAIL, MSG_MAG1_FAIL, MSG_MAG2_FAIL, MSG_BAILOUT);
         TLogItemText= ARRAY[TLogItems] of pchar;
+        // Simple state machine definition
+        TSimpleSM=(SM_ENTRY, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED);
 
-        TConfigTextArray=ARRAY [0..SHITBITS] of string[20];
+        TConfigTextArray=ARRAY [0..SHITBITS] of string[20]; // Should go away at some point
 
 CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
@@ -65,7 +67,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         LOG_ITEM_TEXT_EN: TLogItemText=('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.',
                                         'Door System is disabled in software',
                                         'Door System is enabled',
-                                         'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED',
+                                        'PANIC BUTTON PRESSED: MAGNETS ARE DISABLED',
                                          'Partial lock detected: Maglock 2 did not latch.',
                                          'Partial lock detected: Maglock 1 did not latch.',
                                          'No maglock latched: Door is not locked.',
@@ -84,15 +86,15 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                                   'Tuesday mode inactive',
                                                   'Tuesday mode active. Ring doorbell to enter',
                                                   'Hallway light is on',
-                                                  'Door opened from button',
-                                                  'Door opened from handle with the light on',
-                                                  'Door opened from handle',
-                                                  'Order from system',
+                                        'Door opened from button',
+                                        'Door opened from handle with the light on',
+                                        'Door opened from handle',
+                                        'Order from system',
                                                   'Ding Ding Dong',
                                                   'Check wiring of door switch: door is locked but i see it open',
                                                   'Magnetic lock 1 or its wiring failed. Please repair.',
                                                   'Magnetic lock 2 or its wiring failed. Please repair.',
-                                                  'Door controller is bailing out. Clearing outputs');
+                                        'Door controller is bailing out. Clearing outputs');
 
         // Hardware bug: i got the address lines reversed while building the board.
         // Using a lookup table to mirror the address bits
@@ -204,8 +206,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
 VAR     GPIO_Driver: TIODriver;
         GpF: TIOPort;
         debounceinput_array: ARRAY[false..true, 0..15] of byte; // That one has to be global. No way around it.
-        CurrentState,   // Reason for global: it is modified by the signal handler
-        msgflags: TLotsOfBits; // Reason for global: message state must be preserved (avoid spamming the syslog)
+        CurrentState: TLotsOfBits;   // Reason for global: it is modified by the signal handler
+//        msgflags: TLotsOfBits; // Reason for global: message state must be preserved (avoid spamming the syslog)
         LockBuzzerTracker, BuzzerTracker: TBusyBuzzerScratch;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
@@ -540,7 +542,6 @@ begin
  tuesdaytimer:=0;
  open_wait:=0; beepdelay:=0; Mag1CloseWait:=MAGWAIT; Mag2CloseWait:=MAGWAIT; Mag1LockWait:=LOCKWAIT; Mag2LockWait:=LOCKWAIT; // Initialize some timers
  fillchar (CurrentState, sizeof (CurrentState), 0);
-// fillchar (msgflags, sizeof (msgflags), 0);
  fillchar (debounceinput_array, sizeof (debounceinput_array), 0);
  fillchar (buzzertracker, sizeof (buzzertracker), 0);
  CurrentState[SC_DISABLED]:=STATIC_CONFIG[SC_DISABLED]; // Get default state from config
@@ -576,6 +577,8 @@ begin
       SHMPointer^.shmmsg:=SHMPointer^.shmmsg + #0; // Make sure the string is null terminated
       syslog (log_info, 'HUP received from PID %d. Command: "%s" with parameter: "%s"', [ SHMPointer^.senderpid, CMD_NAME[SHMPointer^.command], @SHMPointer^.shmmsg[1]]);
       case SHMPointer^.command of
+//       CMD_ENABLE: if doorstate=DS_DISABLED then doorstate:=DS_LOG_ENABLED;
+//       CMD_DISABLE: if doorstate<>DS_DISABLED then doorstate:=DS_LOG_DISABLED;
        CMD_ENABLE: if doorstate=DS_DISABLED then doorstate:=DS_LOG_ENABLED;
        CMD_DISABLE: if doorstate<>DS_DISABLED then doorstate:=DS_LOG_DISABLED;
        CMD_STOP: CurrentState[S_STOP]:=true;
@@ -628,7 +631,7 @@ begin
         begin
          outputs[MAGLOCK1_RELAY]:=false;
          outputs[MAGLOCK2_RELAY]:=false;
-         if inputs[PANIC_SENSE] = IS_CLOSED then
+         if inputs[PANIC_SENSE] = IS_CLOSED then // Leave panic mode
           if STATIC_CONFIG[SC_DISABLED] then doorstate:=DS_DISABLED // BUG: It should resume from the previous state
                                        else doorstate:=DS_ENABLED;
         end;
@@ -706,22 +709,22 @@ begin
        DS_LOG_UNLOCK_SYSTEM: // Unlock by system
         begin
          doorstate:=DS_UNLOCKED;
-
+         log_single_door_event (MSG_OPEN_SYSTEM, LOG_ITEM_TEXT_EN, '');
         end;
        DS_LOG_UNLOCK_HANDLE: // Unlock by door handle only
         begin
          doorstate:=DS_UNLOCKED;
-
+         log_single_door_event (MSG_OPEN_HANDLE, LOG_ITEM_TEXT_EN, '');
         end;
        DS_LOG_UNLOCK_HANDLEANDLIGHT: // Unlock by door handle and light on
         begin
          doorstate:=DS_UNLOCKED;
-
+         log_single_door_event (MSG_OPEN_HANDLE_AND_LIGHT, LOG_ITEM_TEXT_EN, '');
         end;
        DS_LOG_UNLOCK_BUTTON: // Unlock by button
         begin
          doorstate:=DS_UNLOCKED;
-
+         log_single_door_event (MSG_OPEN_BUTTON, LOG_ITEM_TEXT_EN, '');
         end;
        DS_LOG_UNLOCK_DOORBELL: // Unlock by doorbell (this path is reached in tuesday mode only)
         begin
@@ -846,7 +849,7 @@ begin
          'Partial lock detected: Maglock 1 did not latch.', '');
         log_door_event (msgflags, 7, (busy_delay_is_expired (Mag2LockWait) and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
          'Partial lock detected: Maglock 2 did not latch.', '');
-        log_door_event (msgflags, 8, (busy_delay_is_expired (Mag1LockWait) and busy_delay_is_expired (Mag2LockWait) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
+        log_door_event (msgflags, 8, (busy_delay_is_expired (Mag1LockWait) and busy_delay_is_exired (Mag2LockWait) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY]),
          'No maglock latched: Door is not locked.', '');
         if ((inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and outputs[MAGLOCK1_RELAY] and outputs[MAGLOCK2_RELAY])
          and (inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED) then door_is_locked:=true;
@@ -904,12 +907,6 @@ begin
       if msgflags[36] then log_door_event (msgflags, 35, (not CurrentState[S_TUESDAY]), 'Tuesday mode inactive', '');
       log_door_event (msgflags, 36, CurrentState[S_TUESDAY], 'Tuesday mode active. Ring doorbell to enter', '');
       log_door_event (msgflags, 37, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
-      log_door_event (msgflags, 40, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED)),
-       'Door opened from button', '');
-      log_door_event (msgflags, 41, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLEANDLIGHT] and (not STATIC_CONFIG[SC_HANDLE]) and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED)),
-       'Door opened from handle with the light on', '');
-      log_door_event (msgflags, 42, ((not CurrentState[SC_DISABLED]) and STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED)), 'Door opened from handle', '');
-      log_door_event (msgflags, 43, sys_open_order,  'Order from system', pchar (@SHMPointer^.shmmsg[1]));
       log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
       log_door_event (msgflags, 45, (door_is_locked and (inputs [DOOR_CLOSED_SWITCH] = IS_OPEN)),
        'Check wiring of door switch: door is locked but i see it open', '');
