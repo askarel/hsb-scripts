@@ -27,7 +27,22 @@ if (!isset($CONFIGFILE))
 }
 
 html_header ('New member');
+printf ("  <p>So you want to become a member of %s, this is great.<br /></p>\n", $CONFIG['orgname']);
+printf ("  <p>In order to make it happen, you need to fill the informations below:<br /></p>\n");
+printf (" <FORM Method=\"POST\" Action=\"%s\">\n", $_SERVER['SCRIPT_NAME']);
+printf ("  First name: <INPUT type=\"text\" size=20 name=\"firstname\" value=\"%s\">%s<br />\n", $SANITIZED_POST['firstname'], $MissingFirstNameText);
+printf ("  name: <INPUT type=\"text\" size=20 name=\"name\" value=\"%s\">%s<br />\n", $SANITIZED_POST['name'], $MissingNameText);
+printf ("  Username/screen name: <INPUT type=\"text\" size=20 name=\"nickname\" value=\"%s\">This is what to put in the login box. If empty, the combination firstname_name will be used. You obviously don't want that.<br />\n", $SANITIZED_POST['nickname']);
+printf ("  Phone number: <INPUT type=text size=20 name=phonenumber value=\"%s\"><br />\n", $SANITIZED_POST['phonenumber']);
+printf ("  Explain why you want to be a member: <br /> <TEXTAREA cols=\"80\" rows=\"25\" name=why_member>%s</TEXTAREA><br />\n", $SANITIZED_POST['why_member']);
+printf ("  Birthdate: <INPUT type=text size=20 name=birthdate value=\"%s\"><br />\n", $SANITIZED_POST['birthdate']);
+printf ("  PGP/GnuPG public key ID: <INPUT type=text size=20 name=openpgpkeyid value=\"%s\">If the key is valid, all mail notifications will be encrypted<br />\n", $SANITIZED_POST['openpgpkeyid']);
+printf ("  SSH public key(s): <br /> <TEXTAREA cols=\"80\" rows=\"10\" name=sshpubkeys>%s</TEXTAREA><br />\n", $SANITIZED_POST['sshpubkeys']);
+printf ("  e-mail address: <INPUT type=text size=20 name=emailaddress value=\"%s\"><br />\n", $SANITIZED_POST['emailaddress']);
+printf ("  Password: <INPUT type=\"password\" size=20 name=\"hsbpass\">%s<br />\n", $MissingPwText);
+printf ("  Confirm password: <INPUT type=\"password\" size=20 name=\"hsbpass2\">%s<br />\n", $NoMatchingPass);
+printf (" <INPUT type=\"submit\" value=\"Submit\">\n");
+printf (" </FORM>\n");
 
-echo "new member entry module (STUB)";
 
 ?>
