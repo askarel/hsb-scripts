@@ -21,14 +21,17 @@
 # First thing first: it's a modern script supposed to be used on
 # decent browsers.
 header ('Content-type: text/html; charset=utf8');
+# Start a new session or open an existing one
+session_start();
 
 $CONFIGFILE=dirname (__FILE__) . '/config.php';
 
 # Load the common stuff
 include_once('./lib/commonfunctions.php');
+require_once('./lib/password.php');
 
 # Pre-sanitize all inputs
-$_POST = sanitize_input ($_POST);
+$SANITIZED_POST = sanitize_input ($_POST);
 
 # Launch the setup script if the config file is not found
 if (!file_exists($CONFIGFILE))
@@ -38,14 +41,33 @@ if (!file_exists($CONFIGFILE))
     {
 # 	Load configuration options
 	require_once ($CONFIGFILE);
-# New member request
-	if (isset ($_POST['newmember']))
+	try 
 	{
-	    require ('./lib/newmember.php');
-	} else
+	    $dbh = new PDO ("mysql:host=". $CONFIG['dbhostname'] . ";dbname=" . $CONFIG['mydb'] . ";charset=UTF8", $CONFIG['dbuser'], $CONFIG['dbpass']);
+	    $dbh->setAttribute (PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+	    $dbh->setAttribute (PDO::ATTR_EMULATE_PREPARES, false);
+
+	    if (isset ($SANITIZED_POST['newmember'])) // New member ?
+	    {
+		require ('./lib/newmember.php');
+	    } else
+	    {
+		if (isset ($_SESSION['MemberID'])) // Logged in ?
+		{
+		    printf ("Logged in as user '%s'<br />\n", $_SESSION['hsbuser']);
+		} else
+		{
+		    require_once ('./lib/login.php');
+		}
+	    }
+	    $dbh = null;
+	}
+	catch (PDOException $e) 
 	{
-	    require_once ('./lib/login.php');
-        }
+	    html_header ('FAIL');
+	    printf ("<H1>Database failed: %s</H1><br />\n", $e->GetMessage());
+	}
     }
+dumparray ($_SESSION, '$_SESSION');
 html_footer();
 ?>
