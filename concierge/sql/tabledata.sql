@@ -20,6 +20,7 @@
 
 INSERT INTO hsb_groups (shortdesc, fulldesc) VALUES 
 			('root', 'Root group: members have all access to this system'),
+			('members', 'Active members, paying their fair share'),
 			('bank_access', 'Members of this group have access to the bank account. Spam them once a week to get the latest statements.'),
 			('board', 'Members of the administrative board'),
 			('sysadmins', 'Members of this group have administrator access to various systems in the space'),
@@ -28,4 +29,13 @@ INSERT INTO hsb_groups (shortdesc, fulldesc) VALUES
 			('Students', 'They usually benefit of a reduced membership fee'),
 			('Cash_short', 'Nobody want to be part of this group.'),
 			('Ex_Members', 'Members that decided to retire'),
-			('webmasters', 'Website administrators');
+			('webmasters', 'Website administrators'),
+			('minors','Should be under adult supervision'),
+			('guests','Guests, staying/using the space for a few days, do not want to be members for whatever reason');
+
+INSERT INTO tag_states (shortdesc, fulldesc) VALUES
+			('ACTIVE', 'Tag is active'),
+			('INACTIVE', 'Tag is in the reserve drawer'),
+			('LOST','The tag is lost in entropy'),
+			('STOLEN','The tag has been stolen. Raise an alarm if it appears'),
+			('DESTROYED','The tag has been obliterated');
