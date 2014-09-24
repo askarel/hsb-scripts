@@ -20,9 +20,9 @@
 create table if not exists hsbmembers (id int not null auto_increment primary key, 
 				    entrydate date not null, 
 				    structuredcomm char(21) unique not null, 
+				    nickname unique char(30), 
 				    firstname char(40) not null, 
 				    name char(40) not null, 
-				    nickname char(30), 
 				    phonenumber char(20), 
 				    emailaddress char(255) not null, 
 				    remind_membership_on date,
@@ -33,7 +33,7 @@ create table if not exists hsbmembers (id int not null auto_increment primary ke
 				    openpgpkeyid char(20), 
 --				    activateddate date, 
 --				    mail_flags bigint not null default 0, 
-				    why_member text not null,
+				    informations text not null,
 --				    json_data text,
 				    sshpubkeys text
 				    );
@@ -93,4 +93,32 @@ create table if not exists expenses (id int not null auto_increment primary key,
 				    flags int, -- should be a bitfield
 				    category int not null, -- should be enum
 				    in_year_seq_no int not null);
+
+create table if not exists user_tags (id int not null auto_increment primary key,
+				    owner_id int,
+				    tag_uid char(100),
+				    validitystart timestamp default current_timestamp,
+				    validityend timestamp,
+				    tag_state int);
+
+create table if not exists tag_states (id int not null auto_increment primary key,
+				    shortdesc char(50) unique not null,
+				    fulldesc text
+				    );
+
+-- Legacy: for JavaScript web interface
+DROP TABLE IF EXISTS `logs_bell`;
+CREATE TABLE `logs_bell` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+DROP TABLE IF EXISTS `logs_door`;
+CREATE TABLE `logs_door` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `login` varchar(100) NOT NULL DEFAULT '',
+  `date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
