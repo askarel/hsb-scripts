@@ -64,8 +64,6 @@ CREATE TABLE `logs_door` (
   create table tags_status (
    status_name varchar(20),
    status_is_valid boolean not null,
-    validitystart timestamp default current_timestamp,
-    validityend timestamp,
    primary key (status_name)
   ) ENGINE=InnoDB CHARACTER SET utf8 COLLATE utf8_general_ci;
 
@@ -73,6 +71,8 @@ CREATE TABLE `logs_door` (
   create table tags (
    UID varchar(100),
    status varchar(20),
+    validitystart timestamp default current_timestamp,
+    validityend timestamp,
    primary key (UID),
    INDEX (status),
    CONSTRAINT fk_status FOREIGN KEY (status) references tags_status(status_name)
@@ -123,7 +123,7 @@ CREATE TABLE `logs_door` (
   DELIMITER $$
   create procedure rfid_db_hsbxl.getflattags ()
   BEGIN
-    select uid, unix_timestamp (validitystart), unix_timestamp (validityend), 0, 0, users_vs_tags.user_login from tags, users_vs_tags, tags_status where (uid=tag_uid) and tags_status.status_is_valid;
+    select uid, unix_timestamp (validitystart), unix_timestamp (validityend), 0, 0, users_vs_tags.user_login from tags, users_vs_tags where (uid=tag_uid) and ((current_timestamp < validityend) or (validityend is null)) order by user_login ;
   END;
   $$
   DELIMITER ;
