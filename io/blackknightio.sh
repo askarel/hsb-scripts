@@ -20,15 +20,25 @@
 # Sample script to illustrate the calling feature of the door controller
 readonly ME="$(basename $0)"
 readonly DBFILE="/var/tmp/rfidpoll.txt"
+readonly GARBAGE_WHITE_BLUE="Garbage day: Please take out the white and blue garbage bags."
+readonly GARBAGE_WHITE_YELLOW="Garbage day: Please take out the white garbage bags and cardboard boxes."
 
 logger -t $ME "$# Command line parameter received: '$1' '$2' '$3'"
 
 # Prepare the greeting depending of the time of the day
 HOUR="$(date '+%H')"
+DAY="$(date '+%u')"
+WEEKNR="$(date '+%U')"
+
 test "$HOUR" -ge 12 -a "$HOUR" -lt 18 && GREETING="Good afternoon"
 test "$HOUR" -ge 18 -a "$HOUR" -le 23 && GREETING="Good evening"
 test "$HOUR" -ge 6 -a "$HOUR" -lt 12 && GREETING="Good morning"
 test "$HOUR" -ge 0 -a "$HOUR" -lt 6 && GREETING="Good night"
+
+# Garbage day announcement: only on mondays after 18:00 and until midnight;
+GARBAGE=''
+test "$HOUR" -ge 18 -a "$DAY" -eq 1 -a $(( $WEEKNR % 2 )) -eq 0 && GARBAGE=". $GARBAGE_WHITE_YELLOW"
+test "$HOUR" -ge 18 -a "$DAY" -eq 1 -a $(( $WEEKNR % 2 )) -ne 0 && GARBAGE=". $GARBAGE_WHITE_BLUE"
 
 speakup()
 {
@@ -43,7 +53,7 @@ case "$1" in
     "40")
 	# opened door from inside with button
 	wget -q -O - "http://127.0.0.1:8080/api/notify/door/open" > /dev/null
-	speakup "$2"
+	speakup "$2$GARBAGE"
 	;;
     "43")
 	# opened door from system (card / webinterface)
@@ -62,7 +72,7 @@ case "$1" in
 		speakup "The landlord is coming in. Hide."
 		;;
 	    *)
-		speakup "$GREETING $RES"
+		speakup "$GREETING $RES$GARBAGE"
 		;;
 	    esac
 	else
@@ -73,7 +83,7 @@ case "$1" in
     "44")
 	# door bell rang
 	wget -q -O - "http://127.0.0.1:8080/api/notify/bell" > /dev/null 
-	speakup "$2"
+	speakup "$2$GARBAGE"
 	;;
     *)
 	speakup "$2"
