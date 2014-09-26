@@ -61,24 +61,30 @@ case "$1" in
         CARDHASH="$(echo "$3"| cut -d ' ' -f 3)"
         DESC="$(echo "$3"| cut -d ' ' -f 2)"
         echo "$3"| read DESC CARDHASH
-	if [ "$DESC" = "tag" ]; then
-	    RES="$(test -f "$DBFILE" && cat "$DBFILE"| awk "\$1 == \"$CARDHASH\""|cut -f 6)"
-	    sleep 15
-	    case "$RES" in
-	    "") 
-		speakup "who are you"
+	case "$DESC" in
+	    "tag")
+		RES="$(test -f "$DBFILE" && cat "$DBFILE"| awk "\$1 == \"$CARDHASH\""|cut -f 6)"
+		sleep 15
+		case "$RES" in
+		    "") 
+			speakup "who are you"
+		    ;;
+		    "landlord")
+			speakup "The landlord is coming in. Hide."
+		    ;;
+		    *)
+			speakup "$GREETING $RES$GARBAGE"
+		    ;;
+		esac
 		;;
-	    "landlord")
-		speakup "The landlord is coming in. Hide."
+	    "webif")
+		sleep 15
+		speakup "$GREETING $CARDHASH$GARBAGE"
 		;;
 	    *)
-		speakup "$GREETING $RES$GARBAGE"
-		;;
-	    esac
-	else
-	    speakup "$2"
-	fi
-
+		speakup "$2"
+	    ;;
+	esac
 	;;
     "44")
 	# door bell rang

@@ -17,7 +17,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Mediawiki dump: mysql -uUSER -pPASSWORD DATABASE -s --skip-column-names -e "select concat ('# ',user_name, user_password) from smw_user where user_password not like '';" > ~/SMWUserData.txt
+# To get the data used by this script, you need to make a partial dump of Mediawiki database with this command: 
+# mysql -uUSER -pPASSWORD DATABASE -s --skip-column-names -e "select concat ('# ',user_name, user_password) from smw_user where user_password not like '';" > ~/SMWUserData.txt
 
 # Some static
 readonly ME=$(basename $0)
@@ -27,7 +28,7 @@ readonly SMWUSERDB="/var/local/SMWUserData.txt"
 test -x './blackknightio' && BLACKKNIGHTIO='./blackknightio'
 test -x '/usr/local/bin/blackknightio' && BLACKKNIGHTIO='/usr/local/bin/blackknightio'
 # debug
-BLACKKNIGHTIO="/usr/bin/logger"
+#BLACKKNIGHTIO="/usr/bin/logger"
 
 function urldecode()
 {
@@ -56,7 +57,7 @@ if [ -n "$DOORUSER" -a -n "$DOORPASS" -a -f "$SMWUSERDB" ]; then
     test -z "$SMWHASH" -o -z "$SMWSALT" && MISSINGPASSTEXT='<font color="red">Login incorrect.</font>'
     DOORHASH="$(echo -n "${SMWSALT}-$(echo -n "$DOORPASS"|md5sum|cut -d ' ' -f 1)"|md5sum|cut -d ' ' -f 1)" #"
     test -n "$SMWHASH" -a "$SMWHASH" != "$DOORHASH" && MISSINGPASSTEXT='<font color="red">Login incorrect.</font>'
-    test "$SMWHASH" = "$DOORHASH" -a -x "$BLACKKNIGHTIO" && $BLACKKNIGHTIO open
+    test "$SMWHASH" = "$DOORHASH" -a -x "$BLACKKNIGHTIO" && $BLACKKNIGHTIO "open" "webif $DOORUSER"
 fi
 
 # Beep!
