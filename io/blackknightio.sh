@@ -19,7 +19,7 @@
 #
 # Sample script to illustrate the calling feature of the door controller
 readonly ME="$(basename $0)"
-readonly DBFILE="/var/tmp/rfidpoll.txt"
+readonly DBFILE="/var/local/rfidpoll.txt"
 readonly GARBAGE_WHITE_BLUE="Garbage day: Please take out the white and blue garbage bags."
 readonly GARBAGE_WHITE_YELLOW="Garbage day: Please take out the white garbage bags and cardboard boxes."
 
@@ -42,7 +42,7 @@ test "$HOUR" -ge 18 -a "$DAY" -eq 1 -a $(( $WEEKNR % 2 )) -ne 0 && GARBAGE=". $G
 
 speakup()
 {
-#    test -x /home/pi/troll-remote && /home/pi/troll-remote speak "$1"
+    test -x /home/pi/troll-remote && /home/pi/troll-remote speak "$1"
     test -x "$(which flite)" && flite -t "$1"
 }
 
