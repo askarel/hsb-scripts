@@ -78,11 +78,11 @@ printf 'running.</h2><br />\n'
 printf "  <button onclick=\"window.location.href='%s?beep'\"> Beep the buzzer </button><br />\n" "$ME"
 printf '  <h3>Door open request</h3>\n'
 printf '  Use your HSBXL MediaWiki credentials to open the door<br />'
-printf "  <FORM Method=\"POST\" Action=\"%s\" enctype=\"x-www-form-urlencoded\">\n" "$ME"
+printf "  <form method=\"post\" action=\"%s\" enctype=\"x-www-form-urlencoded\">\n" "$ME"
 printf "   Username: <INPUT type=\"text\" size=20 name=\"user\">%s<br />\n" "$MISSINGUSERTEXT"
 printf "   Password: <INPUT type=\"password\" size=20 name=\"pass\">%s<br />\n" "$MISSINGPASSTEXT"
 printf "   <INPUT type=\"submit\" value=\"Open\">\n"
-printf '  </FORM>\n'
+printf '  </form>\n'
 
 #env|while read l ; do echo "$l<br />"; done
 #echo "postdata=$POSTDATA<br />"
