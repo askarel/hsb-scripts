@@ -18,7 +18,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # To get the data used by this script, you need to make a partial dump of Mediawiki database with this command: 
-# mysql -uUSER -pPASSWORD DATABASE -s --skip-column-names -e "select concat ('# ',user_name, user_password) from smw_user where user_password not like '';" > ~/SMWUserData.txt
+# mysql -uUSER -pPASSWORD DATABASE -s --skip-column-names -e "select concat ('# ',user_name, user_password, ':', user_email) from smw_user where user_password not like '';" > ~/SMWUserData.txt
+# You will then need to uncoment the users that need access.
 
 # Some static
 readonly ME=$(basename $0)
@@ -35,17 +36,22 @@ function urldecode()
     printf '%b' "${1//%/\\x}"
 }
 
-printf 'Content-type: text/html\n\n'
+printf 'Content-type: text/html\n'
 
 # Process POSTed data
 if [ "$REQUEST_METHOD" = "POST" -a -n "$CONTENT_LENGTH" ]; then
     read -n "$CONTENT_LENGTH" POSTDATA
-    DOORUSER="$(echo "$POSTDATA"| sed -n 's/^.*dooruser=\([^&]*\).*$/\1/p')"
-    DOORPASS="$(echo "$POSTDATA"| sed -n 's/^.*doorpass=\([^&]*\).*$/\1/p')"
+    DOORUSER="$(echo "$POSTDATA"| sed -n 's/^.*user=\([^&]*\).*$/\1/p')"
+    DOORPASS="$(echo "$POSTDATA"| sed -n 's/^.*pass=\([^&]*\).*$/\1/p')"
     test -z "$DOORUSER" && MISSINGUSERTEXT='<font color="red">Username is required</font>'
     test -z "$DOORPASS" && MISSINGPASSTEXT='<font color="red">Password is required</font>'
 fi
+# If we have username/password, set a cookie for the next 24 hours
+#test -n "$DOORUSER" -a -n "$DOORPASS" && printf 'Set-Cookie: dooruser=%s; doorpass=%s; path=%s; expires=%s\r\n' "$DOORUSER" "$DOORPASS" "$SCRIPT_NAME" "$(date --date='now + 1 day')"
 
+# Empty line
+echo ""
+# Datafile present and usable ?
 test -f "$SMWUSERDB" || MISSINGUSERTEXT='<font color="red">Missing database file: no login possible</font>'
 
 # Check supplied password
@@ -57,11 +63,12 @@ if [ -n "$DOORUSER" -a -n "$DOORPASS" -a -f "$SMWUSERDB" ]; then
     test -z "$SMWHASH" -o -z "$SMWSALT" && MISSINGPASSTEXT='<font color="red">Login incorrect.</font>'
     DOORHASH="$(echo -n "${SMWSALT}-$(echo -n "$DOORPASS"|md5sum|cut -d ' ' -f 1)"|md5sum|cut -d ' ' -f 1)" #"
     test -n "$SMWHASH" -a "$SMWHASH" != "$DOORHASH" && MISSINGPASSTEXT='<font color="red">Login incorrect.</font>'
-    test "$SMWHASH" = "$DOORHASH" -a -x "$BLACKKNIGHTIO" && $BLACKKNIGHTIO "open" "webif $DOORUSER"
+    test "$SMWHASH" = "$DOORHASH" -a -x "$BLACKKNIGHTIO" && $BLACKKNIGHTIO "open" "webif $DOORUSER" > /dev/null
 fi
 
 # Beep!
-test -z "$CONTENT_LENGTH" -a "$QUERY_STRING" = "beep" && test -x "$BLACKKNIGHTIO" && $BLACKKNIGHTIO beep
+test "$CONTENT_LENGTH" -eq 0 && unset CONTENT_LENGTH
+test -z "$CONTENT_LENGTH" -a "$QUERY_STRING" = "beep" && test -x "$BLACKKNIGHTIO" && $BLACKKNIGHTIO beep > /dev/null
 
 # Dumping web page
 printf '<!doctype html>\n<html>\n <head>\n  <title>%s</title>\n </head>\n <body>\n' 'The Black Knight - Crude web interface'
@@ -72,10 +79,14 @@ printf "  <button onclick=\"window.location.href='%s?beep'\"> Beep the buzzer </
 printf '  <h3>Door open request</h3>\n'
 printf '  Use your HSBXL MediaWiki credentials to open the door<br />'
 printf "  <FORM Method=\"POST\" Action=\"%s\" enctype=\"x-www-form-urlencoded\">\n" "$ME"
-printf "   Username: <INPUT type=\"text\" size=20 name=\"dooruser\">%s<br />\n" "$MISSINGUSERTEXT"
-printf "   Password: <INPUT type=\"password\" size=20 name=\"doorpass\">%s<br />\n" "$MISSINGPASSTEXT"
+printf "   Username: <INPUT type=\"text\" size=20 name=\"user\">%s<br />\n" "$MISSINGUSERTEXT"
+printf "   Password: <INPUT type=\"password\" size=20 name=\"pass\">%s<br />\n" "$MISSINGPASSTEXT"
 printf "   <INPUT type=\"submit\" value=\"Open\">\n"
 printf '  </FORM>\n'
+
+#env|while read l ; do echo "$l<br />"; done
+#echo "postdata=$POSTDATA<br />"
+
 
 #footer
 printf ' </body>\n</html>\n'
