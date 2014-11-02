@@ -17,10 +17,36 @@
 --    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 --
 
-create table if not exists hsbmembers (id int not null auto_increment primary key, 
+-- Old object: we assumed people in the database are effective members. This will disappear due to lack of flexibility.
+create table if not exists hsbmembers (id int not null auto_increment primary key,
+                                    entrydate date not null,
+                                    structuredcomm char(21) unique not null,
+                                    firstname char(30) not null,
+                                    name char(30) not null,
+                                    nickname char(30),
+                                    phonenumber char(15),
+                                    emailaddress char(60) not null,
+                                    exitdate date,
+                                    passwordhash char(60) not null default 'mouh',
+                                    flags bigint not null default 0,
+                                    birthdate date,
+                                    openpgpkeyid char(20),
+                                    activateddate date,
+                                    mail_flags bigint not null default 0,
+                                    why_member text not null,
+                                    json_data text,
+                                    sshpubkeys text
+                                    );
+
+
+-- New object - describe a person related to the hackerspace.
+-- This allow us to describe a person that is not a member, but is related to the hackerspace.
+-- It can be the neighbour(s), the landlord(s), and/or visitors. This allow us to have visitor access card.
+create table if not exists person (id int not null auto_increment primary key, 
 				    entrydate date not null, 
 				    structuredcomm char(21) unique not null, 
-				    nickname unique char(30), 
+				    lang char(6),
+				    nickname char(30) unique, 
 				    firstname char(40) not null, 
 				    name char(40) not null, 
 				    phonenumber char(20), 
@@ -31,11 +57,22 @@ create table if not exists hsbmembers (id int not null auto_increment primary ke
 --				    flags bigint not null default 0,
 				    birthdate date, 
 				    openpgpkeyid char(20), 
+				    informations text not null,
 --				    activateddate date, 
 --				    mail_flags bigint not null default 0, 
-				    informations text not null,
 --				    json_data text,
 				    sshpubkeys text
+				    );
+
+-- Contractors and providers (electricity, water, gas, internet, insurance, bank,...)
+create table if not exists contractors (id int not null auto_increment primary key,
+				    business_name char(30),
+				    customer_id char(25), -- Usually our customer number
+				    contract_id char(20),
+				    website char(80),
+				    username char(25), -- Credentials to log in to provider website
+				    password char(40),
+				    description text
 				    );
 
 create table if not exists member_sponsors (id int not null auto_increment primary key,
