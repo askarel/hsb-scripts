@@ -39,14 +39,14 @@ SQL_FIELD[6]="why_member|Please explain why you want to be a member (free text)"
 # This next block is not needed by the application and should be stored as a JSON object.
 # The inputdata function should first be made table-agnostic and cleaned up.
 SQL_FIELD[7]="birthdate|About you: Your birth date (YYYY-MM-DD)"
-SQL_FIELD[8]="birthcity|           City were you born"
-SQL_FIELD[9]="birthcountry|           In which country"
-SQL_FIELD[10]="nationalregistry|          National registry number"
-SQL_FIELD[11]="snailcommune|About your home: which commune"
-SQL_FIELD[12]="snailpostcode|                 Postal code"
-SQL_FIELD[13]="snailstreet|                  Street name"
-SQL_FIELD[14]="snailnumber|                  House/building number"
-SQL_FIELD[15]="snailbox|                  Mailbox number (leave empty if N/A)"
+#SQL_FIELD[8]="birthcity|           City were you born"
+#SQL_FIELD[9]="birthcountry|           In which country"
+#SQL_FIELD[10]="nationalregistry|          National registry number"
+#SQL_FIELD[11]="snailcommune|About your home: which commune"
+#SQL_FIELD[12]="snailpostcode|                 Postal code"
+#SQL_FIELD[13]="snailstreet|                  Street name"
+#SQL_FIELD[14]="snailnumber|                  House/building number"
+#SQL_FIELD[15]="snailbox|                  Mailbox number (leave empty if N/A)"
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
