@@ -27,7 +27,6 @@ readonly ME=$(basename $0)
 readonly CSSDIR="$DIR_AUDIOFILES/.CSS"
 readonly TEMPLATE="$CSSDIR/$ME-template.html"
 # buttons definition
-SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
 HTMLTROLLBUTTON='<BUTTON TYPE="BUTTON" VALUE="Submit" CLASS="%s soundBtn" ONCLICK="troll('\''%s'\'')">%s</BUTTON>\n'
 # HTMLSIDEBAR='<A HREF="#%s">%s</A> <br />\n'
 #internals
@@ -37,18 +36,30 @@ readonly JSMETHOD="JS"
 readonly POSTSPEAKMETHOD="SPEAK"
 readonly POSTRANDOMMETHOD="RANDOM"
 readonly PLAYPROG="paplay"
-readonly SPEECHMETHOD="flitemethod"
+readonly SPEECHMETHOD="espeakmethod"
 # readonly FOOTER="Proudly brought to you by Askarel and many contributors in HSBXL."
 #DEBUG=blaah
 
+# Speech method: using espeak
+# Parameter 1: text to say
+# parameter 2: language
+espeakmethod()
+{
+    SPEECHBIN="$(which espeak)"
+    if [ $? = 0 ]; then # Installed ? Something to say ?
+	SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
+	test -n "$1" && $SPEECHBIN "$1" 
+    fi
+}
+
 # Speech method: using flite
+# Parameter 1: text to say
 flitemethod()
 {
     SPEECHBIN="$(which flite)"
     if [ $? = 0 ]; then # Installed ? Something to say ?
+	SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
 	test -n "$1" && $SPEECHBIN -t "$1" 
-    else # Selected speech method unavailable ? Remove menu item.
-	unset SPEECHBAR
     fi
 }
 
@@ -180,7 +191,8 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 		        ;;
 		    "$POSTSPEAKMETHOD") # Speech synth method.
 			SPEECHTEXT="$(echo "$POSTDATA" | cut -d '=' -f 2-)"
-			test -n "$SPEECHMETHOD" && $SPEECHMETHOD "$SPEECHTEXT" &
+			# SPEECHLANG=
+			test -n "$SPEECHMETHOD" && $SPEECHMETHOD "$SPEECHTEXT" "$SPEECHLANG" &
 			;;
 		    *)# The rest...
 			pickfilehash "$DIR_AUDIOFILES" "$POSTDATAVAR" "$PLAYPROG"
