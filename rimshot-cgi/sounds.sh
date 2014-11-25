@@ -45,10 +45,16 @@ readonly SPEECHMETHOD="espeakmethod"
 # parameter 2: language
 espeakmethod()
 {
+    REALLANG='en'
     SPEECHBIN="$(which espeak)"
+    SPEECHLANGLIST="<option selected value=\"en\">Choose language</option>"
     if [ $? = 0 ]; then # Installed ? Something to say ?
-	SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value); return false; }\" />"
-	test -n "$1" && $SPEECHBIN "$1" 
+	for i in $($SPEECHBIN --voices|tr -s ' ' ' '| cut -d ' ' -f 3|tail -n +2); do # Build the language dropdown menu
+	    SPEECHLANGLIST="$SPEECHLANGLIST<option value=\"$i\">$i</option>"
+	    test -n "$2" -a "$i" = "$2" && REALLANG="$i" # Is language in the list ?
+	done
+	SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value + '&SPEECHLANG=' + document.getElementById('SPEECHLANG').value); return false; }\" /><SELECT ID=\"SPEECHLANG\" NAME=\"SPEECHLANG\">$SPEECHLANGLIST</SELECT>"
+	test -n "$1" && $SPEECHBIN -v "$REALLANG" "$1" 
     fi
 }
 
@@ -190,8 +196,8 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 			$PLAYPROG "$(find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"|shuf -n 1)" &
 		        ;;
 		    "$POSTSPEAKMETHOD") # Speech synth method.
-			SPEECHTEXT="$(echo "$POSTDATA" | cut -d '=' -f 2-)"
-			# SPEECHLANG=
+			SPEECHTEXT="$(echo "$POSTDATA"| sed -n 's/^.*SPEAK=\([^&]*\).*$/\1/p')"
+			SPEECHLANG="$(echo "$POSTDATA"| sed -n 's/^.*SPEECHLANG=\([^&]*\).*$/\1/p')"
 			test -n "$SPEECHMETHOD" && $SPEECHMETHOD "$SPEECHTEXT" "$SPEECHLANG" &
 			;;
 		    *)# The rest...
