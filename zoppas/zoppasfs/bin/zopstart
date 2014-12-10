@@ -1,0 +1,5 @@
+#!/bin/sh
+
+chown -R root:root /root
+sleep 2
+ssh zoppas@hal9000 -i /root/.ssh/id_rsa -y
