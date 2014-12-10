@@ -1,0 +1,289 @@
+
+!
+version 12.1
+no service pad
+service timestamps debug uptime
+service timestamps log uptime
+no service password-encryption
+!
+hostname TopSwitch
+!
+ip subnet-zero
+!
+spanning-tree mode pvst
+no spanning-tree optimize bpdu transmission
+spanning-tree extend system-id
+!
+interface FastEthernet0/1
+ description 21
+ switchport access vlan 12
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/2
+ description 23
+ switchport access vlan 12
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/3
+ description 26
+ switchport access vlan 12
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/4
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/5
+ description 10A
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/6
+ description 11A
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/7
+ description 12A
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/8
+ description 13A
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/9
+ description 14A
+ switchport access vlan 4
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/10
+ description 15A
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/11
+ description 16A (unmarked)
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/12
+ description 17A (unmarked)
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/13
+ description 18A
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/14
+ description 19A (unmarked)
+ switchport access vlan 11
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/15
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/16
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/17
+ description 00A
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/18
+ description 01A (unmarked)
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/19
+ description 02A (unmarked)
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/20
+ description 03A (unmarked)
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/21
+ description 04A (unmarked)
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/22
+ description 05A
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/23
+ description 06A
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/24
+ description 07A (unmarked)
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/25
+ description 08A Aquaponics
+ switchport access vlan 4
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/26
+ description 09A
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/27
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/28
+ description 011A (unmarked)
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/29
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/30
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/31
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/32
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/33
+ description RIPE Atlas
+ switchport access vlan 4
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/34
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/35
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/36
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/37
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/38
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/39
+ description The Black Knight
+ switchport access vlan 1
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/40
+ description VDSL Uplink
+ switchport access vlan 20
+ switchport mode access
+!
+interface FastEthernet0/41
+ description Misericable/Teleniet
+ switchport access vlan 21
+ switchport mode access
+!
+interface FastEthernet0/42
+ description Extra uplink 3
+ switchport access vlan 22
+ switchport mode access
+!
+interface FastEthernet0/43
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/44
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/45
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/46
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/47
+ description 3rd floor
+ switchport access vlan 13
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/48
+ description TRUNK to Gate
+ switchport trunk native vlan 999
+ switchport mode trunk
+!
+interface GigabitEthernet0/1
+ switchport trunk native vlan 999
+ switchport mode trunk
+!
+interface GigabitEthernet0/2
+ switchport trunk native vlan 999
+ switchport mode trunk
+!
+interface Vlan1
+ ip address 192.168.222.253 255.255.255.0
+ no ip route-cache
+!
+ip default-gateway 192.168.222.1
+ip http server
+logging 192.168.222.1
+!
+line con 0
+line vty 5 15
+!
+!
+end

@@ -1,0 +1,9 @@
+These are config files about the core network.
+
+bottomswitch.txt - Configuration for Cisco Catalyst 2950: switch above bottom switch
+topswitch.txt - Configuration for Cisco Catalyst 2950: switch at the bottom of the network cabinet
+
+This is work in progress. Expect lots of changes here.
+
+
+ 
