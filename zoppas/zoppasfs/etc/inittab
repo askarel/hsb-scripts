@@ -4,7 +4,8 @@
 ::sysinit:/etc/init.d/kickstart
 
 # Hand to the user
-::respawn:-/bin/zoppas
+#::respawn:-/bin/zoppas
+::respawn:-/bin/zopstart
 tty2::askfirst:-/bin/ash
 tty3::askfirst:-/bin/ash
 tty4::askfirst:-/bin/ash
