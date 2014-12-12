@@ -171,8 +171,8 @@ interface FastEthernet0/27
  switchport mode access
 !
 interface FastEthernet0/28
- description 011A (unmarked)
- switchport access vlan 10
+ description 011A (printer)
+ switchport access vlan 1
  switchport mode access
  spanning-tree portfast
 !

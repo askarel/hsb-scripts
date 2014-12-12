@@ -26,7 +26,7 @@ interface FastEthernet0/2
 !
 interface FastEthernet0/3
  description 27 (2nd floor printer)
- switchport access vlan 12
+ switchport access vlan 1
  switchport mode access
 !
 interface FastEthernet0/4
