@@ -1,0 +1,19 @@
+!
+vlan database
+!
+ vlan 3 name "wireless antwerpen"
+ vlan 4 name "servers"
+ vlan 6 name "IPv6 only LAN"
+ vlan 7 name "Wifi spacefed"
+ vlan 8 name "WiFi WPA"
+ vlan 9 name "WiFi open"
+ vlan 10 name "ground floor"
+ vlan 11 name "1st floor"
+ vlan 12 name "2nd floor"
+ vlan 13 name "3rd floor"
+ vlan 20 name "VDSL Uplink"
+ vlan 21 name "Misericable"
+ vlan 22 name "Extra Uplink"
+ vlan 23 name "Extra uplink 2"
+ vlan 42 name "Legacy LAN"
+exit
