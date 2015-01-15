@@ -265,6 +265,15 @@ interface FastEthernet0/48
  description TRUNK to Gate
  switchport trunk native vlan 999
  switchport mode trunk
+ spanning-tree vlan 20 cost 30
+ spanning-tree vlan 21 cost 30
+ spanning-tree vlan 22 cost 30
+ spanning-tree vlan 23 cost 30
+ spanning-tree vlan 10 cost 90
+ spanning-tree vlan 11 cost 90
+ spanning-tree vlan 12 cost 90
+ spanning-tree vlan 13 cost 90
+ spanning-tree vlan 42 cost 90
 !
 interface GigabitEthernet0/1
  switchport trunk native vlan 999
