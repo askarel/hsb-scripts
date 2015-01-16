@@ -33,13 +33,6 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-) Should go away at some point.
         // Available commands for IPC (subject to change)
         TCommands=(CMD_NONE, CMD_OPEN, CMD_TUESDAY_START, CMD_TUESDAY_STOP, CMD_ENABLE, CMD_DISABLE, CMD_BEEP, CMD_STOP);
-        TSHMVariables=RECORD // What items should be exposed for IPC.
-                Inputs, outputs, fakeinputs: TRegisterbits;
-                state, Config :TLotsofbits;
-                senderpid: TPid;
-                Command: TCommands;
-                SHMMsg:string;
-                end;
         TBusyBuzzerScratch=RECORD
                 TimeIndex: longint;
                 offset: longint;
@@ -64,6 +57,13 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TTuesdaySM=(SM_OFF, SM_LOG_START, SM_START, SM_TICK, SM_LOG_STOP);
 
         TConfigTextArray=ARRAY [0..SHITBITS] of string[20]; // Should go away at some point
+        TSHMVariables=RECORD // What items should be exposed for IPC.
+                Inputs, outputs, fakeinputs: TRegisterbits;
+                state, Config :TLotsofbits;
+                senderpid: TPid;
+                Command: TCommands;
+                SHMMsg:string;
+                end;
 
 CONST   CLOCKPIN=7;  // 74LS673 pins
         STROBEPIN=8;
@@ -169,9 +169,9 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                           'Mailbox','Tripwire','opendoorbtn','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
-        SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11; SC_DISABLED=12; SC_HOLDER=13;
-        // Status bit block only
-        S_DEMOMODE=63; S_TUESDAY=62; S_STOP=61; S_HUP=60;
+        SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11; SC_DISABLED=12; SC_HOLDER=13; SC_BUZZER_DOORBELL=14;
+        // Status bit block only. This should hopefully go away
+        S_DEMOMODE=63; S_STOP=61; S_HUP=60;
 
         // Static config
         STATIC_CONFIG_STR: TConfigTextArray=('Maglock 1',
@@ -187,9 +187,11 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              'Door unlock button',
                                              'Handle unlock only',
                                              'Software-disabled',
-                                             '', '',  '', '', '', '', '', '', '', '', '', '', '',
+                                             'Hold-open device',
+                                             'Buzzer-as-doorbell',
+                                             '', '', '', '', '', '', '', '', '', '', '',
                                              '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
-                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', 'HUP received', 'Stop order', 'Tuesday mode', 'Demo mode');
+                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', 'HUP received', 'Stop order', '', 'Demo mode');
 
         STATIC_CONFIG: TLotsOfBits=(false,  // SC_MAGLOCK1 (Maglock 1 installed)
                                     true, // SC_MAGLOCK2 (Maglock 2 not installed)
@@ -205,7 +207,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     false, // SC_HANDLE (Unlock with the handle only: not recommended in HSBXL)
                                     false, // SC_DISABLED (system is software-disabled)
                                     false, // SC_HOLDER (magnet to hold the door open while entering with a bike)
-                                    false, false, false, false, false, false, false, false, false, false, false, false, false,
+                                    true, // SC_BUZZER_DOORBELL (The buzzer is used as a doorbell)
+                                    false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false,
@@ -218,8 +221,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
 VAR     GPIO_Driver: TIODriver;
         GpF: TIOPort;
         debounceinput_array: ARRAY[false..true, 0..15] of byte; // That one has to be global. No way around it.
+        B_DEMOMODE, B_HUP, B_STOP: boolean;     // Reason for global: it is modified by the signal handler
         CurrentState: TLotsOfBits;   // Reason for global: it is modified by the signal handler
-//        msgflags: TLotsOfBits; // Reason for global: message state must be preserved (avoid spamming the syslog)
         LockBuzzerTracker, BuzzerTracker: TBusyBuzzerScratch;
 
 ///////////// COMMON LIBRARY FUNCTIONS /////////////
@@ -250,9 +253,9 @@ end;
 
 // Decrement the timer variable
 procedure busy_delay_tick (var waitvar: longint; ticklength: word);
-var mytick: word;
+//var mytick: word;
 begin
- if ticklength <= 0 then mytick:=1 else mytick:=ticklength;
+// if ticklength <= 0 then mytick:=1 else mytick:=ticklength;
  if waitvar >= 0 then waitvar:=waitvar - ticklength else waitvar:=0;
 end;
 
@@ -522,7 +525,6 @@ var shmname: string;
     doorstate: TDoorstates;
     tuesdaystate: TTuesdaySM;
     open_wait, tuesdaytimer, beepdelay, Mag1CloseWait, Mag2CloseWait, Mag1LockWait, Mag2LockWait: longint;
-    sys_open_order: boolean;
 begin
  doorstate:=DS_ENTRY;
  tuesdaystate:=SM_OFF;
@@ -550,7 +552,6 @@ begin
     end;
 
    repeat
-    sys_open_order:=false;
     if CurrentState[S_DEMOMODE] then // I/O cycle
      begin // Fake I/O
       inputs:=debounceinput (SHMPointer^.fakeinputs, MAXBOUNCES);
@@ -566,7 +567,7 @@ begin
        CMD_ENABLE: if doorstate=DS_DISABLED then doorstate:=DS_LOG_ENABLED;
        CMD_DISABLE: if doorstate<>DS_DISABLED then doorstate:=DS_LOG_DISABLED;
        CMD_STOP: CurrentState[S_STOP]:=true;
-       CMD_OPEN: sys_open_order:=true;
+       CMD_OPEN: if (doorstate=DS_PARTIAL1) or (doorstate=DS_PARTIAL2) or (doorstate=DS_LOCKED) or (doorstate=DS_NOMAG) then doorstate:=DS_LOG_UNLOCK_SYSTEM;
        CMD_BEEP: beepdelay:=BUZZERCHIRP; // Small beep
        CMD_TUESDAY_START: tuesdaystate:=SM_LOG_START; // Start tuesday timer
        CMD_TUESDAY_STOP: tuesdaystate:=SM_LOG_STOP; // Early stop of the tuesday mode
@@ -688,8 +689,8 @@ begin
        if STATIC_CONFIG[SC_MAGLOCK1] and STATIC_CONFIG[SC_MAGLOCK2] then // Mag 1 and 2
         begin
          if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOG_LOCKED; // Fully locked
-         if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and busy_delay_is_expired (mag2lockwait) then doorstate:=DS_PARTIAL1; // Partial lock
-         if (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and busy_delay_is_expired (mag1lockwait) then doorstate:=DS_PARTIAL2; // Partial lock
+         if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and busy_delay_is_expired (mag2lockwait) then doorstate:=DS_LOG_PARTIAL1; // Partial lock
+         if (inputs[MAGLOCK2_RETURN] = IS_CLOSED) and busy_delay_is_expired (mag1lockwait) then doorstate:=DS_LOG_PARTIAL2; // Partial lock
          if busy_delay_is_expired (mag1lockwait) and busy_delay_is_expired (mag2lockwait) then doorstate:=DS_LOG_2MAGS_NOT_LOCKED; // No magnet locked
         end;
        if (not STATIC_CONFIG[SC_MAGLOCK1]) and (not STATIC_CONFIG[SC_MAGLOCK2]) then // No magnet
@@ -746,11 +747,6 @@ begin
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
-       if sys_open_order then
-        begin
-         sys_open_order:=false;
-         doorstate:=DS_LOG_UNLOCK_SYSTEM;
-        end;
       end;
      DS_LOG_PARTIAL2:
       begin
@@ -764,11 +760,6 @@ begin
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
-       if sys_open_order then
-        begin
-         sys_open_order:=false;
-         doorstate:=DS_LOG_UNLOCK_SYSTEM;
-        end;
       end;
      DS_LOG_2MAGS_NOT_LOCKED:
       begin
@@ -795,7 +786,7 @@ begin
 {         and (inputs[MAGLOCK1_RETURN] = IS_CLOSED)
          and (inputs[MAGLOCK2_RETURN] = IS_CLOSED)
  }       end;
-      end;
+     end;
      DS_LOG_NOMAG:
       begin
        log_single_door_event (MSG_CLOSED_NOMAG, LOG_ITEM_TEXT_EN, '');
@@ -807,11 +798,6 @@ begin
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
-       if sys_open_order then
-        begin
-         sys_open_order:=false;
-         doorstate:=DS_LOG_UNLOCK_SYSTEM;
-        end;
       end;
      DS_LOG_LOCKED:
       begin
@@ -825,51 +811,45 @@ begin
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
-       if sys_open_order then
-        begin
-         sys_open_order:=false;
-         doorstate:=DS_LOG_UNLOCK_SYSTEM;
-        end;
-      end;
-     DS_NONE: // Empty state (for transition)
-      begin
       end;
      end; // End of door state machine
 
-      // Start of mailbox state machine
-      // End of mailbox state machine
-      // Process beep command (independent from state machine flow)
+     // Start of mailbox state machine
+     // End of mailbox state machine
+
+     // Start of tamper switch state machine
+     // End of tamper switch state machine
+
+     // Start of tripwire state machine
+     // End of tripwire state machine
+
+     // Start of doorbell state machine (stuck closed detection and buzzer-as-a-doorbell)
+     // End of doorbell state machine
+
+     // Start of presence detection state machine
+     // End of presence detection state machine
+
+     // Start of doorhandle state machine
+     // End of doorhandle state machine
+
+     // Start of open button detection state machine (stuck closed detection)
+     // End of open button detection state machine
+
+    // Process beep command (independent from state machine flow)
     busy_delay_tick (beepdelay, 16); // tick...
     outputs[BUZZER_OUTPUT]:=(not busy_delay_is_expired (beepdelay)) or outputs[BUZZER_OUTPUT]; // The buzzer might be active elsewhere
 
-//////// End of finite state machine, start of legacy stuff ////////
 (*
-      // The maglocks sensing circuit has capacitors. They may still be charged when we turn them off,
-      // leaving the return contact closed when we turn the magnet off. Wait a bit before raising an alarm.
-      if (inputs[MAGLOCK1_RETURN] = IS_OPEN) then Mag1CloseWait:=MAGWAIT else if not outputs[MAGLOCK1_RELAY] then busy_delay_tick (Mag1CloseWait, 16);
-      if (inputs[MAGLOCK2_RETURN] = IS_OPEN) then Mag2CloseWait:=MAGWAIT else if not outputs[MAGLOCK2_RELAY] then busy_delay_tick (Mag2CloseWait, 16);
-      // Reset closing timers when magnets are off
-      if not outputs[MAGLOCK1_RELAY] then Mag1LockWait:=LOCKWAIT;
-      if not outputs[MAGLOCK2_RELAY] then Mag2LockWait:=LOCKWAIT;
-      // Start the closing timers when the magnets are on. Stop ticking when the shoe is on the magnet -> door is locked.
-      if outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_OPEN) then busy_delay_tick (Mag1LockWait, 16);
-      if outputs[MAGLOCK2_RELAY] and (inputs[MAGLOCK2_RETURN] = IS_OPEN) then busy_delay_tick (Mag2LockWait, 16);
-
       { Corner cases to fix:
-        - tuesday mode: make it time delayed
         - 'Trigger happy' filtering
         - Stuck closed detection
-      }
-
-      // Process beep commands
-      if door_is_locked and STATIC_CONFIG[SC_BUZZER] then
-       outputs[BUZZER_OUTPUT]:=(busy_buzzer (buzzertracker, SND_MISTERCASH, 16) or outputs[BUZZER_OUTPUT])
-       else fillchar (buzzertracker, sizeof (buzzertracker), 0);
-
-      // Process the log/action bits (msg 26-50)
+     }
       log_door_event (msgflags, 27, ((inputs[MAILBOX] = IS_CLOSED) and STATIC_CONFIG[SC_MAILBOX]), 'There is mail in the mailbox', '');
       log_door_event (msgflags, 29, ((inputs[TRIPWIRE_LOOP] = IS_OPEN) and STATIC_CONFIG[SC_TRIPWIRE_LOOP]), 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN', '');
       log_door_event (msgflags, 30, ((inputs[BOX_TAMPER_SWITCH] = IS_OPEN) and STATIC_CONFIG[SC_BOX_TAMPER_SWITCH]), 'Control box is being opened', '');
+      log_door_event (msgflags, 37, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
+      log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
+
       log_door_event (msgflags, 31, (busy_delay_is_expired (Mag1CloseWait) and STATIC_CONFIG[SC_MAGLOCK1]),
        'Check maglock 1 and it''s wiring: maglock is off but i see it closed', '');
       log_door_event (msgflags, 32, (busy_delay_is_expired (Mag2CloseWait) and STATIC_CONFIG[SC_MAGLOCK2]),
@@ -878,10 +858,6 @@ begin
        'Wiring error: maglock 1 is disabled in configuration but i see it closed', '');
       log_door_event (msgflags, 34, ((inputs[MAGLOCK2_RETURN] = IS_CLOSED) and not outputs[MAGLOCK2_RELAY] and not STATIC_CONFIG[SC_MAGLOCK2]),
        'Wiring error: maglock 2 is disabled in configuration but i see it closed', '');
-      if msgflags[36] then log_door_event (msgflags, 35, (not CurrentState[S_TUESDAY]), 'Tuesday mode inactive', '');
-      log_door_event (msgflags, 36, CurrentState[S_TUESDAY], 'Tuesday mode active. Ring doorbell to enter', '');
-      log_door_event (msgflags, 37, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
-      log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
       log_door_event (msgflags, 45, (door_is_locked and (inputs [DOOR_CLOSED_SWITCH] = IS_OPEN)),
        'Check wiring of door switch: door is locked but i see it open', '');
       log_door_event (msgflags, 46, (door_is_locked and outputs[MAGLOCK1_RELAY] and (inputs[MAGLOCK1_RETURN] = IS_OPEN) and STATIC_CONFIG[SC_MAGLOCK1]),
