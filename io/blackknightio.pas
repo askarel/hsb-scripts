@@ -52,13 +52,17 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                    MSG_OPEN_HANDLE_AND_LIGHT, MSG_OPEN_HANDLE, MSG_OPEN_SYSTEM, MSG_OPEN_DOORBELL, MSG_DOORBELL, MSG_DOORSWITCH_FAIL, MSG_MAG1_FAIL,
                    MSG_MAG2_FAIL, MSG_BAILOUT);
         TLogItemText= ARRAY[TLogItems] of pchar;
-        // Simple state machine definition
-        TSimpleSM=(SM_ENTRY, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED);
+        // Simple universal state machine definition (let's see how far it flies)
+        TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED);
+        // Tuesday mode state machine
         TTuesdaySM=(SM_OFF, SM_LOG_START, SM_START, SM_TICK, SM_LOG_STOP);
 
         TConfigTextArray=ARRAY [0..SHITBITS] of string[20]; // Should go away at some point
         TSHMVariables=RECORD // What items should be exposed for IPC.
                 Inputs, outputs, fakeinputs: TRegisterbits;
+                DoorState: TDoorStates;
+                TuesdayState: TTuesdaySM;
+                MailboxState, TamperState, TripwireState: TSimpleSM;
                 state, Config :TLotsofbits;
                 senderpid: TPid;
                 Command: TCommands;
@@ -87,9 +91,9 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                         'Door is locked.',
                                         'Door is open',
                                         'Door is closed',
-                                                  'There is mail in the mailbox',
-                                                  'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN',
-                                                  'Control box is being opened',
+                                        'There is mail in the mailbox',
+                                        'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN',
+                                        'Control box is being opened',
                                                   'Check maglock 1 and it''s wiring: maglock is off but i see it closed',
                                                   'Check maglock 2 and it''s wiring: maglock is off but i see it closed',
                                                   'Wiring error: maglock 1 is disabled in configuration but i see it closed',
@@ -524,10 +528,11 @@ var shmname: string;
     dryrun: byte;
     doorstate: TDoorstates;
     tuesdaystate: TTuesdaySM;
+    MailboxSM, TripwireSM, TamperSM, DoorbellSM, PresenceSM, OpenButtonSM, HandleSM: TSimpleSM;
     open_wait, tuesdaytimer, beepdelay, Mag1CloseWait, Mag2CloseWait, Mag1LockWait, Mag2LockWait: longint;
 begin
- doorstate:=DS_ENTRY;
- tuesdaystate:=SM_OFF;
+ doorstate:=DS_ENTRY; MailboxSM:=SM_ENTRY; TripwireSM:=SM_ENTRY; TamperSM:=SM_ENTRY; DoorbellSM:=SM_ENTRY; // Initialize the state machines
+ PresenceSM:=SM_ENTRY; OpenButtonSM:=SM_ENTRY; HandleSM:=SM_ENTRY; tuesdaystate:=SM_OFF;
  dryrun:=MAXBOUNCES+2;
  open_wait:=0; beepdelay:=0; Mag1CloseWait:=MAGWAIT; Mag2CloseWait:=MAGWAIT; Mag1LockWait:=LOCKWAIT; Mag2LockWait:=LOCKWAIT; // Initialize some timers
  fillchar (CurrentState, sizeof (CurrentState), 0);
@@ -815,21 +820,55 @@ begin
      end; // End of door state machine
 
      // Start of mailbox state machine
+     case MailboxSM of
+      SM_ENTRY: if STATIC_CONFIG[SC_MAILBOX] then MailboxSM:=SM_ACTIVE;
+      SM_ACTIVE: if (inputs[MAILBOX] = IS_CLOSED) then MailboxSM:=SM_LOG_CLOSED else MailboxSM:=SM_OPEN;
+      SM_LOG_CLOSED:
+       begin
+        log_single_door_event (MSG_MAILBOX, LOG_ITEM_TEXT_EN, '');
+        MailboxSM:=SM_CLOSED;
+       end;
+      SM_CLOSED: if (inputs[MAILBOX] = IS_OPEN) then MailboxSM:=SM_OPEN;
+      SM_OPEN:  if (inputs[MAILBOX] = IS_CLOSED) then MailboxSM:=SM_LOG_CLOSED;
+     end;
      // End of mailbox state machine
 
      // Start of tamper switch state machine
+     case TamperSM of
+      SM_ENTRY: if STATIC_CONFIG[SC_BOX_TAMPER_SWITCH] then TamperSM:=SM_ACTIVE;
+      SM_ACTIVE: if (inputs[BOX_TAMPER_SWITCH] = IS_CLOSED) then TamperSM:=SM_CLOSED else TamperSM:=SM_LOG_OPEN;
+      SM_LOG_OPEN:
+       begin
+        log_single_door_event (MSG_BOX_TAMPER, LOG_ITEM_TEXT_EN, '');
+        TamperSM:=SM_OPEN;
+       end;
+      SM_CLOSED: if (inputs[BOX_TAMPER_SWITCH] = IS_OPEN) then TamperSM:=SM_LOG_OPEN;
+      SM_OPEN:  if (inputs[BOX_TAMPER_SWITCH] = IS_CLOSED) then TamperSM:=SM_CLOSED;
+     end;
      // End of tamper switch state machine
 
      // Start of tripwire state machine
+     case TripwireSM of
+      SM_ENTRY: if STATIC_CONFIG[SC_TRIPWIRE_LOOP] then TripwireSM:=SM_ACTIVE;
+      SM_ACTIVE: if (inputs[TRIPWIRE_LOOP] = IS_CLOSED) then TripwireSM:=SM_CLOSED else TripwireSM:=SM_LOG_OPEN;
+      SM_LOG_OPEN:
+       begin
+        log_single_door_event (MSG_TRIPWIRE, LOG_ITEM_TEXT_EN, '');
+        TripwireSM:=SM_OPEN;
+       end;
+      SM_CLOSED: if (inputs[TRIPWIRE_LOOP] = IS_OPEN) then TripwireSM:=SM_LOG_OPEN;
+      SM_OPEN:  if (inputs[TRIPWIRE_LOOP] = IS_CLOSED) then TripwireSM:=SM_CLOSED;
+     end;
      // End of tripwire state machine
 
      // Start of doorbell state machine (stuck closed detection and buzzer-as-a-doorbell)
      // End of doorbell state machine
+//        TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED);
 
      // Start of presence detection state machine
      // End of presence detection state machine
 
-     // Start of doorhandle state machine
+     // Start of doorhandle state machine (stuck closed detection)
      // End of doorhandle state machine
 
      // Start of open button detection state machine (stuck closed detection)
