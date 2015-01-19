@@ -37,7 +37,7 @@ function bits2word (inputbits: TRegisterbits): word;
 function bits2str (inputbits: TRegisterbits): string;
 procedure wastecpucycles (waste: word);
 procedure ls673_write (pin2, pin6, pin5: TSetBit; data: TRegisterbits);
-function ls150_read (address:TSetAddress): TRegisterbits;
+function ls150_read (address:TSetAddress; inputbit:TGetBit): TRegisterbits;
 
 
 IMPLEMENTATION
@@ -75,13 +75,14 @@ begin
  for i:=0 to waste do
   asm
    nop // How handy... This is portable ASM... :-)
+   nop
   end;
 end;
 
 // Send out a word to the 74LS673
 // This procedure know how to *talk* to the chips, but not how to access them
 procedure ls673_write (pin2, pin6, pin5: TSetBit; data: TRegisterbits);
-CONST WASTE=10;
+CONST WASTE=40;
 var i: byte;
 begin
  for i:=0 to 15 do
@@ -100,7 +101,7 @@ end;
 
 // Read all inputs from 74LS150. Setting the address of the multiplexer
 // is implementation specific, use a callback to set the address.
-function ls150_read (address:TSetAddress): TRegisterbits;
+function ls150_read (address:TSetAddress; inputbit:TGetBit): TRegisterbits;
 begin
 
 end;
