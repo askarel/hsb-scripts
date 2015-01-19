@@ -22,12 +22,9 @@ program blackknightio;
  The PiGPIO library included in this repository is (c) 2013 Gábor Szöllösi
 }
 
-// This is a quick hack to check if everything works
-
 uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile, unix, chip7400, typinfo;
 
-CONST   SHITBITS=63; // Should go away at some point
-        TUESDAY_DEFAULT_TIME=9000; // How many milliseconds for the tuesday timer ?
+CONST   SHITBITS=31; // Should go away at some point
 
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-) Should go away at some point.
@@ -40,20 +37,21 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TBuzzPattern= ARRAY [0..20] OF LONGINT;
         // Door states
         Tdoorstates=(DS_ENTRY, DS_LOG_DISABLED, DS_DISABLED, DS_LOG_ENABLED, DS_ENABLED, DS_LOG_PANIC, DS_PANIC, DS_LOG_OPEN, DS_OPEN, DS_LOG_CLOSED, DS_CLOSED,
-                  DS_NONE, DS_LOG_LOCKED, DS_LOCKED, DS_UNLOCKED, DS_LOG_PARTIAL1, DS_PARTIAL1, DS_LOG_PARTIAL2, DS_PARTIAL2, DS_NOT_LOCKED,
+                  DS_NONE, DS_LOG_LOCKED, DS_LOCKED, DS_UNLOCKED, DS_LOG_PARTIAL1, DS_PARTIAL1, DS_LOG_PARTIAL2, DS_PARTIAL2, DS_NOT_LOCKED, DS_LOG_NOW_LOCKED,
                   DS_LOG_NOMAG, DS_NOMAG, DS_LOG_MAG1_NOT_LOCKED, DS_LOG_MAG2_NOT_LOCKED, DS_LOG_2MAGS_NOT_LOCKED, DS_NOT_CLOSED, DS_LOG_STAY_WIDE_OPEN,
                   DS_STAY_WIDE_OPEN, DS_LOG_UNLOCK_SYSTEM, DS_LOG_UNLOCK_MONITOR, DS_LOG_UNLOCK_CMDLINE, DS_LOG_UNLOCK_HANDLE, DS_LOG_UNLOCK_HANDLEANDLIGHT,
                   DS_LOG_UNLOCK_BUTTON, DS_LOG_UNLOCK_DOORBELL);
         // Available error messages
         TLogItems=(MSG_DEMO, MSG_SYS_DISABLED, MSG_SYS_ENABLED, MSG_PANIC, MSG_MAG1PARTIAL, MSG_MAG2PARTIAL, MSG_2MAGS_NOLATCH, MSG_MAG1_NOLATCH,
-                   MSG_MAG2_NOLATCH, MSG_NOMAG_CFG, MSG_CLOSED_NOMAG, MSG_DOORISLOCKED, MSG_DOORISOPEN, MSG_DOORISCLOSED,
-                   MSG_MAILBOX, MSG_TRIPWIRE, MSG_BOX_TAMPER, MSG_MAG1_WIRING, MSG_MAG2_WIRING, MSG_MAG1_DISABLED_BUT_CLOSED,
+                   MSG_MAG2_NOLATCH, MSG_NOMAG_CFG, MSG_CLOSED_NOMAG, MSG_NOW_LOCKED, MSG_DOORISLOCKED, MSG_DOORISOPEN, MSG_DOORISCLOSED,
+                   MSG_MAILBOX, MSG_MAILBOX_THANKS, MSG_TRIPWIRE, MSG_BOX_TAMPER, MSG_MAG1_WIRING, MSG_MAG2_WIRING, MSG_MAG1_DISABLED_BUT_CLOSED,
                    MSG_MAG2_DISABLED_BUT_CLOSED, MSG_TUESDAY_INACTIVE, MSG_TUESDAY_ACTIVE, MSG_LIGHT_ON, MSG_OPEN_BUTTON,
-                   MSG_OPEN_HANDLE_AND_LIGHT, MSG_OPEN_HANDLE, MSG_OPEN_SYSTEM, MSG_OPEN_DOORBELL, MSG_DOORBELL, MSG_DOORSWITCH_FAIL, MSG_MAG1_FAIL,
+                   MSG_OPEN_HANDLE_AND_LIGHT, MFS_FORBIDDEN_HANDLE, MSG_OPEN_HANDLE, MSG_OPEN_SYSTEM, MSG_OPEN_DOORBELL, MSG_DOORBELL, MSG_DOORSWITCH_FAIL, MSG_MAG1_FAIL,
                    MSG_MAG2_FAIL, MSG_BAILOUT);
         TLogItemText= ARRAY[TLogItems] of pchar;
         // Simple universal state machine definition (let's see how far it flies)
-        TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED);
+        TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED,
+                   SM_REALLY_CLOSED, SM_LOG_STUCK_CLOSED, SM_STUCK_CLOSED);
         // Tuesday mode state machine
         TTuesdaySM=(SM_OFF, SM_LOG_START, SM_START, SM_TICK, SM_LOG_STOP);
 
@@ -88,10 +86,12 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                         'Maglock 2 did not latch: Door is not locked',
                                         'No magnetic lock installed. This configuration is NOT recommended.',
                                         'Door is closed. Cannot see if it is locked',
+                                        'Door is now locked. Thank you.',
                                         'Door is locked.',
                                         'Door is open',
                                         'Door is closed',
                                         'There is mail in the mailbox',
+                                        'Thank you for clearing the mail',
                                         'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN',
                                         'Control box is being opened',
                                                   'Check maglock 1 and it''s wiring: maglock is off but i see it closed',
@@ -103,6 +103,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                                   'Hallway light is on',
                                         'Door opened from button',
                                         'Door opened from handle with the light on',
+                                                'You are not allowed to use the handle',
                                         'Door opened from handle',
                                         'Order from system',
                                         'Tuesday mode: door opened by doorbell',
@@ -120,6 +121,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         LOCKWAIT=2000;  // Maximum delay between leaf switch closure and maglock feedback switch closure (if delay expired, alert that the door is not closed properly
         MAGWAIT=1500;   // Reaction delay of the maglock output relay (the PCB has capacitors)
         BUZZERCHIRP=150; // Small beep delay
+        TUESDAY_DEFAULT_TIME=90000; // tuesday timer
+        ERROR_REPEAT=60000; // Error repetition
         SND_MISTERCASH: TBuzzPattern=(50, 100, 50, 100, 50, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         SND_DOORNOTCLOSED: TBuzzPattern=(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, -1); // Be a noisy asshole
         // Places to look for the external script
@@ -175,7 +178,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
         SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11; SC_DISABLED=12; SC_HOLDER=13; SC_BUZZER_DOORBELL=14;
         // Status bit block only. This should hopefully go away
-        S_DEMOMODE=63; S_STOP=61; S_HUP=60;
+        S_DEMOMODE=31; S_STOP=30; S_HUP=29;
 
         // Static config
         STATIC_CONFIG_STR: TConfigTextArray=('Maglock 1',
@@ -194,8 +197,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              'Hold-open device',
                                              'Buzzer-as-doorbell',
                                              '', '', '', '', '', '', '', '', '', '', '',
-                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', '', '', '', '',
-                                             '', '', '', '', '', '', '', '', '',  '', '', '', '', '', '', 'HUP received', 'Stop order', '', 'Demo mode');
+                                             '', '', '',  'HUP received', 'Stop order', 'Demo mode');
 
         STATIC_CONFIG: TLotsOfBits=(false,  // SC_MAGLOCK1 (Maglock 1 installed)
                                     true, // SC_MAGLOCK2 (Maglock 2 not installed)
@@ -213,8 +215,6 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     false, // SC_HOLDER (magnet to hold the door open while entering with a bike)
                                     true, // SC_BUZZER_DOORBELL (The buzzer is used as a doorbell)
                                     false, false, false, false, false, false, false, false, false, false, false, false,
-                                    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
                                     false,
                                     false, // Unused
                                     false, // Unused
@@ -257,9 +257,7 @@ end;
 
 // Decrement the timer variable
 procedure busy_delay_tick (var waitvar: longint; ticklength: word);
-//var mytick: word;
 begin
-// if ticklength <= 0 then mytick:=1 else mytick:=ticklength;
  if waitvar >= 0 then waitvar:=waitvar - ticklength else waitvar:=0;
 end;
 
@@ -332,6 +330,7 @@ end;
 
 // This run as another process and will monitor the SHM buffer for changes.
 // If in demo mode, you will be able to fiddle the inputs
+// This will need a substantial rewrite
 procedure run_test_mode (daemonpid: TPid);
 var  shmid: longint;
      shmkey: TKey;
@@ -603,7 +602,7 @@ begin
        if tuesdaytimer=0 then tuesdaystate:=SM_LOG_STOP;
        busy_delay_tick (tuesdaytimer, 16);
       end;
-     SM_LOG_STOP:
+     SM_LOG_STOP: // stop the timer
       begin
        log_single_door_event (MSG_TUESDAY_INACTIVE, LOG_ITEM_TEXT_EN, '');
        tuesdaystate:=SM_OFF;
@@ -627,7 +626,6 @@ begin
      DS_DISABLED: // System disabled
       begin
        outputs:=word2bits (0); // Set all outputs to zero.
-       //if not CurrentState[SC_DISABLED] then doorstate:=DS_ENABLED;
       end;
      DS_LOG_ENABLED: // Log the door enabled event
       begin
@@ -637,7 +635,6 @@ begin
       end;
      DS_ENABLED: // System enabled
       begin
-       // if CurrentState[SC_DISABLED] then doorstate:=DS_DISABLED;
        if inputs[DOOR_CLOSED_SWITCH] = IS_CLOSED then doorstate:=DS_CLOSED else doorstate:=DS_OPEN;
       end;
      DS_LOG_PANIC: // Log the panic event
@@ -684,12 +681,12 @@ begin
        if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) then  // Mag 1 only
         begin
          if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) then doorstate:=DS_LOG_LOCKED;
-         if busy_delay_is_expired (mag1lockwait) then doorstate:=DS_LOG_MAG1_NOT_LOCKED; // Magnet 1 did not lock
+         if busy_delay_is_expired (mag1lockwait) and (inputs[MAGLOCK1_RETURN] = IS_OPEN) then doorstate:=DS_LOG_MAG1_NOT_LOCKED; // Magnet 1 did not lock
         end;
        if (not STATIC_CONFIG[SC_MAGLOCK1]) and STATIC_CONFIG[SC_MAGLOCK2] then // Mag 2 only
         begin
          if (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOG_LOCKED;
-         if busy_delay_is_expired (mag2lockwait) then doorstate:=DS_LOG_MAG2_NOT_LOCKED; // Magnet 2 did not lock
+         if busy_delay_is_expired (mag2lockwait) and (inputs[MAGLOCK2_RETURN] = IS_OPEN) then doorstate:=DS_LOG_MAG2_NOT_LOCKED; // Magnet 2 did not lock
         end;
        if STATIC_CONFIG[SC_MAGLOCK1] and STATIC_CONFIG[SC_MAGLOCK2] then // Mag 1 and 2
         begin
@@ -784,8 +781,8 @@ begin
      DS_NOT_LOCKED: // Door is not locked !!
       begin
        if STATIC_CONFIG[SC_BUZZER] then outputs[BUZZER_OUTPUT]:=busy_buzzer (buzzertracker, SND_DOORNOTCLOSED, 16);
-       if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) then doorstate:=DS_LOG_LOCKED; // Mag 1 only
-       if (not STATIC_CONFIG[SC_MAGLOCK1]) and STATIC_CONFIG[SC_MAGLOCK2] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOG_LOCKED; // Mag 2 only
+       if STATIC_CONFIG[SC_MAGLOCK1] and (not STATIC_CONFIG[SC_MAGLOCK2]) and (inputs[MAGLOCK1_RETURN] = IS_CLOSED) then doorstate:=DS_LOG_NOW_LOCKED; // Mag 1 only
+       if (not STATIC_CONFIG[SC_MAGLOCK1]) and STATIC_CONFIG[SC_MAGLOCK2] and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOG_NOW_LOCKED; // Mag 2 only
        if STATIC_CONFIG[SC_MAGLOCK1] and STATIC_CONFIG[SC_MAGLOCK2] then // Mag 1 and 2
         begin
 {         and (inputs[MAGLOCK1_RETURN] = IS_CLOSED)
@@ -803,6 +800,11 @@ begin
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
+      end;
+     DS_LOG_NOW_LOCKED:
+      begin
+       log_single_door_event (MSG_NOW_LOCKED, LOG_ITEM_TEXT_EN, '');
+       doorstate:=DS_LOCKED;
       end;
      DS_LOG_LOCKED:
       begin
@@ -828,8 +830,13 @@ begin
         log_single_door_event (MSG_MAILBOX, LOG_ITEM_TEXT_EN, '');
         MailboxSM:=SM_CLOSED;
        end;
-      SM_CLOSED: if (inputs[MAILBOX] = IS_OPEN) then MailboxSM:=SM_OPEN;
-      SM_OPEN:  if (inputs[MAILBOX] = IS_CLOSED) then MailboxSM:=SM_LOG_CLOSED;
+      SM_LOG_OPEN:
+       begin
+        log_single_door_event (MSG_MAILBOX_THANKS, LOG_ITEM_TEXT_EN, '');
+        MailboxSM:=SM_OPEN;
+       end;
+      SM_CLOSED: if (inputs[MAILBOX] = IS_OPEN) then MailboxSM:=SM_LOG_OPEN;
+      SM_OPEN: if (inputs[MAILBOX] = IS_CLOSED) then MailboxSM:=SM_LOG_CLOSED;
      end;
      // End of mailbox state machine
 
@@ -861,17 +868,34 @@ begin
      end;
      // End of tripwire state machine
 
-     // Start of doorbell state machine (stuck closed detection and buzzer-as-a-doorbell)
+//  TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED, SM_LOG_STUCK_CLOSED, SM_STUCK_CLOSED);
+     // Start of doorbell state machine (stuck closed detection, 50 Hz eater and buzzer-as-a-doorbell)
+     // 50 Hz eater: Virtual capacitor concept: full=255; empty=0; charge: cap:=cap+3; discharge: cap:=cap-2;
+     case DoorbellSM of
+      SM_ENTRY: DoorbellSM:=SM_ACTIVE; // Really ?
+//      SM_ACTIVE: if (inputs[MAILBOX] = IS_CLOSED) then MailboxSM:=SM_LOG_CLOSED else MailboxSM:=SM_OPEN;
+//      SM_LOG_CLOSED:
+//       begin
+//        log_single_door_event (MSG_MAILBOX, LOG_ITEM_TEXT_EN, '');
+//        MailboxSM:=SM_CLOSED;
+//       end;
+//      SM_LOG_OPEN:
+//       begin
+//        log_single_door_event (MSG_MAILBOX_THANKS, LOG_ITEM_TEXT_EN, '');
+//        MailboxSM:=SM_OPEN;
+//       end;
+//      SM_CLOSED: if (inputs[MAILBOX] = IS_OPEN) then MailboxSM:=SM_LOG_OPEN;
+//      SM_OPEN: if (inputs[MAILBOX] = IS_CLOSED) then MailboxSM:=SM_LOG_CLOSED;
+     end;
      // End of doorbell state machine
-//        TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED);
 
-     // Start of presence detection state machine
+     // Start of presence detection state machine, with 50 Hz eater
      // End of presence detection state machine
 
      // Start of doorhandle state machine (stuck closed detection)
      // End of doorhandle state machine
 
-     // Start of open button detection state machine (stuck closed detection)
+     // Start of open button detection state machine (stuck closed detection and 50 Hz eater)
      // End of open button detection state machine
 
     // Process beep command (independent from state machine flow)
@@ -883,9 +907,6 @@ begin
         - 'Trigger happy' filtering
         - Stuck closed detection
      }
-      log_door_event (msgflags, 27, ((inputs[MAILBOX] = IS_CLOSED) and STATIC_CONFIG[SC_MAILBOX]), 'There is mail in the mailbox', '');
-      log_door_event (msgflags, 29, ((inputs[TRIPWIRE_LOOP] = IS_OPEN) and STATIC_CONFIG[SC_TRIPWIRE_LOOP]), 'TRIPWIRE LOOP BROKEN: POSSIBLE BREAK-IN', '');
-      log_door_event (msgflags, 30, ((inputs[BOX_TAMPER_SWITCH] = IS_OPEN) and STATIC_CONFIG[SC_BOX_TAMPER_SWITCH]), 'Control box is being opened', '');
       log_door_event (msgflags, 37, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
       log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
 
@@ -905,10 +926,24 @@ begin
        'Magnetic lock 2 or its wiring failed. Please repair.', '');
        *)
 (********************************************************************************************************)
+
+{        TSHMVariables=RECORD // What items should be exposed for IPC.
+                Inputs, outputs, fakeinputs: TRegisterbits;
+                DoorState: TDoorStates;
+                TuesdayState: TTuesdaySM;
+                MailboxState, TamperState, TripwireState: TSimpleSM;
+                state, Config :TLotsofbits;
+                senderpid: TPid;
+                Command: TCommands;
+                SHMMsg:string;
+                end;
+ }
     if dryrun = 0 then // Make a dry run to let inputs settle
      begin
       SHMPointer^.inputs:=inputs;
       SHMPointer^.outputs:=outputs;
+      SHMPointer^.DoorState:=doorstate;
+      SHMPointer^.MailboxState:=MailboxSM;
       SHMPointer^.state:=CurrentState;
       SHMPointer^.Config:=STATIC_CONFIG;
      end;
