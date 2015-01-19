@@ -20,9 +20,15 @@ program loaddatafile;
 
 }
 
-uses unixtype, sysutils;
+uses unixtype, sysutils, daemon;
 
-TYPE TPByte=^char;
+CONST pchararraytest:ARRAY[1..6] of pchar=('this','is','a', 'pchar string', 'test',':-)');
+
+TYPE TPPchar=array of pchar;
+     TPPPChar=^TPPchar;
+     TCharBuffer= array of char;
+     TPByte=^char;
+//     TPByte=^TCharbuffer;
      TFlatAccessData=RECORD
         taghash: string;
         starttime, endtime: time_t;
@@ -35,36 +41,56 @@ TYPE TPByte=^char;
         size: longint;
         end;
 
-
 // Load a file into memory and return a pointer to it. NIL in case of failure
 function loadfile (filename: string): TFlatfile;
 var     f: file;
+        lastioop: word;
         textdata: pointer;
         dataread: longint;
 begin
+ {$I-}
  loadfile.data:=nil; // Assume failure
  assign (f, filename);
  reset (f,1);
- if ioresult = 0 then
+ lastioop:=ioresult;
+ if lastioop = 0 then
   begin
    getmem (textdata, filesize (f));
    if textdata <> nil then
    begin
     blockread (f, textdata^, filesize (f), dataread); // Got buffer: Suck it in
-    loadfile.data:=textdata;
-    loadfile.size:=dataread;
+    lastioop:=ioresult;
+    if lastioop = 0 then
+     begin // Success
+      loadfile.data:=textdata;
+      loadfile.size:=dataread;
+     end
+     else
+     begin // Failure: free the block and return error code
+      freemem (textdata);
+      loadfile.size:=lastioop;
+     end;
    end;
    close (f);
   end
-  else
-   loadfile.size:=ioresult;
+  else // Cannot allocate buffer
+   loadfile.size:=lastioop;
+ {$I+}
+end;
+
+function buffer_to_pchar_array (var textbufferdata: TFlatfile):pointer;
+var i: longint;
+begin
+ for i:=0 to textbufferdata.size do if (textbufferdata.data[i] = #10) or (textbufferdata.data[i] = #13) then textbufferdata.data[i]:=#0;
+// buffer_to_pchar_array:=pointer (textbufferdata.data);
+ buffer_to_pchar_array:=textbufferdata.data;
 end;
 
 // Scan and parse the buffer. Fill output structure if there is a match
 function gettagdata (textbufferdata: TFlatfile; searchtag: string): TFlatAccessData;
-CONST LINEBEGIN=0; WASTELINE=1; STARTDATE=2; ENDDATE=3; FLAGS=4; STATUS=5; NICK=6;
+TYPE SMStates=(LINEBEGIN, WASTELINE, STARTDATE, ENDDATE, FLAGS, STATUS, NICK);
 var workstr: string;
-    state: byte;
+    state: SMStates;
     i, lineno: longint;
 begin
  fillchar (gettagdata, sizeof (TFlatAccessData), 0); // Assume failure: prepare a null answer
@@ -166,9 +192,37 @@ begin
 end;
 
 var testptr: TFlatfile;
+    testarray: ^PChar;
     passeddata: TFlatAccessData;
+    passwddata: Ppasswd;
+    i, line: longint;
 begin
+ line:=0;
+ passwddata:=getpwnam ('avahi-autoipd');
+ writeln (' User name=', passwddata^.pw_name);
+ writeln (' User password=', passwddata^.pw_passwd);
+ writeln (' UID=', passwddata^.pw_uid);
+ writeln (' GID=', passwddata^.pw_gid);
+ writeln (' homedir=', passwddata^.pw_dir);
+ writeln (' shell=', passwddata^.pw_shell);
+ writeln (' Gecos=', passwddata^.pw_gecos);
+
  testptr:=loadfile ('rfidpoll.txt');
+ if testptr.data=nil then
+  begin
+   writeln ('Failed to load data');
+   halt (1);
+  end;
+ for i:=0 to testptr.size do if (testptr.data[i] = #10) or (testptr.data[i] = #13) then
+  begin
+   line:=line+1;
+   writeln ('Line ',line,': newline at offset ', i);//testptr.data[i]:=#0;
+  end;
+ testarray:=pointer (testptr.data);
+// writeln ('high (testptr.data)= ', ord (high (testptr.data^)));
+// writeln (inttohex (qword (testarray), 16 ));
+ writeln (testarray^[0]);
+{
  passeddata:=gettagdata (testptr, '68847c5bdc3538295e42c354e636f1da');
  writeln ('Returned TFlatAccessData content:');
  writeln (' taghash=', passeddata.taghash);
@@ -177,4 +231,5 @@ begin
  writeln (' flags=', passeddata.flags);
  writeln (' revoked=', passeddata.revoked);
  writeln (' username=', passeddata.username);
+}
 end.
