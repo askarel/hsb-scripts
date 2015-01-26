@@ -24,7 +24,7 @@ program blackknightio;
 
 uses PiGpio, sysutils, crt, keyboard, strutils, baseunix, ipc, systemlog, pidfile, unix, chip7400, typinfo;
 
-CONST   SHITBITS=31; // Should go away at some point
+CONST   SHITBITS=22; // Should go away at some point
 
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-) Should go away at some point.
@@ -47,11 +47,11 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                    MSG_MAILBOX, MSG_MAILBOX_THANKS, MSG_TRIPWIRE, MSG_BOX_TAMPER, MSG_MAG1_WIRING, MSG_MAG2_WIRING, MSG_MAG1_DISABLED_BUT_CLOSED,
                    MSG_MAG2_DISABLED_BUT_CLOSED, MSG_TUESDAY_INACTIVE, MSG_TUESDAY_ACTIVE, MSG_LIGHT_ON, MSG_OPEN_BUTTON,
                    MSG_OPEN_HANDLE_AND_LIGHT, MFS_FORBIDDEN_HANDLE, MSG_OPEN_HANDLE, MSG_OPEN_SYSTEM, MSG_OPEN_DOORBELL, MSG_DOORBELL, MSG_DOORSWITCH_FAIL, MSG_MAG1_FAIL,
-                   MSG_MAG2_FAIL, MSG_BAILOUT);
+                   MSG_MAG2_FAIL, MSG_BAILOUT, MSG_DOORBELL_STUCK, MSG_DOORBELL_FIXED, MSG_DOOROPENBUTTON_STUCK, MSG_DOOROPENBUTTON_FIXED, MSG_HANDLE_STUCK, MSG_HANDLE_FIXED);
         TLogItemText= ARRAY[TLogItems] of pchar;
         // Simple universal state machine definition (let's see how far it flies)
         TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED,
-                   SM_REALLY_CLOSED, SM_LOG_STUCK_CLOSED, SM_STUCK_CLOSED);
+                   SM_REALLY_CLOSED, SM_LOG_STUCK_CLOSED, SM_STUCK_CLOSED, SM_LOG_UNSTUCK);
         // Tuesday mode state machine
         TTuesdaySM=(SM_OFF, SM_LOG_START, SM_START, SM_TICK, SM_LOG_STOP);
 
@@ -72,6 +72,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         DATAPIN=25;
         READOUTPIN=4; // Output of 74150
         MAXBOUNCES=8;
+        VCAP_LOAD_RATE=4;  // Virtual capacitor to eat the 50 Hz ripple on the opto inputs
+        VCAP_UNLOAD_RATE=2;
 
         CMD_NAME: ARRAY [TCommands] of pchar=('NoCMD','open','tuesday_start','tuesday_end','enable','disable','beep','stop');
 
@@ -100,18 +102,24 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                                   'Wiring error: maglock 2 is disabled in configuration but i see it closed',
                                         'Tuesday mode inactive',
                                         'Tuesday mode active. Ring doorbell to enter',
-                                                  'Hallway light is on',
+                                        'Hallway light is on',
                                         'Door opened from button',
                                         'Door opened from handle with the light on',
                                                 'You are not allowed to use the handle',
                                         'Door opened from handle',
                                         'Order from system',
                                         'Tuesday mode: door opened by doorbell',
-                                                  'Ding Ding Dong',
+                                        'Ding Ding Dong',
                                                   'Check wiring of door switch: door is locked but i see it open',
                                                   'Magnetic lock 1 or its wiring failed. Please repair.',
                                                   'Magnetic lock 2 or its wiring failed. Please repair.',
-                                        'Door controller is bailing out. Clearing outputs');
+                                        'Door controller is bailing out. Clearing outputs',
+                                                'The doorbell button is stuck. Doorbell notifications disabled. Please repair.',
+                                                'The doorbell button is now fixed. Notifications re-activated. Thank you.',
+                                                'The door open button is stuck closed and has been disabled. Please repair.',
+                                                'The door open button has been released. Reactivating.',
+                                                'The handle is stuck. Handle control disabled. Please repair.',
+                                                'The handle has been fixed. Reactivating.');
 
         // Hardware bug: i got the address lines reversed while building the board.
         // Using a lookup table to mirror the address bits
@@ -176,9 +184,9 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                           'Mailbox','Tripwire','opendoorbtn','PANIC SWITCH','DOORBELL 1','DOORBELL 2','DOORBELL 3','OPTO 4');
         // offsets in status/config bitfields
         SC_MAGLOCK1=0; SC_MAGLOCK2=1; SC_TRIPWIRE_LOOP=2; SC_BOX_TAMPER_SWITCH=3; SC_MAILBOX=4; SC_BUZZER=5; SC_BATTERY=6; SC_HALLWAY=7;
-        SC_DOORSWITCH=8; SC_HANDLEANDLIGHT=9; SC_DOORUNLOCKBUTTON=10; SC_HANDLE=11; SC_DISABLED=12; SC_HOLDER=13; SC_BUZZER_DOORBELL=14;
+        SC_HANDLEANDLIGHT=8; SC_DOORUNLOCKBUTTON=9; SC_HANDLE=10; SC_DISABLED=11; SC_HOLDER=12; SC_BUZZER_DOORBELL=13;
         // Status bit block only. This should hopefully go away
-        S_DEMOMODE=31; S_STOP=30; S_HUP=29;
+        S_DEMOMODE=20; S_STOP=21; S_HUP=22;
 
         // Static config
         STATIC_CONFIG_STR: TConfigTextArray=('Maglock 1',
@@ -189,15 +197,14 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              'buzzer',
                                              'Backup Battery',
                                              'Hallway lights',
-                                             'Door leaf switch',
                                              'handle+light unlock',
                                              'Door unlock button',
                                              'Handle unlock only',
                                              'Software-disabled',
                                              'Hold-open device',
                                              'Buzzer-as-doorbell',
-                                             '', '', '', '', '', '', '', '', '', '', '',
-                                             '', '', '',  'HUP received', 'Stop order', 'Demo mode');
+                                             '', '', '', '', '',
+                                             '',  'HUP received', 'Stop order', 'Demo mode');
 
         STATIC_CONFIG: TLotsOfBits=(false,  // SC_MAGLOCK1 (Maglock 1 installed)
                                     true, // SC_MAGLOCK2 (Maglock 2 not installed)
@@ -207,14 +214,13 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     true,  // SC_BUZZER (Let it make some noise)
                                     false, // SC_BATTERY (battery not attached)
                                     false, // SC_HALLWAY (Hallway light not connected)
-                                    true,  // SC_DOORSWITCH (Door leaf switch installed) This should go: the leaf switch is required.
                                     true,  // SC_HANDLEANDLIGHT (The light must be on to unlock with the handle)
                                     true,  // SC_DOORUNLOCKBUTTON (A push button to open the door)
                                     false, // SC_HANDLE (Unlock with the handle only: not recommended in HSBXL)
                                     false, // SC_DISABLED (system is software-disabled)
                                     false, // SC_HOLDER (magnet to hold the door open while entering with a bike)
                                     true, // SC_BUZZER_DOORBELL (The buzzer is used as a doorbell)
-                                    false, false, false, false, false, false, false, false, false, false, false, false,
+                                    false, false, false, false,
                                     false,
                                     false, // Unused
                                     false, // Unused
@@ -530,6 +536,7 @@ var shmname: string;
     MailboxSM, TripwireSM, TamperSM, DoorbellSM, PresenceSM, OpenButtonSM, HandleSM: TSimpleSM;
     open_wait, tuesdaytimer, beepdelay, Mag1CloseWait, Mag2CloseWait, Mag1LockWait, Mag2LockWait: longint;
 begin
+ outputs:=word2bits (0); // Set all outputs to zero.
  doorstate:=DS_ENTRY; MailboxSM:=SM_ENTRY; TripwireSM:=SM_ENTRY; TamperSM:=SM_ENTRY; DoorbellSM:=SM_ENTRY; // Initialize the state machines
  PresenceSM:=SM_ENTRY; OpenButtonSM:=SM_ENTRY; HandleSM:=SM_ENTRY; tuesdaystate:=SM_OFF;
  dryrun:=MAXBOUNCES+2;
@@ -614,7 +621,6 @@ begin
     case doorstate of
      DS_ENTRY: // First thing to run
       begin
-       outputs:=word2bits (0); // Set all outputs to zero.
        if dryrun = 0 then if STATIC_CONFIG[SC_DISABLED] then doorstate:=DS_DISABLED else doorstate:=DS_ENABLED
                      else dryrun:=dryrun - 1;
       end;
@@ -868,34 +874,82 @@ begin
      end;
      // End of tripwire state machine
 
-//  TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED, SM_LOG_STUCK_CLOSED, SM_STUCK_CLOSED);
+//  TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED, SM_REALLY_CLOSED, SM_LOG_STUCK_CLOSED, SM_STUCK_CLOSED, SM_LOG_UNSTUCK);
      // Start of doorbell state machine (stuck closed detection, 50 Hz eater and buzzer-as-a-doorbell)
      // 50 Hz eater: Virtual capacitor concept: full=255; empty=0; charge: cap:=cap+3; discharge: cap:=cap-2;
      case DoorbellSM of
       SM_ENTRY: DoorbellSM:=SM_ACTIVE; // Really ?
-//      SM_ACTIVE: if (inputs[MAILBOX] = IS_CLOSED) then MailboxSM:=SM_LOG_CLOSED else MailboxSM:=SM_OPEN;
-//      SM_LOG_CLOSED:
-//       begin
-//        log_single_door_event (MSG_MAILBOX, LOG_ITEM_TEXT_EN, '');
-//        MailboxSM:=SM_CLOSED;
-//       end;
-//      SM_LOG_OPEN:
-//       begin
-//        log_single_door_event (MSG_MAILBOX_THANKS, LOG_ITEM_TEXT_EN, '');
-//        MailboxSM:=SM_OPEN;
-//       end;
-//      SM_CLOSED: if (inputs[MAILBOX] = IS_OPEN) then MailboxSM:=SM_LOG_OPEN;
-//      SM_OPEN: if (inputs[MAILBOX] = IS_CLOSED) then MailboxSM:=SM_LOG_CLOSED;
+      SM_ACTIVE: if (inputs[DOORBELL1] = IS_CLOSED) or (inputs[DOORBELL2] = IS_CLOSED) or (inputs[DOORBELL2] = IS_CLOSED) then DoorbellSM:=SM_LOG_CLOSED;
+      SM_LOG_CLOSED:
+       begin
+        log_single_door_event (MSG_DOORBELL, LOG_ITEM_TEXT_EN, '');
+        DoorbellSM:=SM_CLOSED;
+       end;
+      SM_CLOSED: if (inputs[DOORBELL1] = IS_OPEN) and (inputs[DOORBELL2] = IS_OPEN) and (inputs[DOORBELL2] = IS_OPEN) then DoorbellSM:=SM_ACTIVE;
      end;
      // End of doorbell state machine
 
      // Start of presence detection state machine, with 50 Hz eater
+     case PresenceSM of
+      SM_ENTRY: PresenceSM:=SM_ACTIVE; // Really ?
+      SM_ACTIVE: if (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) then PresenceSM:=SM_LOG_CLOSED;
+      SM_LOG_CLOSED:
+       begin
+        log_single_door_event (MSG_LIGHT_ON, LOG_ITEM_TEXT_EN, '');
+        PresenceSM:=SM_CLOSED;
+       end;
+      SM_CLOSED: if (inputs[LIGHTS_ON_SENSE] = IS_OPEN) then PresenceSM:=SM_ACTIVE;
+     end;
      // End of presence detection state machine
 
      // Start of doorhandle state machine (stuck closed detection)
+     case HandleSM of
+      SM_ENTRY: HandleSM:=SM_ACTIVE; // Really ?
+      SM_ACTIVE: if (inputs[DOORHANDLE] = IS_CLOSED) then HandleSM:=SM_LOG_CLOSED;
+      SM_LOG_CLOSED:
+       begin
+//        log_single_door_event (MSG_LIGHT_ON, LOG_ITEM_TEXT_EN, '');
+        HandleSM:=SM_CLOSED;
+       end;
+      SM_CLOSED: if (inputs[DOORHANDLE] = IS_OPEN) then HandleSM:=SM_ACTIVE;
+     end;
      // End of doorhandle state machine
 
      // Start of open button detection state machine (stuck closed detection and 50 Hz eater)
+     case OpenButtonSM of
+      SM_ENTRY: if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] then OpenButtonSM:=SM_ACTIVE;
+      SM_ACTIVE: if (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then OpenButtonSM:=SM_LOG_CLOSED;
+      SM_LOG_CLOSED:
+       begin
+//        log_single_door_event (MSG_LIGHT_ON, LOG_ITEM_TEXT_EN, '');
+        OpenButtonSM:=SM_CLOSED;
+       end;
+      SM_CLOSED:
+       begin
+        if (inputs[DOOR_OPEN_BUTTON] = IS_OPEN) then OpenButtonSM:=SM_LOG_OPEN;
+        // Stuck closed detection here
+       end;
+      SM_LOG_OPEN: // Button has been released
+       begin
+        OpenButtonSM:=SM_ACTIVE;
+        // Do open the door here
+       end;
+      SM_LOG_STUCK_CLOSED:
+       begin
+        log_single_door_event (MSG_DOOROPENBUTTON_STUCK, LOG_ITEM_TEXT_EN, '');
+        OpenButtonSM:=SM_STUCK_CLOSED;
+       end;
+      SM_STUCK_CLOSED:
+       begin
+        if (inputs[DOOR_OPEN_BUTTON] = IS_OPEN) then OpenButtonSM:=SM_LOG_UNSTUCK;
+        // Spam the log on a regular basis to remind something is broken
+       end;
+      SM_LOG_UNSTUCK: // Button finally released
+       begin
+        log_single_door_event (MSG_DOOROPENBUTTON_FIXED, LOG_ITEM_TEXT_EN, '');
+        OpenButtonSM:=SM_ACTIVE
+       end;
+     end;
      // End of open button detection state machine
 
     // Process beep command (independent from state machine flow)
@@ -907,8 +961,6 @@ begin
         - 'Trigger happy' filtering
         - Stuck closed detection
      }
-      log_door_event (msgflags, 37, ((inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and STATIC_CONFIG[SC_HALLWAY]), 'Hallway light is on', '');
-      log_door_event (msgflags, 44, ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED)), 'Ding Ding Dong', '');
 
       log_door_event (msgflags, 31, (busy_delay_is_expired (Mag1CloseWait) and STATIC_CONFIG[SC_MAGLOCK1]),
        'Check maglock 1 and it''s wiring: maglock is off but i see it closed', '');
