@@ -28,7 +28,6 @@ create table if not exists hsbmembers (id int not null auto_increment primary ke
                                     emailaddress char(60) not null,
                                     exitdate date,
                                     passwordhash char(60) not null default 'mouh',
-                                    flags bigint not null default 0,
                                     birthdate date,
                                     openpgpkeyid char(20),
                                     activateddate date,
@@ -43,6 +42,7 @@ create table if not exists hsbmembers (id int not null auto_increment primary ke
 -- This allow us to describe a person that is not a member, but is related to the hackerspace.
 -- It can be the neighbour(s), the landlord(s), and/or visitors. This allow us to have visitor access card.
 create table if not exists person (id int not null auto_increment primary key, 
+-- 				    entrydate date not null default current_date, 
 				    entrydate date not null, 
 				    structuredcomm char(21) unique not null, 
 				    lang char(6),
@@ -51,17 +51,14 @@ create table if not exists person (id int not null auto_increment primary key,
 				    name char(40) not null, 
 				    phonenumber char(20), 
 				    emailaddress char(255) not null, 
-				    remind_membership_on date,
---				    exitdate date, 
-				    passwordhash char(60) not null default 'mouh', 
---				    flags bigint not null default 0,
+				    passwordhash char(70) not null default 'mouh', 
 				    birthdate date, 
 				    openpgpkeyid char(20), 
 				    informations text not null,
---				    activateddate date, 
---				    mail_flags bigint not null default 0, 
---				    json_data text,
-				    sshpubkeys text
+				    sshpubkeys text,
+                                    groupbits bigint not null default 0,
+				    machinestate char(20) not null,
+				    machinestate_data text
 				    );
 
 -- Contractors and providers (electricity, water, gas, internet, insurance, bank,...)
@@ -70,7 +67,7 @@ create table if not exists contractors (id int not null auto_increment primary k
 				    customer_id char(25), -- Usually our customer number
 				    contract_id char(20),
 				    website char(80),
-				    username char(25), -- Credentials to log in to provider website
+				    username char(40), -- Credentials to log in to provider website
 				    password char(40),
 				    description text
 				    );
@@ -82,9 +79,11 @@ create table if not exists member_sponsors (id int not null auto_increment prima
 
 create table if not exists member_history (id int not null auto_increment primary key,
 				    member_id int not null,
-				    event_date date not null,
-				    event_code int not null,
-				    event_string text
+--				    event_timestamp datetime default NOW(),
+				    event_timestamp datetime,
+				    machinestate char(20) not null,
+				    machinestate_data text,
+				    freetext text
 				    );
 
 create table if not exists member_groups (id int not null auto_increment primary key,
@@ -92,7 +91,7 @@ create table if not exists member_groups (id int not null auto_increment primary
 				    group_id int not null
 				    );
 
-create table if not exists hsb_groups (id int not null auto_increment primary key,
+create table if not exists hsb_groups (bit_id int not null auto_increment primary key,
 				    shortdesc char(50) unique not null,
 				    fulldesc text
 				    );
