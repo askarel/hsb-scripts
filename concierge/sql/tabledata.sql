@@ -31,6 +31,7 @@ INSERT INTO hsb_groups (shortdesc, fulldesc) VALUES
 			('Ex_Members', 'Members that decided to retire'),
 			('webmasters', 'Website administrators'),
 			('minors','Should be under adult supervision'),
+			('cohabitants','People unrelated to the hackerspace, but living in the same building'),
 			('guests','Guests, staying/using the space for a few days, do not want to be members for whatever reason');
 
 INSERT INTO tag_states (shortdesc, fulldesc) VALUES
