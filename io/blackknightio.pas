@@ -753,7 +753,6 @@ begin
        if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED;
        if STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLE; // Open from handle only
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
-       if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
       end;
      DS_LOG_PARTIAL2:
@@ -766,7 +765,6 @@ begin
        if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED;
        if STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLE; // Open from handle only
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
-       if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
       end;
      DS_LOG_2MAGS_NOT_LOCKED:
@@ -804,7 +802,6 @@ begin
       begin
        if STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLE; // Open from handle only
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
-       if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
       end;
      DS_LOG_NOW_LOCKED:
@@ -822,7 +819,6 @@ begin
        if STATIC_CONFIG[SC_BUZZER] then outputs[BUZZER_OUTPUT]:=busy_buzzer (buzzertracker, SND_MISTERCASH, 16);
        if STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLE; // Open from handle only
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
-       if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] and (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_BUTTON; // Open from unlock button
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
       end;
      end; // End of door state machine
@@ -918,21 +914,16 @@ begin
      // Start of open button detection state machine (stuck closed detection and 50 Hz eater)
      case OpenButtonSM of
       SM_ENTRY: if STATIC_CONFIG[SC_DOORUNLOCKBUTTON] then OpenButtonSM:=SM_ACTIVE;
-      SM_ACTIVE: if (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then OpenButtonSM:=SM_LOG_CLOSED;
-      SM_LOG_CLOSED:
-       begin
-//        log_single_door_event (MSG_LIGHT_ON, LOG_ITEM_TEXT_EN, '');
-        OpenButtonSM:=SM_CLOSED;
-       end;
+      SM_ACTIVE: if (inputs[DOOR_OPEN_BUTTON] = IS_CLOSED) then OpenButtonSM:=SM_CLOSED;
       SM_CLOSED:
        begin
         if (inputs[DOOR_OPEN_BUTTON] = IS_OPEN) then OpenButtonSM:=SM_LOG_OPEN;
-        // Stuck closed detection here
+        // Stuck closed detection here: tick the timer
        end;
       SM_LOG_OPEN: // Button has been released
        begin
         OpenButtonSM:=SM_ACTIVE;
-        // Do open the door here
+        if (doorstate=DS_LOCKED) or (doorstate=DS_NOMAG) or (doorstate=DS_PARTIAL1) or (doorstate=DS_PARTIAL2) then doorstate:=DS_LOG_UNLOCK_BUTTON;
        end;
       SM_LOG_STUCK_CLOSED:
        begin
