@@ -29,7 +29,7 @@ CONST   SHITBITS=22; // Should go away at some point
 TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-) Should go away at some point.
         // Available commands for IPC (subject to change)
-        TCommands=(CMD_NONE, CMD_OPEN, CMD_TUESDAY_START, CMD_TUESDAY_STOP, CMD_ENABLE, CMD_DISABLE, CMD_BEEP, CMD_STOP);
+        TCommands=(CMD_NONE, CMD_OPEN, CMD_TUESDAY_START, CMD_TUESDAY_STOP, CMD_ENABLE, CMD_DISABLE, CMD_BEEP, CMD_LIGHT, CMD_STOP);
         TBusyBuzzerScratch=RECORD
                 TimeIndex: longint;
                 offset: longint;
@@ -39,8 +39,8 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
         Tdoorstates=(DS_ENTRY, DS_LOG_DISABLED, DS_DISABLED, DS_LOG_ENABLED, DS_ENABLED, DS_LOG_PANIC, DS_PANIC, DS_LOG_OPEN, DS_OPEN, DS_LOG_CLOSED, DS_CLOSED,
                   DS_NONE, DS_LOG_LOCKED, DS_LOCKED, DS_UNLOCKED, DS_LOG_PARTIAL1, DS_PARTIAL1, DS_LOG_PARTIAL2, DS_PARTIAL2, DS_NOT_LOCKED, DS_LOG_NOW_LOCKED,
                   DS_LOG_NOMAG, DS_NOMAG, DS_LOG_MAG1_NOT_LOCKED, DS_LOG_MAG2_NOT_LOCKED, DS_LOG_2MAGS_NOT_LOCKED, DS_NOT_CLOSED, DS_LOG_STAY_WIDE_OPEN,
-                  DS_STAY_WIDE_OPEN, DS_LOG_UNLOCK_SYSTEM, DS_LOG_UNLOCK_MONITOR, DS_LOG_UNLOCK_CMDLINE, DS_LOG_UNLOCK_HANDLE, DS_LOG_UNLOCK_HANDLEANDLIGHT,
-                  DS_LOG_UNLOCK_BUTTON, DS_LOG_UNLOCK_DOORBELL);
+                  DS_STAY_WIDE_OPEN, DS_LOG_UNLOCK_SYSTEM, DS_LOG_UNLOCK_MONITOR, DS_LOG_UNLOCK_CMDLINE, DS_LOG_UNLOCK_HANDLEANDLIGHT, DS_LOG_UNLOCK_DOORBELL,
+                  DS_LOG_UNLOCK_HANDLE);
         // Available error messages
         TLogItems=(MSG_DEMO, MSG_SYS_DISABLED, MSG_SYS_ENABLED, MSG_PANIC, MSG_MAG1PARTIAL, MSG_MAG2PARTIAL, MSG_2MAGS_NOLATCH, MSG_MAG1_NOLATCH,
                    MSG_MAG2_NOLATCH, MSG_NOMAG_CFG, MSG_CLOSED_NOMAG, MSG_NOW_LOCKED, MSG_DOORISLOCKED, MSG_DOORISOPEN, MSG_DOORISCLOSED,
@@ -75,7 +75,7 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         VCAP_LOAD_RATE=4;  // Virtual capacitor to eat the 50 Hz ripple on the opto inputs
         VCAP_UNLOAD_RATE=2;
 
-        CMD_NAME: ARRAY [TCommands] of pchar=('NoCMD','open','tuesday_start','tuesday_end','enable','disable','beep','stop');
+        CMD_NAME: ARRAY [TCommands] of pchar=('NoCMD','open','tuesday_start','tuesday_end','enable','disable','beep','lights_on','stop');
 
         LOG_ITEM_TEXT_EN: TLogItemText=('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.',
                                         'Door System is disabled in software',
@@ -116,8 +116,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                         'Door controller is bailing out. Clearing outputs',
                                                 'The doorbell button is stuck. Doorbell notifications disabled. Please repair.',
                                                 'The doorbell button is now fixed. Notifications re-activated. Thank you.',
-                                                'The door open button is stuck closed and has been disabled. Please repair.',
-                                                'The door open button has been released. Reactivating.',
+                                        'The door open button is stuck closed and has been disabled. Please repair.',
+                                        'The door open button has been released. Reactivating.',
                                                 'The handle is stuck. Handle control disabled. Please repair.',
                                                 'The handle has been fixed. Reactivating.');
 
@@ -129,8 +129,9 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
         LOCKWAIT=2000;  // Maximum delay between leaf switch closure and maglock feedback switch closure (if delay expired, alert that the door is not closed properly
         MAGWAIT=1500;   // Reaction delay of the maglock output relay (the PCB has capacitors)
         BUZZERCHIRP=150; // Small beep delay
-        TUESDAY_DEFAULT_TIME=90000; // tuesday timer
-        ERROR_REPEAT=60000; // Error repetition
+        TUESDAY_DEFAULT_TIME=1000*60*60*3; // tuesday timer: 3 hours
+        LOG_REPEAT_RATE_FAST=1000*10; // Repeat that error every 10 seconds
+        LOG_REPEAT_RATE_SLOW=LOG_REPEAT_RATE_FAST*60; // Repeat that error every 6 minutes
         SND_MISTERCASH: TBuzzPattern=(50, 100, 50, 100, 50, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         SND_DOORNOTCLOSED: TBuzzPattern=(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, -1); // Be a noisy asshole
         // Places to look for the external script
@@ -203,7 +204,8 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                              'Software-disabled',
                                              'Hold-open device',
                                              'Buzzer-as-doorbell',
-                                             '', '', '', '', '',
+                                             '',
+                                             '', '', '', '',
                                              '',  'HUP received', 'Stop order', 'Demo mode');
 
         STATIC_CONFIG: TLotsOfBits=(false,  // SC_MAGLOCK1 (Maglock 1 installed)
@@ -217,10 +219,11 @@ CONST   CLOCKPIN=7;  // 74LS673 pins
                                     true,  // SC_HANDLEANDLIGHT (The light must be on to unlock with the handle)
                                     true,  // SC_DOORUNLOCKBUTTON (A push button to open the door)
                                     false, // SC_HANDLE (Unlock with the handle only: not recommended in HSBXL)
-                                    false, // SC_DISABLED (system is software-disabled)
+                                    false, // SC_DISABLED (system is software-disabled by default)
                                     false, // SC_HOLDER (magnet to hold the door open while entering with a bike)
                                     true, // SC_BUZZER_DOORBELL (The buzzer is used as a doorbell)
-                                    false, false, false, false,
+                                    false,
+                                    false, false, false,
                                     false,
                                     false, // Unused
                                     false, // Unused
@@ -733,11 +736,6 @@ begin
        doorstate:=DS_UNLOCKED;
        log_single_door_event (MSG_OPEN_HANDLE_AND_LIGHT, LOG_ITEM_TEXT_EN, '');
       end;
-     DS_LOG_UNLOCK_BUTTON: // Unlock by button
-      begin
-       doorstate:=DS_UNLOCKED;
-       log_single_door_event (MSG_OPEN_BUTTON, LOG_ITEM_TEXT_EN, '');
-      end;
      DS_LOG_UNLOCK_DOORBELL: // Unlock by doorbell (this path is reached in tuesday mode only)
       begin
        doorstate:=DS_UNLOCKED;
@@ -751,7 +749,6 @@ begin
      DS_PARTIAL1: // Partial lock: magnet 1 catched, but not magnet 2
       begin
        if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED;
-       if STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLE; // Open from handle only
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
       end;
@@ -763,7 +760,6 @@ begin
      DS_PARTIAL2: // Partial lock: magnet 2 catched, but not magnet 1
       begin
        if (inputs[MAGLOCK1_RETURN] = IS_CLOSED) and (inputs[MAGLOCK2_RETURN] = IS_CLOSED) then doorstate:=DS_LOCKED;
-       if STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLE; // Open from handle only
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
       end;
@@ -800,7 +796,6 @@ begin
       end;
      DS_NOMAG: // No magnet installed (not recommended)
       begin
-       if STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLE; // Open from handle only
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
       end;
@@ -817,7 +812,6 @@ begin
      DS_LOCKED: // Door is locked
       begin
        if STATIC_CONFIG[SC_BUZZER] then outputs[BUZZER_OUTPUT]:=busy_buzzer (buzzertracker, SND_MISTERCASH, 16);
-       if STATIC_CONFIG[SC_HANDLE] and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLE; // Open from handle only
        if STATIC_CONFIG[SC_HANDLEANDLIGHT] and (inputs[LIGHTS_ON_SENSE] = IS_CLOSED) and (inputs[DOORHANDLE] = IS_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT; // Open from handle and light
        if (tuesdaytimer <> 0) and ((inputs[OPTO1] = IS_CLOSED) or (inputs[OPTO2] = IS_CLOSED) or (inputs[OPTO3] = IS_CLOSED))then doorstate:=DS_LOG_UNLOCK_DOORBELL;  // Open from doorbell
       end;
@@ -900,14 +894,16 @@ begin
 
      // Start of doorhandle state machine (stuck closed detection)
      case HandleSM of
-      SM_ENTRY: HandleSM:=SM_ACTIVE; // Really ?
-      SM_ACTIVE: if (inputs[DOORHANDLE] = IS_CLOSED) then HandleSM:=SM_LOG_CLOSED;
-      SM_LOG_CLOSED:
+      SM_ENTRY: if STATIC_CONFIG[SC_HANDLE] or STATIC_CONFIG[SC_HANDLEANDLIGHT] then HandleSM:=SM_ACTIVE;
+      SM_ACTIVE: if (inputs[DOORHANDLE] = IS_CLOSED) then HandleSM:=SM_CLOSED;
+      SM_CLOSED:
        begin
-//        log_single_door_event (MSG_LIGHT_ON, LOG_ITEM_TEXT_EN, '');
-        HandleSM:=SM_CLOSED;
+        if (inputs[DOORHANDLE] = IS_OPEN) then HandleSM:=SM_ACTIVE; // Handle released
+        if ((doorstate=DS_LOCKED) or (doorstate=DS_NOMAG) or (doorstate=DS_PARTIAL1) or (doorstate=DS_PARTIAL2)) and STATIC_CONFIG[SC_HANDLE] then doorstate:=DS_LOG_UNLOCK_HANDLE;
+        if STATIC_CONFIG[SC_HANDLEANDLIGHT] then
+         if ((doorstate=DS_LOCKED) or (doorstate=DS_NOMAG) or (doorstate=DS_PARTIAL1) or (doorstate=DS_PARTIAL2)) and (PresenceSM=SM_CLOSED) then doorstate:=DS_LOG_UNLOCK_HANDLEANDLIGHT;
+        // Stuck closed detection here: tick the timer
        end;
-      SM_CLOSED: if (inputs[DOORHANDLE] = IS_OPEN) then HandleSM:=SM_ACTIVE;
      end;
      // End of doorhandle state machine
 
@@ -923,7 +919,11 @@ begin
       SM_LOG_OPEN: // Button has been released
        begin
         OpenButtonSM:=SM_ACTIVE;
-        if (doorstate=DS_LOCKED) or (doorstate=DS_NOMAG) or (doorstate=DS_PARTIAL1) or (doorstate=DS_PARTIAL2) then doorstate:=DS_LOG_UNLOCK_BUTTON;
+        if (doorstate=DS_LOCKED) or (doorstate=DS_NOMAG) or (doorstate=DS_PARTIAL1) or (doorstate=DS_PARTIAL2) then // Door was locked, open it.
+         begin
+          doorstate:=DS_UNLOCKED;
+          log_single_door_event (MSG_OPEN_BUTTON, LOG_ITEM_TEXT_EN, '');
+         end;
        end;
       SM_LOG_STUCK_CLOSED:
        begin
