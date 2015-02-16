@@ -25,6 +25,8 @@ SQLUSER='rfid_web_user'
 SQLPASS='ChangeMe'
 SQLDB='rfid_db_hsbxl'
 
+READER="ACS ACR122U PICC Interface 01 00"
+
 #############################################################
 ME="$(basename $0)"
 PAUSEFILE="/tmp/RFID.register"
@@ -88,10 +90,10 @@ gettaghash()
     echo "Waiting for RFID card..." >&2
     touch $PAUSEFILE
     while test -z "$HASH"; do
-	ATRHASH="$(echo "reset" | scriptor -r "ACS ACR122U PICC Interface 01 00" 2> /dev/null | tail -n 1 | md5sum | cut -d ' ' -f 1)"
+	ATRHASH="$(echo "reset" | scriptor -r "$READER" 2> /dev/null | tail -n 1 | md5sum | cut -d ' ' -f 1)"
 	if [ "$ATRHASH" != 'd41d8cd98f00b204e9800998ecf8427e' ] ; then # d41d8cd98f00b204e9800998ecf8427e is the empty string hash
 		# Ask the card UID and hash the result (i don't care about the garbage)
-		CARDHASH="$(echo 'ffca000000'|scriptor -r "ACS ACR122U PICC Interface 01 00" 2> /dev/null|tail -n 1 | md5sum | cut -d ' ' -f 1)"
+		CARDHASH="$(echo 'ffca000000'|scriptor -r "$READER" 2> /dev/null|tail -n 1 | md5sum | cut -d ' ' -f 1)"
 		if [ "$ATRHASH" != 'd41d8cd98f00b204e9800998ecf8427e' ] ; then # d41d8cd98f00b204e9800998ecf8427e is the empty string hash
 		    HASH="$(echo -n "$CARDHASH $ATRHASH"| md5sum | cut -d ' ' -f 1)"
 		fi
