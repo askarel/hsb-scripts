@@ -1,0 +1,353 @@
+#
+# /etc/network/interfaces file used on The Gate in HSBXL
+# Written by Frederic Pasteleurs <frederic@askarel.be>
+#
+
+# Used by ifup(8) and ifdown(8). See the interfaces(5) manpage or
+# /usr/share/doc/ifupdown/examples for more information.
+
+################ LOOPBACK ################
+auto lo
+iface lo inet loopback
+
+# Current interface layout:
+# eth0: TRUNK: bottom switch <-- Keep
+# eth1: free
+# eth2: TRUNK: TOUGHSwitch <-- Keep
+# eth3: free
+# eth4: free
+# eth5: TRUNK: top switch <-- keep
+
+################ VLAN ################
+# Declare all used VLANs here.
+# Bridge them in the LAN section when needed.
+
+# Networks on bottom basement switch
+#auto eth0.1
+iface eth0.1 inet manual
+	vlan_raw_device eth0
+
+iface eth0.4 inet manual
+	vlan_raw_device eth0
+
+iface eth0.6 inet manual
+	vlan_raw_device eth0
+
+iface eth0.10 inet manual
+	vlan_raw_device eth0
+
+iface eth0.11 inet manual
+	vlan_raw_device eth0
+
+iface eth0.12 inet manual
+	vlan_raw_device eth0
+
+iface eth0.13 inet manual
+	vlan_raw_device eth0
+
+iface eth0.20 inet manual
+	vlan_raw_device eth0
+
+iface eth0.21 inet manual
+	vlan_raw_device eth0
+
+iface eth0.22 inet manual
+	vlan_raw_device eth0
+
+iface eth0.42 inet manual
+	vlan_raw_device eth0
+
+# Networks on ToughSwitch
+# Modifying those entries may lock you out - DO NOT MODIFY WITHOUT GOOD REASON
+iface eth2.1 inet manual
+	vlan_raw_device eth2
+
+iface eth2.2 inet manual
+	vlan_raw_device eth2
+
+iface eth2.4 inet manual
+	vlan_raw_device eth2
+
+iface eth2.5 inet manual
+	vlan_raw_device eth2
+
+iface eth2.6 inet manual
+	vlan_raw_device eth2
+
+iface eth2.7 inet manual
+	vlan_raw_device eth2
+
+iface eth2.8 inet manual
+	vlan_raw_device eth2
+
+iface eth2.9 inet manual
+	vlan_raw_device eth2
+
+iface eth2.10 inet manual
+	vlan_raw_device eth2
+
+iface eth2.11 inet manual
+	vlan_raw_device eth2
+
+iface eth2.12 inet manual
+	vlan_raw_device eth2
+
+iface eth2.13 inet manual
+	vlan_raw_device eth2
+
+iface eth2.42 inet manual
+	vlan_raw_device eth2
+
+# Networks on top basement switch
+iface eth5.1 inet manual
+	vlan_raw_device eth5
+
+iface eth5.4 inet manual
+	vlan_raw_device eth5
+
+iface eth5.6 inet manual
+	vlan_raw_device eth5
+
+iface eth5.10 inet manual
+	vlan_raw_device eth5
+
+iface eth5.11 inet manual
+	vlan_raw_device eth5
+
+iface eth5.12 inet manual
+	vlan_raw_device eth5
+
+iface eth5.13 inet manual
+	vlan_raw_device eth5
+
+iface eth5.20 inet manual
+	vlan_raw_device eth5
+
+iface eth5.21 inet manual
+	vlan_raw_device eth5
+
+iface eth5.22 inet manual
+	vlan_raw_device eth5
+
+iface eth5.42 inet manual
+	vlan_raw_device eth5
+
+
+################ VDSL WAN ################
+# Modifying those entries may lock you out - DO NOT MODIFY WITHOUT GOOD REASON
+# Since we're very likely to access this machine from the outside, put the
+# WAN interface on a dedicated NIC (not on a VLAN on a managed switch)
+auto br-vdsl
+iface br-vdsl inet static
+	bridge_ports eth3 eth0.20 eth5.20
+	bridge_maxwait 0
+	bridge_stp on
+	bridge_waitport 0
+	bridge_fd 0
+	address 192.168.1.2
+	netmask 255.255.255.0
+
+#auto eth3
+iface eth3 inet manual
+
+auto dsl-provider
+iface dsl-provider inet ppp
+#    pre-up /sbin/ifconfig eth3 up # line maintained by pppoeconf
+#    pre-up /sbin/ifconfig br-vdsl up # line maintained by pppoeconf
+#    provider dsl-provider
+    provider dsl-provider-br-vdsl
+
+################ BACKUP WAN ################
+# Wireless Antwerpen uplink
+#auto eth2.3
+iface eth2.3 inet dhcp
+	vlan_raw_device eth2
+
+# Emergency WAN uplink
+#auto eth2.5
+iface eth2.5 inet dhcp
+	vlan_raw_device eth2
+
+################ LAN ################
+
+## <MGMT LAN> ##
+# Subnet to manage internal and non-shared devices.
+# Should not be exposed to the big bad net.
+auto br-mgmt
+iface br-mgmt inet6 static
+	bridge_ports eth2.1 eth0.1 eth5.1
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:222::1
+	netmask 64
+
+iface br-mgmt inet static
+	address 192.168.222.1
+	netmask 255.255.255.0
+## </MGMT LAN> ##
+
+## <SERVER LAN>
+# Quiet (hacking-wise) subnet for production services and machines
+auto br-srv
+iface br-srv inet6 static
+	bridge_ports eth2.4 eth0.4 eth5.4
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:4::1
+	netmask 64
+
+iface br-srv inet static
+	address 172.22.33.33
+	netmask 255.255.255.224
+## </SERVER LAN>
+
+## <IPV6-LAN>
+# IPv6 only LAN
+auto br-v6
+iface br-v6 inet6 static
+	bridge_ports eth0.6 eth2.6 eth5.6
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:6::1
+	netmask 64
+## </IPV6-LAN>
+
+## <WIFI-SPACEFED LAN>
+# Network segment for SpaceFED
+auto br-fed
+iface br-fed inet6 static
+	bridge_ports eth2.7
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:7::1
+	netmask 64
+
+iface br-fed inet static
+	address 172.22.33.97
+	netmask 255.255.255.224
+## </WIFI-SPACEFED LAN>
+
+## <WIFI-WPA LAN>
+# Network segment on a private SSID
+auto br-wifiwpa
+iface br-wifiwpa inet6 static
+	bridge_ports eth2.8
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:8::1
+	netmask 64
+
+iface br-wifiwpa inet static
+	address 172.23.187.1
+	netmask 255.255.255.128
+## </WIFI-WPA LAN>
+
+## <WIFI-PUBLIC LAN>
+# Network segment on a public SSID
+auto br-wifiopen
+iface br-wifiopen inet6 static
+	bridge_ports eth2.9
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:9::1
+	netmask 64
+
+iface br-wifiopen inet static
+	address 172.23.187.129
+	netmask 255.255.255.192
+## </PUBLIC WIFI LAN>
+
+## <GROUND FLOOR LAN>
+auto br-0
+iface br-0 inet6 static
+	bridge_ports eth2.10 eth0.10 eth5.10
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:10::1
+	netmask 64
+
+iface br-0 inet static
+	address 172.22.33.129
+	netmask 255.255.255.224
+## </GROUND FLOOR LAN>
+
+## <1st FLOOR LAN>
+auto br-1
+iface br-1 inet6 static
+	bridge_ports eth2.11 eth0.11 eth5.11
+#	bridge_ports eth2.11
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:11::1
+	netmask 64
+
+iface br-1 inet static
+	address 172.22.33.161
+	netmask 255.255.255.224
+## </1st FLOOR LAN>
+
+## <2nd FLOOR LAN>
+auto br-2
+iface br-2 inet6 static
+	bridge_ports eth2.12 eth0.12 eth5.12
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:12::1
+	netmask 64
+
+iface br-2 inet static
+	address 172.22.33.193
+	netmask 255.255.255.224
+## </2nd FLOOR LAN>
+
+## <3rd FLOOR LAN>
+auto br-3
+iface br-3 inet6 static
+	bridge_ports eth2.13 eth0.13 eth5.13
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:13::1
+	netmask 64
+
+iface br-3 inet static
+	address 172.22.33.65
+	netmask 255.255.255.224
+## </3rd FLOOR LAN>
+
+## <HSB-LAN>
+# Legacy flat LAN
+auto br-lan
+iface br-lan inet6 static
+	bridge_ports eth0.42 eth5.42
+#	bridge_ports eth0
+	bridge_maxwait 0
+	bridge_stp off
+	bridge_waitport 0
+	bridge_fd 0
+	address 2001:6f8:147f:42::2
+	netmask 64
+
+iface br-lan inet static
+	address 172.22.33.225
+	netmask 255.255.255.224
+## </HSB LAN (Modified by Askarel)>
