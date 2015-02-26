@@ -199,8 +199,10 @@ interface FastEthernet0/33
  spanning-tree portfast
 !
 interface FastEthernet0/34
- switchport access vlan 42
+ description Neutrinet Neutribox
+ switchport access vlan 4
  switchport mode access
+ spanning-tree portfast
 !
 interface FastEthernet0/35
  switchport access vlan 42
