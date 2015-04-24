@@ -68,4 +68,20 @@ function sanitize_input($input)
     return $input;
 }
 
+
+// Generate a random password
+function mypwgen($length = 15)
+{
+    $fp = fopen ("/dev/urandom", 'r');
+    if (!$fp) die ("Can't access /dev/urandom to get random data. Aborting.");
+    $random = fread ($fp, 512);
+    fclose ($fp);
+    return substr (trim (base64_encode ($random), "="), 0, $length);
+}
+
+# function get_auth_user()
+
+// Automagically insert footer on exit
+register_shutdown_function('html_footer');
+
 ?>
