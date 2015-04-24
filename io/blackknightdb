@@ -25,7 +25,7 @@ SQLUSER='rfid_web_user'
 SQLPASS='ChangeMe'
 SQLDB='rfid_db_hsbxl'
 
-READER="ACS ACR122U PICC Interface 01 00"
+READER="ACS ACR122U PICC Interface 00 00"
 
 #############################################################
 ME="$(basename $0)"
