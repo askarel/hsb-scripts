@@ -1,0 +1,63 @@
+# This file contains example data used for developing the frontend
+dn: uid=alice,ou=people,dc=hackerspace,dc=be
+objectClass: x-hsbxl-person
+uid: alice
+cn: Alice
+gn: Alice
+sn: Hacker
+telephoneNumber: +1 212 555 0001
+mail: alice@example.net
+
+dn: x-hsbxl-nfcUid=04c585193e2580,uid=alice,ou=people,dc=hackerspace,dc=be
+objectClass: x-hsbxl-accessCard
+x-hsbxl-nfcUid: 04c585193e2580
+x-hsbxl-activeSince: 20150425174143Z
+owner: uid=alice,ou=people,dc=hackerspace,dc=be
+# No x-hsbxl-activeUntil, so active forever
+
+dn: uid=bob,ou=people,dc=hackerspace,dc=be
+objectClass: x-hsbxl-person
+objectClass: x-hsbxl-member
+uid: bob
+gn: Robert
+cn: Bob
+sn: Hacker
+telephoneNumber: +1 212 555 0002
+mail: bob@example.com
+x-hsbxl-structuredComm: +++123/45678/9002+++
+userPassword: {CLEARTEXT}Open Sesame
+
+# This UID was taken from a random tag I had lying around
+dn: x-hsbxl-nfcUid=04bb8a193e2580,uid=bob,ou=people,dc=hackerspace,dc=be
+objectClass: x-hsbxl-accessCard
+x-hsbxl-nfcUid: 04bb8a193e2580
+owner: uid=bob,ou=people,dc=hackerspace,dc=be
+# No x-hsbxl-activeSince or x-hsbxl-activeUntil, so inactive
+
+# This one is based on me; it covers all of the different sorts of
+# names we might use
+dn: uid=thequux,ou=people,dc=hackerspace,dc=be
+objectClass: x-hsbxl-person
+objectClass: x-hsbxl-member
+uid: thequux
+gn: Dan
+sn: Hirsch
+cn: TQ
+mail: tq@hackerspace.example
+x-hsbxl-pgpFingerprint: 4096R/D3F43C110147B6BDA90ED97BC262C9B2FA65AB11
+userPassword: {CLEARTEXT}LetMe1n!
+x-hsbxl-structuredComm: +++878/88568/3346+++
+
+dn: x-hsbxl-nfcUid=04af1d193e2584,uid=thequux,ou=people,dc=hackerspace,dc=be
+objectClass: x-hsbxl-accessCard
+owner: uid=thequux,ou=people,dc=hackerspace,dc=be
+x-hsbxl-nfcUid: 04af1d193e2584
+x-hsbxl-activeSince: 20150425174143Z
+# No x-hsbxl-activeUntil, so active forever
+
+# This DN is mentioned in the config; it should be persisted
+dn: cn=ldap-admin,ou=groups,dc=hackerspace,dc=be
+objectClass: groupOfNames
+cn: ldap-admin
+member: uid=alice,ou=people,dc=hackerspace,dc=be
+member: uid=bob,ou=people,dc=hackerspace,dc=be

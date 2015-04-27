@@ -1,0 +1,17 @@
+dn: ou=people,dc=hackerspace,dc=be
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=hackerspace,dc=be
+objectClass: organizationalUnit
+ou: groups
+
+dn: ou=services,dc=hackerspace,dc=be
+objectClass: organizationalUnit
+ou: services
+
+dn: cn=concierge,ou=services,dc=hackerspace,dc=be
+objectClass: applicationProcess
+objectClass: simpleSecurityObject
+cn: concierge
+userPassword: {CLEARTEXT}@CHANGEME@
