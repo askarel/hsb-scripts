@@ -60,7 +60,8 @@ TYPE    TDbgArray= ARRAY [0..15] OF string[15];
                 Inputs, outputs, fakeinputs: TRegisterbits;
                 DoorState: TDoorStates;
                 TuesdayState: TTuesdaySM;
-                MailboxState, TamperState, TripwireState: TSimpleSM;
+                MailboxState, TripwireState, TamperState, DoorbellState, PresenceState, OpenButtonState, HandleState, PanicState: TSimpleSM;
+                // Mag1SM, Mag2SM: TSimpleSM;
                 state, Config :TLotsofbits;
                 senderpid: TPid;
                 Command: TCommands;
@@ -536,12 +537,12 @@ var shmname: string;
     dryrun: byte;
     doorstate: TDoorstates;
     tuesdaystate: TTuesdaySM;
-    MailboxSM, TripwireSM, TamperSM, DoorbellSM, PresenceSM, OpenButtonSM, HandleSM: TSimpleSM;
+    MailboxSM, TripwireSM, TamperSM, DoorbellSM, PresenceSM, OpenButtonSM, HandleSM, PanicSM, Mag1SM, Mag2SM: TSimpleSM;
     open_wait, tuesdaytimer, beepdelay, Mag1CloseWait, Mag2CloseWait, Mag1LockWait, Mag2LockWait: longint;
 begin
  outputs:=word2bits (0); // Set all outputs to zero.
  doorstate:=DS_ENTRY; MailboxSM:=SM_ENTRY; TripwireSM:=SM_ENTRY; TamperSM:=SM_ENTRY; DoorbellSM:=SM_ENTRY; // Initialize the state machines
- PresenceSM:=SM_ENTRY; OpenButtonSM:=SM_ENTRY; HandleSM:=SM_ENTRY; tuesdaystate:=SM_OFF;
+ PresenceSM:=SM_ENTRY; OpenButtonSM:=SM_ENTRY; HandleSM:=SM_ENTRY; tuesdaystate:=SM_OFF; PanicSM:=SM_ENTRY; Mag1SM:=SM_ENTRY; Mag2SM:=SM_ENTRY;
  dryrun:=MAXBOUNCES+2;
  open_wait:=0; beepdelay:=0; Mag1CloseWait:=MAGWAIT; Mag2CloseWait:=MAGWAIT; Mag1LockWait:=LOCKWAIT; Mag2LockWait:=LOCKWAIT; // Initialize some timers
  fillchar (CurrentState, sizeof (CurrentState), 0);
@@ -591,7 +592,7 @@ begin
       SHMPointer^.senderpid:=0; // Reset sender PID: If zero, we may have a race condition
      end;
 
-    // Panic mode has topmost priority
+    // Panic mode has topmost priority (need rework)
     if (inputs[PANIC_SENSE] = IS_OPEN) and (doorstate<> DS_PANIC) and (dryrun = 0) then doorstate:=DS_LOG_PANIC;
 
     // Start of tuesday mode state machine
@@ -619,6 +620,14 @@ begin
       end;
     end;
     // End of tuesday mode state machine
+
+    // Start of panic mode state machine
+    case PanicSM of
+     SM_ENTRY:
+      begin
+      end;
+    end;
+    // End of panic mode state machine
 
     // Start of front door state machine
     case doorstate of
@@ -817,6 +826,22 @@ begin
       end;
      end; // End of door state machine
 
+    // Start of maglock 1 feedback state machine
+    case Mag1SM of
+     SM_ENTRY:
+      begin
+      end;
+    end;
+    // End of maglock 1 feedback state machine
+
+    // Start of maglock 2 feedback state machine
+    case Mag2SM of
+     SM_ENTRY:
+      begin
+      end;
+    end;
+    // End of maglock 2 feedback state machine
+
      // Start of mailbox state machine
      case MailboxSM of
       SM_ENTRY: if STATIC_CONFIG[SC_MAILBOX] then MailboxSM:=SM_ACTIVE;
@@ -974,20 +999,29 @@ begin
                 Inputs, outputs, fakeinputs: TRegisterbits;
                 DoorState: TDoorStates;
                 TuesdayState: TTuesdaySM;
-                MailboxState, TamperState, TripwireState: TSimpleSM;
+                MailboxState, TripwireState, TamperState, DoorbellState, PresenceState, OpenButtonState, HandleState, PanicState: TSimpleSM;
+                // Mag1SM, Mag2SM: TSimpleSM;
                 state, Config :TLotsofbits;
                 senderpid: TPid;
                 Command: TCommands;
                 SHMMsg:string;
                 end;
- }
+}
     if dryrun = 0 then // Make a dry run to let inputs settle
      begin
       SHMPointer^.inputs:=inputs;
       SHMPointer^.outputs:=outputs;
       SHMPointer^.DoorState:=doorstate;
+      SHMPointer^.TuesdayState:=tuesdaystate;
       SHMPointer^.MailboxState:=MailboxSM;
-      SHMPointer^.state:=CurrentState;
+      SHMPointer^.TripwireState:=TripwireSM;
+      SHMPointer^.TamperState:=TamperSM;
+      SHMPointer^.DoorbellState:=DoorbellSM;
+      SHMPointer^.PresenceState:=PresenceSM;
+      SHMPointer^.OpenButtonState:=OpenButtonSM;
+      SHMPointer^.HandleState:=HandleSM;
+      SHMPointer^.PanicState:=PanicSM;
+      SHMPointer^.state:=CurrentState; // Should go away
       SHMPointer^.Config:=STATIC_CONFIG;
      end;
    until CurrentState[S_STOP];
