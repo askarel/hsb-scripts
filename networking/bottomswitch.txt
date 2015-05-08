@@ -220,7 +220,8 @@ interface FastEthernet0/44
  switchport mode access
 !
 interface FastEthernet0/45
- switchport access vlan 42
+ switchport access vlan 1
+ description 1st floor printer
  switchport mode access
 !
 interface FastEthernet0/46
