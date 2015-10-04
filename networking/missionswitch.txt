@@ -201,39 +201,36 @@ interface FastEthernet0/32
  switchport mode access
 !
 interface FastEthernet0/33
- description VDSL modem
- switchport access vlan 20
+ description Port 33
+ switchport access vlan 42
  switchport mode access
  spanning-tree portfast
 !
 interface FastEthernet0/34
- description Teleniet/Misericable
- switchport access vlan 21
+ description Zoppas
+ switchport access vlan 4
  switchport mode access
  spanning-tree portfast
 !
 interface FastEthernet0/35
- description Uplink 3
- switchport access vlan 22
+ description Printer entrance
+ switchport access vlan 1
  switchport mode access
 !
 interface FastEthernet0/36
- description Wireless Antwerpen
- switchport trunk native vlan 1
- switchport mode trunk
- switchport trunk allowed vlan 3
+ description Printer Back
+ switchport access vlan 1
+ switchport mode access
 !
 interface FastEthernet0/37
- description Unifi 1
- switchport trunk native vlan 1
- switchport mode trunk
- switchport trunk allowed vlan 6-9
+ description RIPE ATLAS
+ switchport access vlan 4
+ switchport mode access
 !
 interface FastEthernet0/38
- description Unifi 2
- switchport trunk native vlan 1
- switchport mode trunk
- switchport trunk allowed vlan 6-9
+ description HAL9000
+ switchport access vlan 4
+ switchport mode access
 !
 interface FastEthernet0/39
  description The Black Knight
@@ -242,59 +239,52 @@ interface FastEthernet0/39
  spanning-tree portfast
 !
 interface FastEthernet0/40
- description Printer
- switchport access vlan 1
+ description VDSL Uplink
+ switchport access vlan 20
  switchport mode access
 !
 interface FastEthernet0/41
- description Server
- switchport access vlan 4
+ description Uplink 1
+ switchport access vlan 21
  switchport mode access
 !
 interface FastEthernet0/42
- description Server
- switchport access vlan 4
+ description Uplink 2
+ switchport access vlan 22
  switchport mode access
 !
 interface FastEthernet0/43
- description Server
- switchport access vlan 4
+ description Wireless Antwerpen Uplink
+ switchport access vlan 3
  switchport mode access
 !
 interface FastEthernet0/44
- description Server
- switchport access vlan 4
- switchport mode access
+ description Unifi outdoor
+ switchport trunk native vlan 1
+ switchport mode trunk
+ switchport trunk allowed vlan 6-9
 !
 interface FastEthernet0/45
- description Server
- switchport access vlan 4
- switchport mode access
+ description Unifi 1
+ switchport trunk native vlan 1
+ switchport mode trunk
+ switchport trunk allowed vlan 6-9
 !
 interface FastEthernet0/46
- description Server
- switchport access vlan 4
- switchport mode access
+ description Unifi 2
+ switchport trunk native vlan 1
+ switchport mode trunk
+ switchport trunk allowed vlan 6-9
 !
 interface FastEthernet0/47
- description Electronic desk
- switchport access vlan 13
- switchport mode access
- spanning-tree portfast
+ description TRUNK port to next switch
+ switchport trunk native vlan 1
+ switchport mode trunk
 !
 interface FastEthernet0/48
  description TRUNK to minirouter/miniserver
  switchport trunk native vlan 1
  switchport mode trunk
- spanning-tree vlan 20 cost 30
- spanning-tree vlan 21 cost 30
- spanning-tree vlan 22 cost 30
- spanning-tree vlan 23 cost 30
- spanning-tree vlan 10 cost 90
- spanning-tree vlan 11 cost 90
- spanning-tree vlan 12 cost 90
- spanning-tree vlan 13 cost 90
- spanning-tree vlan 42 cost 90
 !
 interface GigabitEthernet0/1
  switchport trunk native vlan 1
