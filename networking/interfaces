@@ -27,10 +27,28 @@ iface lo inet loopback
 iface eth0.1 inet manual
 	vlan_raw_device eth0
 
+iface eth0.2 inet manual
+	vlan_raw_device eth0
+
+iface eth0.3 inet manual
+	vlan_raw_device eth0
+
 iface eth0.4 inet manual
 	vlan_raw_device eth0
 
+iface eth0.5 inet manual
+	vlan_raw_device eth0
+
 iface eth0.6 inet manual
+	vlan_raw_device eth0
+
+iface eth0.7 inet manual
+	vlan_raw_device eth0
+
+iface eth0.8 inet manual
+	vlan_raw_device eth0
+
+iface eth0.9 inet manual
 	vlan_raw_device eth0
 
 iface eth0.10 inet manual
@@ -65,11 +83,14 @@ iface eth2.1 inet manual
 iface eth2.2 inet manual
 	vlan_raw_device eth2
 
+#iface eth2.3 inet manual
+#	vlan_raw_device eth2
+
 iface eth2.4 inet manual
 	vlan_raw_device eth2
 
-iface eth2.5 inet manual
-	vlan_raw_device eth2
+#iface eth2.5 inet manual
+#	vlan_raw_device eth2
 
 iface eth2.6 inet manual
 	vlan_raw_device eth2
@@ -102,10 +123,28 @@ iface eth2.42 inet manual
 iface eth5.1 inet manual
 	vlan_raw_device eth5
 
+iface eth5.2 inet manual
+	vlan_raw_device eth5
+
+iface eth5.3 inet manual
+	vlan_raw_device eth5
+
 iface eth5.4 inet manual
 	vlan_raw_device eth5
 
+iface eth5.5 inet manual
+	vlan_raw_device eth5
+
 iface eth5.6 inet manual
+	vlan_raw_device eth5
+
+iface eth5.7 inet manual
+	vlan_raw_device eth5
+
+iface eth5.8 inet manual
+	vlan_raw_device eth5
+
+iface eth5.9 inet manual
 	vlan_raw_device eth5
 
 iface eth5.10 inet manual
@@ -222,7 +261,7 @@ iface br-v6 inet6 static
 # Network segment for SpaceFED
 auto br-fed
 iface br-fed inet6 static
-	bridge_ports eth2.7
+	bridge_ports eth0.7 eth2.7 eth5.7
 	bridge_maxwait 0
 	bridge_stp off
 	bridge_waitport 0
@@ -239,7 +278,7 @@ iface br-fed inet static
 # Network segment on a private SSID
 auto br-wifiwpa
 iface br-wifiwpa inet6 static
-	bridge_ports eth2.8
+	bridge_ports eth0.8 eth2.8 eth5.8
 	bridge_maxwait 0
 	bridge_stp off
 	bridge_waitport 0
@@ -256,7 +295,7 @@ iface br-wifiwpa inet static
 # Network segment on a public SSID
 auto br-wifiopen
 iface br-wifiopen inet6 static
-	bridge_ports eth2.9
+	bridge_ports eth0.9 eth2.9 eth5.9
 	bridge_maxwait 0
 	bridge_stp off
 	bridge_waitport 0
@@ -338,7 +377,7 @@ iface br-3 inet static
 # Legacy flat LAN
 auto br-lan
 iface br-lan inet6 static
-	bridge_ports eth0.42 eth5.42
+	bridge_ports eth0.42 eth2.42 eth5.42
 #	bridge_ports eth0
 	bridge_maxwait 0
 	bridge_stp off
