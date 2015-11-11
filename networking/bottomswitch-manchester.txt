@@ -1,0 +1,307 @@
+
+!
+version 12.1
+no service pad
+service timestamps debug uptime
+service timestamps log uptime
+no service password-encryption
+!
+hostname BottomSwitch
+!
+!
+ip subnet-zero
+!
+!
+spanning-tree mode pvst
+no spanning-tree optimize bpdu transmission
+spanning-tree extend system-id
+!
+!
+!
+!
+interface FastEthernet0/1
+ description Thinclient 1
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/2
+ description Thinclient 2
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/3
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/4
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/5
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/6
+ description Electronic lab table switch
+ switchport access vlan 42
+ switchport mode access
+!
+interface FastEthernet0/7
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/8
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/9
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/10
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/11
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/12
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/13
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/14
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/15
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/16
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/17
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/18
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/19
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/20
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/21
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/22
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/23
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/24
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/25
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/26
+ description 42
+ switchport access vlan 42
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/27
+ description Rpi-hosting
+ switchport access vlan 4
+ switchport mode access
+!
+interface FastEthernet0/28
+ description Rpi-hosting
+ switchport access vlan 4
+ switchport mode access
+!
+interface FastEthernet0/29
+ description Rpi-hosting
+ switchport access vlan 4
+ switchport mode access
+!
+interface FastEthernet0/30
+ description Rpi-hosting
+ switchport access vlan 4
+ switchport mode access
+!
+interface FastEthernet0/31
+ description Unifi 1
+ switchport trunk allowed vlan 6-9
+ switchport mode trunk
+!
+interface FastEthernet0/32
+ description Unifi 2
+ switchport trunk allowed vlan 6-9
+ switchport mode trunk
+!
+interface FastEthernet0/33
+ description Unifi 3
+ switchport trunk allowed vlan 6-9
+ switchport mode trunk
+!
+interface FastEthernet0/34
+ description Unifi 4
+ switchport trunk allowed vlan 6-9
+ switchport mode trunk
+!
+interface FastEthernet0/35
+ description VDSL Uplink
+ switchport access vlan 20
+ switchport mode access
+!
+interface FastEthernet0/36
+ description Teleniet/Misericable
+ switchport access vlan 21
+ switchport mode access
+!
+interface FastEthernet0/37
+ description Uplink 3
+ switchport access vlan 22
+ switchport mode access
+!
+interface FastEthernet0/38
+ description Uplink 4
+ switchport access vlan 23
+ switchport mode access
+!
+interface FastEthernet0/39
+ description TOUGHSwitch Management
+ switchport mode access
+!
+interface FastEthernet0/40
+ description VLAN 1
+ switchport mode access
+!
+interface FastEthernet0/41
+ description Zoppas
+ switchport access vlan 4
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/42
+ description RIPE ATLAS
+ switchport access vlan 4
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/43
+ description SIP box
+ switchport access vlan 4
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/44
+ description HAL9000
+ switchport access vlan 4
+ switchport mode access
+!
+interface FastEthernet0/45
+ description Printer 1
+ switchport mode access
+!
+interface FastEthernet0/46
+ description Printer 2
+ switchport mode access
+!
+interface FastEthernet0/47
+ description Downstairs neighbour
+ switchport access vlan 13
+ switchport mode access
+!
+interface FastEthernet0/48
+ description TRUNK to Gate
+ switchport mode trunk
+ spanning-tree vlan 10-13,42 cost 30
+ spanning-tree vlan 20-23 cost 90
+!
+interface GigabitEthernet0/1
+ switchport trunk native vlan 999
+ switchport mode trunk
+!
+interface GigabitEthernet0/2
+ switchport trunk native vlan 999
+ switchport mode trunk
+!
+interface Vlan1
+ ip address 192.168.222.254 255.255.255.0
+ no ip route-cache
+!
+ip default-gateway 192.168.222.1
+ip http server
+logging 192.168.222.1
+!
+line con 0
+line vty 0 4
+ login
+line vty 5 15
+ login
+!
+!
+end
