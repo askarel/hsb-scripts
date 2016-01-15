@@ -29,12 +29,13 @@ CONST   SHITBITS=16; // Should go away at some point
 TYPE    TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of bits to abuse. 64 bits should be enough. :-) Should go away at some point.
 
         // Available error messages
-        TLogItems=(MSG_DEMO, MSG_BOX_TAMPER, MSG_BUTTON_PUSHED, MSG_BUTTON_STUCK, MSG_BUTTON_FIXED, MSG_TUESDAY_INACTIVE, MSG_TUESDAY_ACTIVE,
+        TLogItems=(MSG_DEMO, MSG_BOX_TAMPER, MSG_BUTTON_PUSHED, MSG_LONG_BUTTON_PUSH, MSG_BUTTON_STUCK, MSG_BUTTON_FIXED, MSG_TUESDAY_INACTIVE,
+                MSG_TUESDAY_ACTIVE_CMDLINE, MSG_TUESDAY_ACTIVE_TAG, MSG_TUESDAY_TIMEOUT, MSG_TUESDAY_FORCE_INACTIVE,
                 MSG_TUESDAY_CALL, MSG_BOX_RECLOSED, MSG_SPARE1_CLOSED, MSG_SPARE1_OPEN, MSG_SPARE2_CLOSED, MSG_SPARE2_OPEN, MSG_ELEVATOR_CMDLINE, MSG_BAILOUT);
        TCommands=(CMD_NONE, CMD_GOHOME, CMD_TUESDAY_START, CMD_TUESDAY_STOP, CMD_STOP);
        TLogItemText= ARRAY[TLogItems] of pchar;
         // Tuesday mode state machine
-        TTuesdaySM=(SM_OFF, SM_LOG_START, SM_START, SM_TICK, SM_LOG_STOP);
+        TTuesdaySM=(SM_OFF, SM_LOG_START_CMDLINE, SM_LOG_START_VALID_TAG, SM_START, SM_TICK, SM_LOG_STOP_CMDLINE, SM_LOG_STOP_TIMEOUT, SM_LOG_STOP_BUTTON);
         // Simple universal state machine definition (let's see how far it flies)
         TSimpleSM=(SM_ENTRY, SM_ACTIVE, SM_LOG_OPEN, SM_OPEN, SM_LOG_REALLY_OPEN, SM_REALLY_OPEN, SM_LOG_CLOSED, SM_CLOSED, SM_LOG_REALLY_CLOSED,
                    SM_REALLY_CLOSED, SM_LOG_STUCK_CLOSED, SM_STUCK_CLOSED, SM_LOG_UNSTUCK);
@@ -55,10 +56,14 @@ CONST
         LOG_ITEM_TEXT_EN: TLogItemText=('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.',
                                         'WARNING: the box is being tampered !',
                                         'Button has been pushed',
+                                        'Long push on button',
                                         'Button is stuck. Please repair.',
                                         'Button has been fixed. Thanks.',
                                         'Tuesday mode inactive',
-                                        'Tuesday mode active. Push lit button to go to up',
+                                        'Tuesday mode activated by command line. Push lit button to go to 4th floor',
+                                        'Tuesday mode activated by valid tag. I''m taking you to the 4th floor',
+                                        'Tuesday mode timeout',
+                                        'Tuesday mode forcefully de-activated by button',
                                         'Tuesday mode: elevator called by button',
                                         'Controller box has been re-closed',
                                         'Unknown input closed (SPARE1)',
@@ -69,10 +74,11 @@ CONST
                                         'Controller is bailing out !' );
 
 //        TUESDAY_DEFAULT_TIME=1000*60*60*3; // tuesday timer: 3 hours
-        TUESDAY_DEFAULT_TIME=1000*60*3; // tuesday timer: 3 minutes (debug)
+        TUESDAY_DEFAULT_TIME=1000*60*6; // tuesday timer: 6 minutes (debug)
         CALL_DELAY=100; // 100 mS to trigger the 555
-        STUCK_DELAY=3*1000; // Delay to determine being stuck
-        S_DEMOMODE=0; S_STOP=1; S_HUP=2; S_I_BUTTON=3; S_I_TAMPER=4; S_I_SPARE1=5; S_I_SPARE2=6; S_O_CALL=7; S_O_LED=8;
+        LONG_PUSH_DELAY=10*1000; // Long push on button (10 seconds)
+        STUCK_DELAY=3*60*1000; // Delay to determine being stuck (3 minutes)
+        S_DEMOMODE=0; S_STOP=1; S_HUP=2; S_I_BUTTON=3; S_I_TAMPER=4; S_I_SPARE1=5; S_I_SPARE2=6; S_O_CALL=7; S_O_LED=8; S_BLOCK=9;
         IS_CLOSED=false;
         IS_OPEN=true;
  // Convert Raspberry Pi P1 pins (Px) to GPIO port
@@ -211,7 +217,7 @@ var shmname: string;
     tuesdaystate: TTuesdaySM;
     TamperSM, ButtonSM, Spare1SM, Spare2SM: TSimpleSM;
     ElevatorSM: TElevatorSM;
-    tuesdaytimer, ElevatorTimer, BtnStuckTimer: longint;
+    tuesdaytimer, ElevatorTimer, BtnStuckTimer, BtnLongTimer: longint;
 begin
  TamperSM:=SM_ENTRY; Spare1SM:=SM_ENTRY; Spare2SM:=SM_ENTRY; tuesdaystate:=SM_OFF; ButtonSM:=SM_ENTRY; ElevatorSM:=EL_ENTRY; // Initialize the state machines
  fillchar (CurrentState, sizeof (CurrentState), 0);
@@ -251,9 +257,16 @@ begin
       syslog (log_info, 'HUP received from PID %d. Command: "%s" with parameter: "%s"', [ SHMPointer^.senderpid, CMD_NAME[SHMPointer^.command], @SHMPointer^.shmmsg[1]]);
       case SHMPointer^.command of
        CMD_STOP: CurrentState[S_STOP]:=true;
-       CMD_GOHOME: if (ElevatorSM=EL_CALL_RESET) then ElevatorSM:=EL_LOG_CALL;
-       CMD_TUESDAY_START: tuesdaystate:=SM_LOG_START; // Start tuesday timer
-       CMD_TUESDAY_STOP: tuesdaystate:=SM_LOG_STOP; // Early stop of the tuesday mode
+       CMD_GOHOME: if (ButtonSM=SM_CLOSED) or (ButtonSM=SM_REALLY_CLOSED) then
+                    begin
+                     tuesdaystate:=SM_LOG_START_VALID_TAG;
+                     if (ElevatorSM=EL_CALL_RESET) then ElevatorSM:=EL_CALL_SET;
+                     CurrentState[S_BLOCK]:=true;
+                    end
+                    else
+                     if (ElevatorSM=EL_CALL_RESET) then ElevatorSM:=EL_LOG_CALL;
+       CMD_TUESDAY_START: tuesdaystate:=SM_LOG_START_CMDLINE; // Start tuesday timer
+       CMD_TUESDAY_STOP: tuesdaystate:=SM_LOG_STOP_CMDLINE; // Early stop of the tuesday mode
       end;
       SHMPointer^.command:=CMD_NONE;
       CurrentState[S_HUP]:=false; // Reset HUP signal
@@ -262,27 +275,45 @@ begin
 
     // Start of tuesday mode state machine
     case tuesdaystate of
-     SM_OFF: tuesdaytimer:=0; // Tuesday mode is off
-     SM_LOG_START: // Start the tuesday timer
+     SM_OFF:
       begin
-       log_single_door_event (MSG_TUESDAY_ACTIVE, LOG_ITEM_TEXT_EN, '');
-       CurrentState[S_O_LED]:=true;
+       tuesdaytimer:=0; // Tuesday mode is off
+       CurrentState[S_O_LED]:=false;
+      end;
+     SM_LOG_START_CMDLINE: // Start the tuesday timer (cmdline)
+      begin
+       log_single_door_event (MSG_TUESDAY_ACTIVE_CMDLINE, LOG_ITEM_TEXT_EN, '');
+       tuesdaystate:=SM_START;
+      end;
+     SM_LOG_START_VALID_TAG: // Start the tuesday timer (with valid tag) and call elevator
+      begin
+       log_single_door_event (MSG_TUESDAY_ACTIVE_TAG, LOG_ITEM_TEXT_EN, pchar (@SHMPointer^.shmmsg[1]));
        tuesdaystate:=SM_START;
       end;
      SM_START:
       begin
        tuesdaytimer:=TUESDAY_DEFAULT_TIME;
+       CurrentState[S_O_LED]:=true;
        tuesdaystate:=SM_TICK;
       end;
      SM_TICK: //Tick the tuesday timer
       begin
-       if tuesdaytimer=0 then tuesdaystate:=SM_LOG_STOP;
+       if tuesdaytimer=0 then tuesdaystate:=SM_LOG_STOP_TIMEOUT;
        busy_delay_tick (tuesdaytimer, 1);
       end;
-     SM_LOG_STOP: // stop the timer
+     SM_LOG_STOP_CMDLINE: // stop the timer (cmdline)
       begin
        log_single_door_event (MSG_TUESDAY_INACTIVE, LOG_ITEM_TEXT_EN, '');
-       CurrentState[S_O_LED]:=false;
+       tuesdaystate:=SM_OFF;
+      end;
+     SM_LOG_STOP_TIMEOUT: // stop the timer (timeout)
+      begin
+       log_single_door_event (MSG_TUESDAY_TIMEOUT, LOG_ITEM_TEXT_EN, '');
+       tuesdaystate:=SM_OFF;
+      end;
+     SM_LOG_STOP_BUTTON: // stop the timer (via button)
+      begin
+       log_single_door_event (MSG_TUESDAY_FORCE_INACTIVE, LOG_ITEM_TEXT_EN, '');
        tuesdaystate:=SM_OFF;
       end;
     end;
@@ -352,24 +383,43 @@ begin
        begin
         ButtonSM:=SM_CLOSED;
         BtnStuckTimer:=STUCK_DELAY;
+        BtnLongTimer:=LONG_PUSH_DELAY;
+        CurrentState[S_BLOCK]:=false;
        end;
       SM_CLOSED:
        begin
         if (CurrentState[S_I_BUTTON] = IS_OPEN) then ButtonSM:=SM_LOG_OPEN;
+        busy_delay_tick (BtnLongTimer, 1);
+        if (BtnLongTimer=0) then ButtonSM:=SM_LOG_REALLY_CLOSED;
+       end;
+      SM_LOG_REALLY_CLOSED:
+       begin
+        ButtonSM:=SM_REALLY_CLOSED;
+       end;
+      SM_REALLY_CLOSED:
+       begin
         busy_delay_tick (BtnStuckTimer, 1);
         if BtnStuckTimer=0 then ButtonSM:=SM_LOG_STUCK_CLOSED;
+        if (CurrentState[S_I_BUTTON] = IS_OPEN) then ButtonSM:=SM_LOG_REALLY_OPEN;
+        if (tuesdaystate=SM_TICK) then tuesdaystate:=SM_LOG_STOP_BUTTON;    // !! BUG ?
        end;
       SM_LOG_OPEN: // Button has been released
        begin
         ButtonSM:=SM_ACTIVE;
          if (tuesdayState=SM_TICK) then
           begin // In tuesday mode
-           log_single_door_event (MSG_TUESDAY_CALL, LOG_ITEM_TEXT_EN, '');
+           if not CurrentState[S_BLOCK] then log_single_door_event (MSG_TUESDAY_CALL, LOG_ITEM_TEXT_EN, '');
            ElevatorSM:=EL_CALL_SET;
           end
           else  // Outside tuesday mode
            log_single_door_event (MSG_BUTTON_PUSHED, LOG_ITEM_TEXT_EN, '');
        end;
+      SM_LOG_REALLY_OPEN:
+       begin
+        ButtonSM:=SM_REALLY_OPEN;
+       end;
+      SM_REALLY_OPEN:
+       ButtonSM:=SM_ACTIVE;
       SM_LOG_STUCK_CLOSED:
        begin
         log_single_door_event (MSG_BUTTON_STUCK, LOG_ITEM_TEXT_EN, '');
@@ -394,7 +444,7 @@ begin
       EL_CALL_RESET: CurrentState[S_O_CALL]:=false;
       EL_LOG_CALL:
        begin
-        log_single_door_event (MSG_ELEVATOR_CMDLINE, LOG_ITEM_TEXT_EN, '');
+        log_single_door_event (MSG_ELEVATOR_CMDLINE, LOG_ITEM_TEXT_EN, pchar (@SHMPointer^.shmmsg[1]));
         ElevatorSM:=EL_CALL_SET;
        end;
       EL_CALL_SET:
