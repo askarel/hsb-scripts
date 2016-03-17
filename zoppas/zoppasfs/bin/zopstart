@@ -1,5 +1,7 @@
 #!/bin/sh
 
+
 chown -R root:root /root
 sleep 2
-ssh zoppas@hal9000 -i /root/.ssh/id_rsa -y
+ssh zoppas@hal9000.space.hackerspace.be -i /root/.ssh/id_rsa -y
+#ssh zoppas@192.0.2.1 -p 2222 -i /root/.ssh/id_rsa -y
