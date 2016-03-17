@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 #	The callback script
 #
@@ -24,7 +24,10 @@ readonly GARBAGE_WHITE_BLUE="Garbage day: Please take out the white and blue gar
 readonly GARBAGE_WHITE_YELLOW="Garbage day: Please take out the white garbage bags and cardboard boxes."
 readonly TROLLURL="http://hal9000.space.hackerspace.be/cgi-bin/sounds.sh"
 
+RANDOM_BLOB="RANDOM_BLOB=$(dd if=/dev/urandom bs=112 count=1 2>/dev/null |base64 -w 0)"
+
 logger -t $ME "$# Command line parameter received: '$1' '$2' '$3'"
+
 
 # Prepare the greeting depending of the time of the day
 HOUR="$(date '+%H')"
@@ -127,8 +130,17 @@ case "$1" in
 	remote_speakup "Ding Dong." &
 	speakup "Ding Dong"
 	;;
+    "MSG_BOX_TAMPER")
+	remote_speakup "ALERT: Elevator box is being tampered." &
+	speakup "What are you doing ?"
+	;;
+    "MSG_BOX_RECLOSED")
+	remote_speakup "ALERT: Elevator box has been re-closed." &
+	;;
     *)
 	speakup "$2"
 	;;
 esac
 
+# Send UDP packet storm to HAL9000 with the current event (just in case TCP is not possible due to bad WiFi)
+for i in $(seq 20); do echo -e "COMMAND=$1&$RANDOM_BLOB" > /dev/udp/hal9000.space.hackerspace.be/54321; sleep 0.2; done
