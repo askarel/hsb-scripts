@@ -18,7 +18,7 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-PAGEURL="http://hal9000/cgi-bin/sounds.sh"
+PAGEURL="http://hal9000.space.hackerspace.be/cgi-bin/sounds.sh"
 
 readonly ME="$(basename $0)"
 
