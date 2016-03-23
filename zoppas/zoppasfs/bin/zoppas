@@ -40,6 +40,30 @@ PRODUCT_FIELD_PRICE_BYTENIGHT='7' # Any field number above is the different pric
 
 PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_NORMAL"
 
+readonly GC_TOPLEFT=0
+readonly GC_HBAR=1
+readonly GC_TOPRIGHT=3
+readonly GC_BOTTOMLEFT=4
+readonly GC_VBAR=5
+readonly GC_BOTTOMRIGHT=6
+readonly GC_CROSS=7
+readonly GC_T_UP=8
+readonly GC_T_DOWN=9
+readonly GC_T_RIGHT=10
+readonly GC_T_LEFT=11
+
+readonly GG_SINGLE=0
+readonly GG_DOUBLE=11
+readonly GG_DOUBLE_H=22
+readonly GG_DOUBLE_V=33
+
+# declare -a GRAPHCHARS=("|" "-" "+" "+")
+declare -a GRAPHCHARS=(	"\xe2\x94\x8c" "\xe2\x94\x80" "\xe2\x94\x90" "\xe2\x94\x94" "\xe2\x94\x82" "\xe2\x94\x98" "\xe2\x94\xbc" "\xe2\x94\xb4" "\xe2\x94\xac" "\xe2\x94\x9c" "\xe2\x94\xa4"
+			"\xe2\x95\x94" "\xe2\x95\x90" "\xe2\x95\x97" "\xe2\x95\x9a" "\xe2\x95\x91" "\xe2\x95\x9d" "\xe2\x95\xac" "\xe2\x95\xa9" "\xe2\x95\xa6" "\xe2\x95\xa0" "\xe2\x95\xa3"
+			"\xe2\x95\x93" "\xe2\x94\x80" "\xe2\x95\x96" "\xe2\x95\x99" "\xe2\x95\x91" "\xe2\x95\x9c" "\xe2\x95\xab" "\xe2\x95\xa8" "\xe2\x95\xa5" "\xe2\x95\x9f" "\xe2\x95\xa2"
+			"\xe2\x95\x92" "\xe2\x95\x90" "\xe2\x95\x95" "\xe2\x95\x98" "\xe2\x94\x82" "\xe2\x95\x9b" "\xe2\x95\xaa" "\xe2\x95\xa7" "\xe2\x95\xa4" "\xe2\x95\x9e" "\xe2\x95\xa1"
+)
+
 unset CASHCOMMAND
 
 ############### FUNCTIONS ###############
@@ -82,8 +106,9 @@ hline()
 {
     BUF="$TMPDIR/$2"
     test -z "$2" && BUF="$(mktemp $TMPDIR/$ME.XXXXXXXXXXXXX)"
-    HLINE="\033(0q\033(B"
-    HLINE="-"
+#    HLINE="\033(0q\033(B"
+#    HLINE="-"
+    HLINE="\xE2\x94\x80"
     for i in $(seq 1 $1); do printf "$HLINE" >> $BUF ; done
     test -z "$2" && cat $BUF && rm $BUF
 }
@@ -318,7 +343,8 @@ setbottombar()
     for i in $(seq 3 $MAXX); do CLEARBAR="$CLEARBAR "; done;
 #    gotoxy 1 $MAXY bottombar;  outtext "$CLEARBAR" bottombar; gotoxy 1 $MAXY
     for i in $(seq 1 $(( $BOTTOMBARITEMS -1 )) ); do
-	gotoxy $(( ($MAXX / $BOTTOMBARITEMS) * $i )) $MAXY bottombar; outtext "|" bottombar
+#	gotoxy $(( ($MAXX / $BOTTOMBARITEMS) * $i )) $MAXY bottombar; outtext "|" bottombar
+	gotoxy $(( ($MAXX / $BOTTOMBARITEMS) * $i )) $MAXY bottombar; outtext "\xe2\x95\x91" bottombar
     done
     BOTTOMCODES=""
     for i in $(seq 1 $# ); do
@@ -366,6 +392,20 @@ decodebottombar()
     esac
 }
 
+graftest()
+{
+    echo "$ME graph test"
+    for i in 0 11 22 33 ; do 
+	for j in $( seq 0 10 ); do 
+	    echo -ne " ${GRAPHCHARS[ $(( $j + $i )) ]} "
+	done
+	echo ""
+    done
+    exit 0
+}
+
+test "$1" = "graftest" && graftest
+
 ############### CODE ###############
 # Look for config file in the following locations: /etc, user directory and 
 # script directory. Script directory always wins.
@@ -386,7 +426,7 @@ test -n "$MONIES" || MONIES="0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;
 # If a specific screen size is defined in config file, use it.
 # when all else fail, default to 80x25 :-)
 test -z "$MAXX" && MAXX="80"
-test -z "$MAXY" && MAXY="25"
+test -z "$MAXY" && MAXY="33"
 mkdir -p "$CACHEDIR" || die "Cannot create the cache directory ($CACHEDIR)"
 # Maximum length of the price line
 test -z "$MAXPRICELINE" && MAXPRICELINE="39"
