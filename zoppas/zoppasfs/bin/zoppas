@@ -55,8 +55,8 @@ readonly GC_T_LEFT=10
 # Graphical table to use
 readonly GG_SINGLE=0
 readonly GG_DOUBLE=11
-readonly GG_DOUBLE_H=22
-readonly GG_DOUBLE_V=33
+readonly GG_DOUBLE_V=22
+readonly GG_DOUBLE_H=33
 
 # Graphical elements
 declare -a TEXTCHARS=("+" "-" "+" "+" "|" "+" "+" "+" "+" "+" "+" "+" "=" "+" "+" "|" "+" "+" "+" "+" "+" "+" "+" "-" "+" "+" "|" "+" "+" "+" "+" "+" "+" "+" "=" "+" "+" "|" "+" "+" "+" "+" "+" "+" )
@@ -64,6 +64,8 @@ declare -a GRAPHCHARS=(	"\xe2\x94\x8c" "\xe2\x94\x80" "\xe2\x94\x90" "\xe2\x94\x
 			"\xe2\x95\x94" "\xe2\x95\x90" "\xe2\x95\x97" "\xe2\x95\x9a" "\xe2\x95\x91" "\xe2\x95\x9d" "\xe2\x95\xac" "\xe2\x95\xa9" "\xe2\x95\xa6" "\xe2\x95\xa0" "\xe2\x95\xa3"
 			"\xe2\x95\x93" "\xe2\x94\x80" "\xe2\x95\x96" "\xe2\x95\x99" "\xe2\x95\x91" "\xe2\x95\x9c" "\xe2\x95\xab" "\xe2\x95\xa8" "\xe2\x95\xa5" "\xe2\x95\x9f" "\xe2\x95\xa2"
 			"\xe2\x95\x92" "\xe2\x95\x90" "\xe2\x95\x95" "\xe2\x95\x98" "\xe2\x94\x82" "\xe2\x95\x9b" "\xe2\x95\xaa" "\xe2\x95\xa7" "\xe2\x95\xa4" "\xe2\x95\x9e" "\xe2\x95\xa1")
+
+Graph="$GRAPHCHARS"
 
 unset CASHCOMMAND
 
@@ -76,6 +78,12 @@ test -e "$0.conf" && CONFIGFILE="$0.conf"
 test -z "$CONFIGFILE" && die "No config file found"
 # Bring the config file
 . "$CONFIGFILE"
+# By default we talk in euros, and we define the full set of coins and notes of the currency.
+# Change it in the config file if you're not in the euro zone.
+test -n "$CURRENCY" || CURRENCY="EUR"
+test -n "$MONIES" || MONIES="0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;20.00;50.00;100.00;200.00;500.00"
+# validate config file
+test -n "$ORGNAME" || die "Variable ORGNAME is empty. Set it to the name of your organization"
 
 
 ############### FUNCTIONS ###############
@@ -86,6 +94,17 @@ die()
     test -z "$2" && exit 1
     test -n "$2" && exit $2
 }
+
+# Callback to redraw the screen in case of terminal resize
+redrawscreen()
+{
+    MAXX="$(tput cols)"
+    MAXY="$(tput lines)"
+    test -n "$DRAWSCREEN" && $DRAWSCREEN
+    test -z "$DRAWSCREEN" && echo "Console is now $MAXX x $MAXY."
+}
+
+trap redrawscreen WINCH
 
 # Erase a buffer file (1 parameter: buffer name)
 destroybuffer()
@@ -404,11 +423,37 @@ decodebottombar()
     esac
 }
 
+# New salescreen. Draw the whole salescreen at once. The parameter is an array
+salescreen()
+{
+    clear
+    printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" 'Line' 'Int.' 'Barcode' 'Description' 'U.Price' 'Quant.' 'Subtot.'
+    printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" 'No.' 'code' 'number' ' ' "$CURRENCY " ' ' "$CURRENCY "
+    printf "%4s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %4s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %-11s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s \n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
+    for i in $(seq 0 $(( $MAXY - 9 )) ); do 
+	printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n"
+    done
+    printf "%4s${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %4s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %-11s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]}%6s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]}%6s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s \n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
+
+    printf '<-%76s->\n' 'This string is exactly 80 chars long.'
+}
+
+# New price list. Draw the whole screen at once. Data is in an array
+npricelist()
+{
+    PRHEADER="$ORGNAME price list"
+    clear
+    printf "${GRAPHCHARS[ $(($GC_TOPLEFT + $GG_DOUBLE )) ]}%$(( $MAXX - 2 ))s${GRAPHCHARS[ $(($GC_TOPRIGHT + $GG_DOUBLE )) ]}\n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
+    printf "${GRAPHCHARS[ $(($GC_VBAR + $GG_DOUBLE )) ]}%$(( ($MAXX - 2)/2 ))s%-$(( ($MAXX - 2) /2 ))s${GRAPHCHARS[ $(($GC_VBAR + $GG_DOUBLE )) ]}\n" "$PRHEADER"
+    printf "${GRAPHCHARS[ $(($GC_BOTTOMLEFT + $GG_DOUBLE )) ]}%-$(( $MAXX - 2 ))s${GRAPHCHARS[ $(($GC_BOTTOMRIGHT + $GG_DOUBLE )) ]}\n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
+    printf '<-%76s->\n' 'This string is exactly 80 chars long.'
+    echo "${#PRHEADER}"
+}
+
 testmode()
 {
     PS3="$ME> "
-#    select TESTOPT in 'graftest' 'setscreen' 'pricelist' 'salescreen' 'bottombar' 'quit'; do
-    select TESTOPT in 'graftest' 'setscreen' 'quit'; do
+    select TESTOPT in 'graftest' 'setscreen' 'salescreen' 'pricelist' 'bottombar' 'quit'; do
 	case "$TESTOPT" in
 	    'graftest')
 		echo "$ME graph test"
@@ -449,6 +494,18 @@ testmode()
 		    break
 		done
 	    ;;
+	    'salescreen')
+		DRAWSCREEN=salescreen
+		salescreen
+		read
+		unset DRAWSCREEN
+	    ;;
+	    'pricelist')
+		DRAWSCREEN=npricelist
+		npricelist
+		read
+		unset DRAWSCREEN
+	    ;;
 	    *)
 		die 'bye'
 	    ;;
@@ -462,12 +519,7 @@ testmode()
 test "$1" = "testmode" && testmode
 
 # validate config file
-test -n "$ORGNAME" || die "Variable ORGNAME is empty. Set it to the name of your organization"
 test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
-# By default we talk in euros, and we define the full set of coins and notes of the currency.
-# Change it in the config file if you're not in the euro zone.
-test -n "$CURRENCY" || CURRENCY="EUR"
-test -n "$MONIES" || MONIES="0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;20.00;50.00;100.00;200.00;500.00"
 # By default, detect screen size.
 # If a specific screen size is defined in config file, use it.
 # when all else fail, default to 80x25 :-)
