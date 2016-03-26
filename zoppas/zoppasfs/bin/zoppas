@@ -40,6 +40,8 @@ PRODUCT_FIELD_PRICE_BYTENIGHT='7' # Any field number above is the different pric
 
 PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_NORMAL"
 
+declare -A SALEBUFFER
+
 # Graphical items
 readonly GC_TOPLEFT=0
 readonly GC_HBAR=1
@@ -427,15 +429,32 @@ decodebottombar()
 salescreen()
 {
     clear
+    SALEBUFFER[0,INTREF]=12
+    SALEBUFFER[0,BARCODE]=1234567890
+    SALEBUFFER[0,DESC]='Description text'
+    SALEBUFFER[0,UPRICE]='2.00'
+    SALEBUFFER[0,QUANT]='2'
+    SALEBUFFER[0,SUBTOT]=''
+
+    SALEBUFFER[1,INTREF]=33
+    SALEBUFFER[1,BARCODE]=98456712345
+    SALEBUFFER[1,DESC]='Other Description text'
+    SALEBUFFER[1,UPRICE]='5.00'
+    SALEBUFFER[1,QUANT]='3'
+    SALEBUFFER[1,SUBTOT]=''
+
+    SALEINDEX=0
     printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" 'Line' 'Int.' 'Barcode' 'Description' 'U.Price' 'Quant.' 'Subtot.'
     printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" 'No.' 'code' 'number' ' ' "$CURRENCY " ' ' "$CURRENCY "
     printf "%4s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %4s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %-11s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s \n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
-    for i in $(seq 0 $(( $MAXY - 9 )) ); do 
-	printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n"
+    for i in $(seq 0 $(( $MAXY - 9 )) ); do
+	test -n "${SALEBUFFER[$(( $SALEINDEX + $i )),INTREF]}" && LINE_NO="$(( $SALEINDEX + $i +1 ))" || unset LINE_NO
+	printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" "$LINE_NO" "${SALEBUFFER[$(( $SALEINDEX + $i )),INTREF]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),BARCODE]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),DESC]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),UPRICE]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),QUANT]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),SUBTOT]}"
     done
     printf "%4s${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %4s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %-11s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]}%6s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]}%6s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s \n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
 
     printf '<-%76s->\n' 'This string is exactly 80 chars long.'
+    printf "${#SALEBUFFER[@]}\n"
 }
 
 # New price list. Draw the whole screen at once. Data is in an array
@@ -517,7 +536,7 @@ testmode()
 ############### CODE ###############
 
 test "$1" = "testmode" && testmode
-
+#exit 0
 # validate config file
 test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
 # By default, detect screen size.
