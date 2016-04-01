@@ -24,8 +24,6 @@ CACHEDIR="/var/tmp/$ME"
 TRANSACTIONDIR="/var/lib/$ME"
 BARCODEFILE="${ME}-barcodes.csv"
 SALEFILE="$TMPDIR/currentsale"
-MAXX="$(tput cols)"
-MAXY="$(tput lines)"
 CSVSEPARATOR=';'
 # How many items on the bottom bar
 BOTTOMBARITEMS=5
@@ -40,7 +38,7 @@ PRODUCT_FIELD_PRICE_BYTENIGHT='7' # Any field number above is the different pric
 
 PRODUCT_FIELD_PRICE="$PRODUCT_FIELD_PRICE_NORMAL"
 
-declare -A SALEBUFFER
+declare -A SALEBUFFER PRICELIST
 
 # Graphical items
 readonly GC_TOPLEFT=0
@@ -80,13 +78,22 @@ test -e "$0.conf" && CONFIGFILE="$0.conf"
 test -z "$CONFIGFILE" && die "No config file found"
 # Bring the config file
 . "$CONFIGFILE"
-# By default we talk in euros, and we define the full set of coins and notes of the currency.
-# Change it in the config file if you're not in the euro zone.
-test -n "$CURRENCY" || CURRENCY="EUR"
-test -n "$MONIES" || MONIES="0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;20.00;50.00;100.00;200.00;500.00"
 # validate config file
 test -n "$ORGNAME" || die "Variable ORGNAME is empty. Set it to the name of your organization"
-
+# By default we talk in euros, and we define the full set of coins and notes of the currency.
+# Change it in the config file if you're not in the euro zone.
+CURRENCY="${CURRENCY:-EUR}"
+MONIES="${MONIES:-0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;20.00;50.00;100.00;200.00;500.00}"
+#test -n "$MONIES" || MONIES="0.01;0.02;0.05;0.10;0.20;0.50;1.00;2.00;5.00;10.00;20.00;50.00;100.00;200.00;500.00"
+# By default, detect screen size.
+# If a specific screen size is defined in config file, use it.
+# when all else fail, default to 80x25 :-)
+MAXX="$(tput cols)"
+MAXY="$(tput lines)"
+test -z "$MAXX" && MAXX="80"
+test -z "$MAXY" && MAXY="25"
+# Maximum length of the price line
+test -z "$MAXPRICELINE" && MAXPRICELINE="39"
 
 ############### FUNCTIONS ###############
 # Function to call when we bail out
@@ -242,11 +249,6 @@ computesaletotal()
     fi
 }
 
-computesubtotal()
-{
-    echo
-}
-
 ############### SCREEN FUNCTIONS ###############
 
 # Automagically position text snippet on the screen based on an index, screen width and a length.
@@ -388,7 +390,8 @@ setbottombar()
 }
 
 # Decode the bottom bar options.
-# Parameter: input barcode
+# Parameter 1: input barcode
+# Parameter 2: translation table
 # output: if option barcode, translate it
 #	  if not an option, send input back unmodified
 # Configure it with function setbottombar()
@@ -396,28 +399,28 @@ decodebottombar()
 {
     case "$1" in
 	"OPT:1")
-	    echo "$BOTTOMCODES"| cut -d ',' -f 2
+	    echo "$2"| cut -d ',' -f 2
 	    ;;
 	"OPT:2")
-	    echo "$BOTTOMCODES"| cut -d ',' -f 3
+	    echo "$2"| cut -d ',' -f 3
 	    ;;
 	"OPT:3")
-	    echo "$BOTTOMCODES"| cut -d ',' -f 4
+	    echo "$2"| cut -d ',' -f 4
 	    ;;
 	"OPT:4")
-	    echo "$BOTTOMCODES"| cut -d ',' -f 5
+	    echo "$2"| cut -d ',' -f 5
 	    ;;
 	"OPT:5")
-	    echo "$BOTTOMCODES"| cut -d ',' -f 6
+	    echo "$2"| cut -d ',' -f 6
 	    ;;
 	"OPT:6")
-	    echo "$BOTTOMCODES"| cut -d ',' -f 7
+	    echo "$2"| cut -d ',' -f 7
 	    ;;
 	"OPT:7")
-	    echo "$BOTTOMCODES"| cut -d ',' -f 8
+	    echo "$2"| cut -d ',' -f 8
 	    ;;
 	"OPT:8")
-	    echo "$BOTTOMCODES"| cut -d ',' -f 9
+	    echo "$2"| cut -d ',' -f 9
 	    ;;
 	*) # Not an option ? Transparently fall through.
 	    echo "$1"
@@ -425,48 +428,86 @@ decodebottombar()
     esac
 }
 
-# New salescreen. Draw the whole salescreen at once. The parameter is an array
+# Load the pricelist into PRICELIST array.
+loadpricelist()
+{
+    echo
+}
+
+# Recalculate the sale buffer
+calculatesalebuffer()
+{
+    if [ "$SALEBUFFERHASH" != "$(sha1sum <<< "${SALEBUFFER[@]}")" ]; then
+	SALETOTAL='0'
+	for i in $(seq 0 $(( ${#SALEBUFFER[@]} / 6 )) ); do
+	    test -n "${SALEBUFFER[$i,UPRICE]}" -a -n "${SALEBUFFER[$i,QUANT]}" && SALEBUFFER[$i,SUBTOT]="$(calculate "${SALEBUFFER[$i,UPRICE]} * ${SALEBUFFER[$i,QUANT]}" )"
+	    test -n "${SALEBUFFER[$i,SUBTOT]}" && SALETOTAL="$(calculate "$SALETOTAL + ${SALEBUFFER[$i,SUBTOT]}" )"
+	done
+	SALEBUFFERHASH="$(sha1sum <<< "${SALEBUFFER[@]}")"
+    fi
+}
+
+# New salescreen. Draw the whole salescreen at once.
+# Parameters:
+# - the SALEBUFFER array
+# - the STATUSLINE variable
 salescreen()
 {
     clear
-    SALEBUFFER[0,INTREF]=12
-    SALEBUFFER[0,BARCODE]=1234567890
-    SALEBUFFER[0,DESC]='Description text'
-    SALEBUFFER[0,UPRICE]='2.00'
-    SALEBUFFER[0,QUANT]='2'
-    SALEBUFFER[0,SUBTOT]=''
-
-    SALEBUFFER[1,INTREF]=33
-    SALEBUFFER[1,BARCODE]=98456712345
-    SALEBUFFER[1,DESC]='Other Description text'
-    SALEBUFFER[1,UPRICE]='5.00'
-    SALEBUFFER[1,QUANT]='3'
-    SALEBUFFER[1,SUBTOT]=''
-
+    calculatesalebuffer
     SALEINDEX=0
+    MAXAPERTURE="$(( $MAXY - 9 ))"
     printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" 'Line' 'Int.' 'Barcode' 'Description' 'U.Price' 'Quant.' 'Subtot.'
     printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" 'No.' 'code' 'number' ' ' "$CURRENCY " ' ' "$CURRENCY "
     printf "%4s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %4s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %-11s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s \n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
-    for i in $(seq 0 $(( $MAXY - 9 )) ); do
+    for i in $(seq 0 $MAXAPERTURE ); do
 	test -n "${SALEBUFFER[$(( $SALEINDEX + $i )),INTREF]}" && LINE_NO="$(( $SALEINDEX + $i +1 ))" || unset LINE_NO
 	printf "%4s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %4s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %-11s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" "$LINE_NO" "${SALEBUFFER[$(( $SALEINDEX + $i )),INTREF]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),BARCODE]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),DESC]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),UPRICE]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),QUANT]}" "${SALEBUFFER[$(( $SALEINDEX + $i )),SUBTOT]}"
     done
-    printf "%4s${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %4s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %-11s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]}%6s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]}%6s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s \n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
-
-    printf '<-%76s->\n' 'This string is exactly 80 chars long.'
-    printf "${#SALEBUFFER[@]}\n"
+    printf "%4s${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %4s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %-11s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]} %$(( $MAXX - 51 ))s ${GRAPHCHARS[ $(($GC_T_UP + $GG_DOUBLE_H )) ]}%6s ${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s${GRAPHCHARS[ $(($GC_CROSS + $GG_DOUBLE_H )) ]}%6s \n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
+    printf "%-$(( $MAXX - 15 ))s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%6s${GRAPHCHARS[ $(($GC_VBAR + $GG_SINGLE )) ]}%7s\n" "$STATUSLINE" "TOTAL" "$SALETOTAL"
+    printf '<-%76s->\n' 'This string is exactly 80 chars long.    '
 }
 
-# New price list. Draw the whole screen at once. Data is in an array
+# New price list. Draw the whole screen at once. 
+# Parameters:
+# - The PRICELIST array
+# - The STATUSLINE variable
 npricelist()
 {
     PRHEADER="$ORGNAME price list"
+    PRICELISTITEM="%${MAXPRICELINE}s %5s %3s"
     clear
     printf "${GRAPHCHARS[ $(($GC_TOPLEFT + $GG_DOUBLE )) ]}%$(( $MAXX - 2 ))s${GRAPHCHARS[ $(($GC_TOPRIGHT + $GG_DOUBLE )) ]}\n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
     printf "${GRAPHCHARS[ $(($GC_VBAR + $GG_DOUBLE )) ]}%$(( ($MAXX - 2)/2 ))s%-$(( ($MAXX - 2) /2 ))s${GRAPHCHARS[ $(($GC_VBAR + $GG_DOUBLE )) ]}\n" "$PRHEADER"
     printf "${GRAPHCHARS[ $(($GC_BOTTOMLEFT + $GG_DOUBLE )) ]}%-$(( $MAXX - 2 ))s${GRAPHCHARS[ $(($GC_BOTTOMRIGHT + $GG_DOUBLE )) ]}\n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
     printf '<-%76s->\n' 'This string is exactly 80 chars long.'
     echo "${#PRHEADER}"
+}
+
+# New bottom bar implementation
+# Parameter 1: List of items to show to the user
+# Parameter 2: Quantity of options to show
+nshowbottombar()
+{
+    echo
+}
+
+# Reimplementation of the main loop as a finite state machine
+mainapp()
+{
+    STATE='entry'
+    while true; do
+        case "$STATE" in
+	    "EXIT") # cleanup and get out
+		rm -rf $TMPDIR
+		exit 0
+	    ;;
+	    *)
+		die "mainapp(): Invalid state"
+	    ;;
+	esac
+    done
 }
 
 testmode()
@@ -533,22 +574,12 @@ testmode()
     exit 0
 }
 
-############### CODE ###############
-
-test "$1" = "testmode" && testmode
-#exit 0
+# The main program, moved to it's own function for clarity.
+oldmain()
+{
 # validate config file
 test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
-# By default, detect screen size.
-# If a specific screen size is defined in config file, use it.
-# when all else fail, default to 80x25 :-)
-test -z "$MAXX" && MAXX="80"
-test -z "$MAXY" && MAXY="25"
 mkdir -p "$CACHEDIR" || die "Cannot create the cache directory ($CACHEDIR)"
-# Maximum length of the price line
-test -z "$MAXPRICELINE" && MAXPRICELINE="39"
-# Optional delay to wait
-test -n "$WAITFORSTART" && echo "$ME: delayed start: $WAITFORSTART seconds." && sleep $WAITFORSTART
 # Count the items of the currency
 MONIESIZE="$(echo "$MONIES" |tr ';' '\n'|wc -l)"
 
@@ -577,7 +608,7 @@ while true; do
     test -e "$SALEFILE" || TODAYDIR="$CACHEDIR/$(date '+%Y%m%d')"
     test -d "$TODAYDIR" || mkdir -p "$TODAYDIR" || die "Cannot create today's directory ($TODAYDIR)"
     read REPLY
-    REPLY=$(decodebottombar "$REPLY")
+    REPLY=$(decodebottombar "$REPLY" "$BOTTOMCODES")
     case "$REPLY" in
 	"CANCEL")
 		rm $SALEFILE
@@ -652,3 +683,16 @@ while true; do
 	;;
     esac
 done
+
+}
+
+############### CODE ###############
+
+case "$1" in
+    "testmode")
+	testmode
+    ;;
+    *)
+	oldmain
+    ;;
+esac
