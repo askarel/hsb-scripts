@@ -122,7 +122,7 @@ function verifyiban()
     if [ -n "$IBANLENGTH" ]; then
 	# Is it the correct length ?
 	if [ "$IBANLENGTH" -eq "$(echo -n "$IBAN" | wc -c)" ]; then
-	    # Build sed script to transform letters in numbers (A=10, B=11,... Z=35)
+	    # Build sed script to transform letters in numbers (A=10, B=11, C=12, D=13, E=14,... Z=35)
 	    for i in $(seq $(echo -n $IBANTABLE |wc -c)); do
 		SEDSCRIPT="s/${IBANTABLE:$i:1}/$(( $i +9 ))/gI;$SEDSCRIPT"
 	    done
@@ -133,7 +133,7 @@ function verifyiban()
 }
 
 # Verify belgian-style account number. It has 12 digits separated by dashes.
-# The two last digits are the modulo 97 of the 10 first.
+# The two last digits are the modulo 97 of the 10 first. Set to 97 if zero.
 # input: what look like a belgian account number
 # output: cleanly formatted belgian account number. Nothing if garbage
 function verifybe()
@@ -143,6 +143,24 @@ function verifybe()
     MODULO="${CLEANBE:10:2}"
     ACCOUNTNR="${CLEANBE:0:10}"
     test $MODULO -ne "$(( 10#$ACCOUNTNR % 97 ))" || echo "${CLEANBE:0:3}-${CLEANBE:3:7}-$MODULO"
+    test "$MODULO" = '97' -a "$(( 10#$ACCOUNTNR % 97 ))" = '0' && echo "${CLEANBE:0:3}-${CLEANBE:3:7}-$MODULO"
+}
+
+# Convert belgian style account number to IBAN number
+# input: belgian style or IBAN bank account number
+# output: IBANized bank account number. Pass through if already IBANized. No output in case of garbage input.
+function be2iban()
+{
+    test -n "$(verifyiban "$1")" && verifyiban "$1"
+    if [ -n "$(verifybe "$1")" ]; then
+	# Clean anything that do not look like a digit
+	CLEANBE="$(echo "$1"|sed -e 's/[^0-9]//gI')"
+	if [ $(wc -c <<< "$CLEANBE") -eq '13' ]; then
+	    MODULO="$(( ( 10#${CLEANBE}111400 % 97 ) - 98 ))"
+	    test "$MODULO" -lt 0 && MODULO="$(( 10#$MODULO * -1 ))"
+	    printf 'BE%02d%012d' "$(( 10#$MODULO ))" "$(( 10#$CLEANBE ))"
+	fi
+    fi
 }
 
 function listcurrentsql()
@@ -311,6 +329,9 @@ afloat. You can ask your bank to make an automatic transfer to the following
 bank account: ${BANKACCOUNT:0:4} ${BANKACCOUNT:4:4} ${BANKACCOUNT:8:4} ${BANKACCOUNT:12:4} ${BANKACCOUNT:16:4} ${BANKACCOUNT:20:4}
 Monthly amount: $MONTHLYFEE $CURRENCY
 Communication: $(echo $SQLRESULT|cut -d ',' -f 1)
+
+The amount specified is the minimum amount agreed on during the general assembly. 
+You can give more if you can afford it.
 
 You *MUST* use the communication string above: it allow us to automate the
 day by day follow up of the financial aspect of the association.
@@ -516,6 +537,12 @@ done
 	    belfius)
 		echo "Not yet implemented (very messy internals)"
 	    ;;
+	    test)
+		test -z "$3" && die "Supply bank account number"
+		echo -n "$3 -> "
+		be2iban "$3"
+		echo ''
+	    ;;
 	    *)
 		echo "Syntax: $ME importbankcsv bankname bankfile"
 		echo " Valid banknames: argenta, belfius"
@@ -573,7 +600,8 @@ done
 	for i in $DBID; do
 	    EMAIL="$(runsql "select emailaddress from hsbmembers where id like $i;")"
 	    FIRSTNAME="$(runsql "select firstname from hsbmembers where id like $i;")"
-	    export FIRSTNAME QUORUM
+	    STRUCTUREDCOMM="$(runsql "select structuredcomm from hsbmembers where id like $i;")"
+	    export FIRSTNAME QUORUM BANKACCOUNT STRUCTUREDCOMM
 	    case "$MAILCOMMAND" in
 		"test")
 		 cat "$2" | envsubst
