@@ -17,48 +17,41 @@
 --    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 --
 
--- Old object: we assumed people in the database are effective members. This will disappear due to lack of flexibility.
-create table if not exists hsbmembers (id int not null auto_increment primary key,
-                                    entrydate date not null,
-                                    structuredcomm char(21) unique not null,
-                                    firstname char(30) not null,
-                                    name char(30) not null,
-                                    nickname char(30),
-                                    phonenumber char(15),
-                                    emailaddress char(60) not null,
-                                    exitdate date,
-                                    passwordhash char(60) not null default 'mouh',
-                                    birthdate date,
-                                    openpgpkeyid char(20),
-                                    activateddate date,
-                                    mail_flags bigint not null default 0,
-                                    why_member text not null,
-                                    json_data text,
-                                    sshpubkeys text
-                                    );
-
-
 -- New object - describe a person related to the hackerspace.
 -- This allow us to describe a person that is not a member, but is related to the hackerspace.
 -- It can be the neighbour(s), the landlord(s), and/or visitors. This allow us to have visitor access card.
 create table if not exists person (id int not null auto_increment primary key, 
--- 				    entrydate date not null default current_date, 
 				    entrydate date not null, 
 				    structuredcomm char(21) unique not null, 
 				    lang char(6),
-				    nickname char(30) unique, 
 				    firstname char(40) not null, 
 				    name char(40) not null, 
+				    nickname char(255) unique,
 				    phonenumber char(20), 
-				    emailaddress char(255) not null, 
-				    passwordhash char(70) not null default 'mouh', 
-				    birthdate date, 
-				    openpgpkeyid char(20), 
+				    emailaddress char(255) not null,
+				    passwordhash char(127) not null, 
+				    birthdate date,
+				    openpgpkeyid char(40), 
 				    informations text not null,
 				    sshpubkeys text,
                                     groupbits bigint not null default 0,
-				    machinestate char(20) not null,
-				    machinestate_data text
+				    machinestate char(40) not null,
+				    machinestate_data text,
+				    machinestate_expiration_date date -- Date when the state expires
+				    );
+
+-- The history of the person state changes
+create table if not exists person_history (id int not null auto_increment primary key,
+				    member_id int not null,
+				    event_timestamp datetime,
+				    machinestate char(40) not null,
+				    machinestate_data text,
+				    freetext text
+				    );
+
+create table if not exists hsb_groups (bit_id int not null auto_increment primary key,
+				    shortdesc char(50) unique not null,
+				    fulldesc text
 				    );
 
 -- Contractors and providers (electricity, water, gas, internet, insurance, bank,...)
@@ -77,41 +70,34 @@ create table if not exists member_sponsors (id int not null auto_increment prima
 				    sponsor_id int
 				    );
 
-create table if not exists member_history (id int not null auto_increment primary key,
+-- The history of the person state changes
+create table if not exists person_history (id int not null auto_increment primary key,
 				    member_id int not null,
---				    event_timestamp datetime default NOW(),
 				    event_timestamp datetime,
-				    machinestate char(20) not null,
+				    machinestate char(40) not null,
 				    machinestate_data text,
 				    freetext text
+				    );
+
+-- The new: hold every money movements
+create table if not exists moneymovements (id int not null auto_increment primary key,
+				    date_val date,
+				    date_account date,
+				    this_account char(40),
+				    other_account char (40),
+				    amount decimal (15,4) not null,
+				    currency char (5) not null, -- should be enum
+				    message char (255),
+				    other_account_name char (50),
+				    transaction_id char(255) unique not null,
+				    fix_fuckup_msg char (60),
+				    raw_csv_line text
 				    );
 
 create table if not exists member_groups (id int not null auto_increment primary key,
 				    member_id int not null,
 				    group_id int not null
 				    );
-
-create table if not exists hsb_groups (bit_id int not null auto_increment primary key,
-				    shortdesc char(50) unique not null,
-				    fulldesc text
-				    );
-
-create table if not exists bankstatements (id int not null auto_increment primary key,
-				    date_val date,
-				    date_account date,
-				    this_account char(40),
-				    other_account char (40),
-				    amount decimal (15,2) not null,
-				    currency char (5) not null, -- should be enum
-				    message char (60),
-				    other_account_name char (50),
-				    transactionhash binary(20) unique not null,
-				    fix_fuckup_msg char (60)
-				    );
-
-create table if not exists validiban (id int not null auto_increment primary key,
-				    country char(2) unique not null,
-				    validlength int not null);
 
 create table if not exists expenses (id int not null auto_increment primary key,
 				    submitter_id int not null,
@@ -142,6 +128,12 @@ create table if not exists tag_states (id int not null auto_increment primary ke
 				    fulldesc text
 				    );
 
+-- Must go away: use an array instead
+create table if not exists validiban (id int not null auto_increment primary key,
+				    country char(2) unique not null,
+				    validlength int not null);
+
+
 -- Legacy: for JavaScript web interface
 DROP TABLE IF EXISTS `logs_bell`;
 CREATE TABLE `logs_bell` (
@@ -157,4 +149,38 @@ CREATE TABLE `logs_door` (
   `date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- Old object: we assumed people in the database are effective members. This will disappear due to lack of flexibility.
+create table if not exists hsbmembers (id int not null auto_increment primary key,
+                                    entrydate date not null,
+                                    structuredcomm char(21) unique not null,
+                                    firstname char(30) not null,
+                                    name char(30) not null,
+                                    nickname char(30),
+                                    phonenumber char(15),
+                                    emailaddress char(60) not null,
+                                    exitdate date,
+                                    passwordhash char(60) not null default 'mouh',
+                                    birthdate date,
+                                    openpgpkeyid char(20),
+                                    activateddate date,
+                                    mail_flags bigint not null default 0,
+                                    why_member text not null,
+                                    json_data text,
+                                    sshpubkeys text
+                                    );
+
+-- The old: this was designed to hold only the bank statements
+create table if not exists bankstatements (id int not null auto_increment primary key,
+				    date_val date,
+				    date_account date,
+				    this_account char(40),
+				    other_account char (40),
+				    amount decimal (15,4) not null,
+				    currency char (5) not null, -- should be enum
+				    message char (60),
+				    other_account_name char (50),
+				    transactionhash binary(20) unique not null,
+				    fix_fuckup_msg char (60)
+				    );
 
