@@ -108,7 +108,7 @@ case "$1" in
 	echo "$ME: $2: ${#CSV[@]} lines, 2 header lines, $(( $i - 2 )) lines processed." > /dev/stderr
 	;;
     'header')
-	echo "date_val;date_account;this_account;other_account;amount;currency;message;other_account_name;transaction_id;raw_csv_line"
+	echo "@date_val;@date_account;this_account;other_account;amount;currency;message;other_account_name;transaction_id;raw_csv_line"
 	;;
     'testcode')
 	verifyiban "$2"
