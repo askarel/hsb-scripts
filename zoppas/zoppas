@@ -429,9 +429,25 @@ decodebottombar()
 }
 
 # Load the pricelist into PRICELIST array.
+# Parameters:
+#- 1: Mode ('normal' if empty)
 loadpricelist()
 {
-    echo
+    PLCOUNTER=0
+    CSVFILE=$(nl -s ';' -w 1 "$CACHEDIR/$BARCODEFILE"| cut -d ';' -f 1,2,3,$(( $PRODUCT_FIELD_PRICE+1)))
+    oldifs="$IFS"
+    IFS='
+'
+    for csvline in $CSVFILE; do
+	IFS=';'
+	read PRICELIST[$PLCOUNTER,ID] PRICELIST[$PLCOUNTER,BARCODE] PRICELIST[$PLCOUNTER,DESCRIPTION] PRICELIST[$PLCOUNTER,PRICE] <<< "$csvline"
+#	echo "$PLCOUNTER ${PRICELIST[$PLCOUNTER,ID]} ${PRICELIST[$PLCOUNTER,BARCODE]} ${PRICELIST[$PLCOUNTER,DESCRIPTION]} ${PRICELIST[$PLCOUNTER,PRICE]} "
+	PLCOUNTER="$(( $PLCOUNTER + 1 ))"
+	IFS='
+'
+    done
+    IFS="$oldifs"
+#    echo "$PLCOUNTER ${#PRICELIST[@]}"
 }
 
 # Recalculate the sale buffer
@@ -475,14 +491,21 @@ salescreen()
 # - The STATUSLINE variable
 npricelist()
 {
+    loadpricelist
     PRHEADER="$ORGNAME price list"
-    PRICELISTITEM="%${MAXPRICELINE}s %5s %3s"
+    PRICELISTCOLUMNS="$(( $MAXX / $MAXPRICELINE ))"
     clear
     printf "${GRAPHCHARS[ $(($GC_TOPLEFT + $GG_DOUBLE )) ]}%$(( $MAXX - 2 ))s${GRAPHCHARS[ $(($GC_TOPRIGHT + $GG_DOUBLE )) ]}\n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
     printf "${GRAPHCHARS[ $(($GC_VBAR + $GG_DOUBLE )) ]}%$(( ($MAXX - 2)/2 ))s%-$(( ($MAXX - 2) /2 ))s${GRAPHCHARS[ $(($GC_VBAR + $GG_DOUBLE )) ]}\n" "$PRHEADER"
     printf "${GRAPHCHARS[ $(($GC_BOTTOMLEFT + $GG_DOUBLE )) ]}%-$(( $MAXX - 2 ))s${GRAPHCHARS[ $(($GC_BOTTOMRIGHT + $GG_DOUBLE )) ]}\n"|sed -e "s/\ /${GRAPHCHARS[ $(( $GC_HBAR + $GG_DOUBLE )) ]}/g"
-    printf '<-%76s->\n' 'This string is exactly 80 chars long.'
-    echo "${#PRHEADER}"
+    for i in $(seq 0 $((${#PRICELIST[@]}/4))); do
+	printf "%$(( $MAXPRICELINE - 10 ))s %5s %3s" "${PRICELIST[$i,DESCRIPTION]}" "${PRICELIST[$i,PRICE]}" "$CURRENCY"
+	test "$(( ($i+1) % $PRICELISTCOLUMNS ))" = '0' && echo '' # Insert line feed
+    done
+#    echo
+#    printf '<-%36s->\n' 'This string is 40 chars long.'
+#    printf '<-%76s->\n' 'This string is exactly 80 chars long.'
+#    echo "${#PRHEADER}"
 }
 
 # New bottom bar implementation
@@ -513,7 +536,7 @@ mainapp()
 testmode()
 {
     PS3="$ME> "
-    select TESTOPT in 'graftest' 'setscreen' 'salescreen' 'pricelist' 'bottombar' 'quit'; do
+    select TESTOPT in 'graftest' 'setscreen' 'salescreen' 'pricelist' 'bottombar' 'loadpricelist' 'quit'; do
 	case "$TESTOPT" in
 	    'graftest')
 		echo "$ME graph test"
@@ -566,6 +589,9 @@ testmode()
 		read
 		unset DRAWSCREEN
 	    ;;
+	    'loadpricelist')
+		loadpricelist
+	    ;;
 	    *)
 		die 'bye'
 	    ;;
@@ -578,13 +604,9 @@ testmode()
 oldmain()
 {
 # validate config file
-test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
 mkdir -p "$CACHEDIR" || die "Cannot create the cache directory ($CACHEDIR)"
 # Count the items of the currency
 MONIESIZE="$(echo "$MONIES" |tr ';' '\n'|wc -l)"
-
-# Fetch the CSV holding the barcodes
-wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
 
 echo "Building screens..."
 blanksalescreen
@@ -687,6 +709,10 @@ done
 }
 
 ############### CODE ###############
+
+# Fetch the CSV holding the barcodes
+test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
+#wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
 
 case "$1" in
     "testmode")
