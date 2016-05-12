@@ -23,6 +23,7 @@
 create table if not exists person (id int not null auto_increment primary key, 
 				    entrydate date not null, 
 				    structuredcomm char(21) unique not null, 
+				    altcomm char(21), -- This is supposed to disappear: migrate from old database
 				    lang char(6),
 				    firstname char(40) not null, 
 				    name char(40) not null, 
@@ -32,7 +33,7 @@ create table if not exists person (id int not null auto_increment primary key,
 				    passwordhash char(127) not null, 
 				    birthdate date,
 				    openpgpkeyid char(40), 
-				    informations text not null,
+--				    informations text not null,
 				    sshpubkeys text,
                                     groupbits bigint not null default 0,
 				    machinestate char(40) not null,
@@ -76,6 +77,7 @@ create table if not exists person_history (id int not null auto_increment primar
 				    event_timestamp datetime,
 				    machinestate char(40) not null,
 				    machinestate_data text,
+				    machinestate_expiration_date date,
 				    freetext text
 				    );
 
