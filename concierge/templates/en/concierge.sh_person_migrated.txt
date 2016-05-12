@@ -1,0 +1,14 @@
+Your membership data has been migrated.
+
+Hello $FIRSTNAME,
+
+This e-mail is the confirmation that your data has been successfully migrated to
+the new membership management system.
+
+You don't have anything to do at the moment.
+
+A password has been automatically generated for you for future services. Keep 
+this mail around: since we're hashing your passwords, it cannot be emailed back
+to you.
+
+$PASSWORD
