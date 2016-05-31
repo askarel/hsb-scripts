@@ -87,32 +87,6 @@ templatecat()
     test -f "$myfooter" && cat "$myfooter" | envsubst
 }
 
-help()
-{
-cat <<EOF
-Usage: $ME maincommand subcommand parameters
-
-Main commands and subcommands:
-    install
-	force
-    person
-	add
-	modify
-	changepass
-	list
-    cron
-	install
-	remove
-	run
-    doorcontrol
-	addtag
-	rmtag
-	revokeperson
-    massmail
-EOF
-exit 1
-}
-
 addperson()
 {
     local REQUESTED_FIELDS=(lang firstname name nickname phonenumber emailaddress birthdate openpgpkeyid machinestate_data)
@@ -157,6 +131,28 @@ changepassword()
     fi
 }
 
+# Parameter 1: bank name (will be used to call the right parser)
+# Parameter 2: bank statements filename
+importbankcsv()
+{
+    test -f "$2" || die "File '$2' does not exist or is not a regular file"
+    BANKPARSER="$(dirname "$0")/unicsv-$1.sh"
+    test -x "$BANKPARSER" || die "Cannot find parser '$BANKPARSER' for bank '$1'"
+    local TEMPFILE="$(mktemp /tmp/$ME.XXXXXXXXXXXXXXXXXXXXXXXX)"
+    local IMPORTFILE="$BANKDIR/$(sha1sum "$2"|cut -d ' ' -f 1).${2##*.}"
+    local FIELDS="$($BANKPARSER header | tr ';' ',')"
+
+    if [ -f "$IMPORTFILE" ]; then
+	read -p "File '$2' already imported. Local copy is in $IMPORTFILE. Do you want to continue ? [y/n]" -n 1 -r
+	echo
+	test "$REPLY" != 'y' -a "$REPLY" != 'Y' && die 'Aborted by user'
+    fi
+    cp "$2" "$IMPORTFILE"
+    $BANKPARSER import "$2" > $TEMPFILE
+    runsql "load data local infile '$TEMPFILE' into table moneymovements fields terminated by ';' enclosed by '\"' ignore 1 lines ($FIELDS) set date_val=STR_TO_DATE(@date_val,'%Y-%m-%d'),date_account=STR_TO_DATE(@date_account,'%Y-%m-%d')"
+    rm "$TEMPFILE"
+}
+
 cron()
 {
     echo ""
@@ -186,7 +182,7 @@ test -n "$DEFAULT_LANGUAGE" || DEFAULT_LANGUAGE='en'
 BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
 # If empty, use localhost
 test -n "$SQLHOST" || SQLHOST="127.0.0.1"
-#mkdir -p "$BANKHISTORY" || die "Can't create csv archive directory"
+mkdir -p "$BANKDIR" || die "Can't create csv archive directory"
 test -d "$SQLDIR" || die "SQL files repository not found. Current path: $SQLDIR"
 
 case "$1" in
@@ -216,18 +212,34 @@ case "$1" in
 	    'modify')
 		shift
 		test -z "$1" && die 'Spefify person e-mail address'
-		modify "$@"
+		modify "$1"
 		;;
 	    'changepass')
 		shift
 		changepassword "$1"
 		;;
-	    'test')
-		shift
-		templatecat "$1" "$2" | do_mail "$MAILFROM" "frederic@askarel.be"
-		;;
 	    *)
 		die "Please specify subaction (add|modify|changepass|...)"
+		;;
+	esac
+	;;
+    "bank")
+	shift
+	case "$1" in
+	    'importcsv')
+		shift
+		test -z "$1" && die 'Specify bank name'
+		test -z "$2" && die 'Specify file name to import'
+		importbankcsv "$1" "$2"
+		;;
+	    'balance')
+		runsql 'select this_account, sum(amount) from moneymovements group by this_account'
+		;;
+	    'showflow')
+		echo showflow
+		;;
+	    *)
+		die "Please specify subaction (importcsv|balance|...)"
 		;;
 	esac
 	;;
@@ -236,6 +248,6 @@ case "$1" in
 	cron
 	;;
     *)
-	help
+	echo "Specify the main action (person|bank|cron|install|..."
 	;;
 esac
