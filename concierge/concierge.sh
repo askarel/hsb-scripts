@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 	Member list handler client for Hackerspace Brussels 
-#	(c) 2015 Frederic Pasteleurs <frederic@askarel.be>
+#	(c) 2016 Frederic Pasteleurs <frederic@askarel.be>
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -20,8 +20,6 @@
 readonly ME="$(basename "$0" .sh)"
 readonly MYDIR="$(dirname "$0")"
 readonly CONFIGFILE="$ME.conf"
-# The raw bank statements will be stored here
-#readonly BANKHISTORY="$(dirname $0)/bank"
 # Default path for the SQL files
 readonly SQLDIR="$MYDIR/sql/"
 # Default path to mail templates
@@ -45,7 +43,7 @@ die()
 runsql()
 {
     test -z "$1" && die "Empty SQL request"
-    SQPROG='echo'
+    local SQPROG='echo'
     test -f "$1" && SQPROG='cat'
     if [ -z "$2" ]; then $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  || die "Failed query: '$1'" # Fix your junk !
 		    else $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  2>&1 # We want the error
@@ -136,7 +134,7 @@ changepassword()
 importbankcsv()
 {
     test -f "$2" || die "File '$2' does not exist or is not a regular file"
-    BANKPARSER="$(dirname "$0")/unicsv-$1.sh"
+    local BANKPARSER="$(dirname "$0")/unicsv-$1.sh"
     test -x "$BANKPARSER" || die "Cannot find parser '$BANKPARSER' for bank '$1'"
     local TEMPFILE="$(mktemp /tmp/$ME.XXXXXXXXXXXXXXXXXXXXXXXX)"
     local IMPORTFILE="$BANKDIR/$(sha1sum "$2"|cut -d ' ' -f 1).${2##*.}"
@@ -218,6 +216,21 @@ case "$1" in
 		shift
 		changepassword "$1"
 		;;
+	    'test')
+		    select GRP in $(runsql 'select shortdesc from hsb_groups order by bit_id') details End; do
+			case "$GRP" in
+			    'details')
+				runsql 'select * from hsb_groups order by bit_id'
+				;;
+			    'End')
+				break
+				;;
+			    *)
+				echo $GRP
+				;;
+			esac
+		    done
+		;;
 	    *)
 		die "Please specify subaction (add|modify|changepass|...)"
 		;;
@@ -233,10 +246,13 @@ case "$1" in
 		importbankcsv "$1" "$2"
 		;;
 	    'balance')
-		runsql 'select this_account, sum(amount) from moneymovements group by this_account'
+		echo "Account			balance		date last movement"
+		runsql 'select this_account, sum(amount), max(date_val) from moneymovements group by this_account'
 		;;
 	    'showflow')
-		echo showflow
+		shift
+		test -z "$1" && die 'Specify year for the statistics'
+		die 'TODO'
 		;;
 	    *)
 		die "Please specify subaction (importcsv|balance|...)"
@@ -246,6 +262,10 @@ case "$1" in
     "cron")
 	shift
 	cron
+	;;
+    "legacy")
+	shift
+	legacy
 	;;
     *)
 	echo "Specify the main action (person|bank|cron|install|..."
