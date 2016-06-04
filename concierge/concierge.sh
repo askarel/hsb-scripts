@@ -24,7 +24,8 @@ readonly CONFIGFILE="$ME.conf"
 readonly SQLDIR="$MYDIR/sql/"
 # Default path to mail templates
 readonly TEMPLATEDIR="$MYDIR/templates"
-readonly DEBUGGING=true
+readonly GPGHOME="$MYDIR/.gnupg"
+#readonly DEBUGGING=true
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -53,6 +54,7 @@ runsql()
 # Send the data on STDIN by e-mail.
 # Parameter 1: sender address
 # Parameter 2: receiver address
+# Parameter 3: optional GnuPG key ID. If the key is usable, the mail will be encrypted before sending
 # First line will be pasted as subject line
 do_mail()
 {
@@ -61,7 +63,11 @@ do_mail()
     # This will eat the first line of stdin
     read SUBJECTLINE
     if [ -z "$DEBUGGING" ] ; then 
-	mail -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
+	if gpg --no-permission-warning --homedir "$GPGHOME" --fingerprint "$3" > /dev/null 2>&1; then # Is key usable ?
+	    gpg --no-permission-warning --homedir "$GPGHOME" --encrypt --armor --batch --always-trust --recipient "$3" | mail -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
+	else # Invalid or non-existent key: send cleartext.
+	    mail -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
+	fi
     else 
 	echo "DEBUG: From: '$1' To: '$2' Suject: '$ORGNAME - $SUBJECTLINE'" 
 	cat
@@ -104,13 +110,14 @@ addperson()
     SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'MEMBER_MANUALLY_ENTERED', date_add(now(), interval 1 month) );"
 #    echo "$SQL_QUERY"
     runsql "$SQL_QUERY" && echo "$ME: Added to database."
+    gpg --no-permission-warning --homedir "$GPGHOME" --keyserver hkp://keys.gnupg.net --recv-keys "${REPLY_FIELD[7]}"
     # If we're here, we have successfully inserted person data
     STRUCTUREDCOMM="$(runsql 'select structuredcomm from person order by id desc limit 1')"
     EXPIRYDATE="$(runsql 'select machinestate_expiration_date from person order by id desc limit 1')"
     FIRSTNAME="${REPLY_FIELD[1]}"
     JOINREASON="${REPLY_FIELD[8]}"
     # This must change according to group bits
-    templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add.txt" | do_mail "$MAILFROM" "${REQUESTED_FIELDS[5]}"
+    templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add.txt" | do_mail "$MAILFROM" "${REQUESTED_FIELDS[5]}" "${REPLY_FIELD[7]}"
 }
 
 # Send a new password for specified user
@@ -124,9 +131,25 @@ changepassword()
     local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
     local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
     FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
+    local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
     if runsql "update person set passwordhash='$(mkpasswd -m sha-512 -s <<< "$PASSWORD")' where id=$PERSONID" ; then
-	templatecat "$MYLANG" "$ME.sh_person_changepassword.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS"
+	templatecat "$MYLANG" "$ME.sh_person_changepassword.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
     fi
+}
+
+# Re-send the payment infos for specified user
+# Parameter 1: user to re-send infos for
+resendinfos()
+{
+    test -z "$1" && die "Specify the nickname or e-mail address of the person that need a new password"
+    local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
+    test -z "$PERSONID" && die "No match found for user '$1'"
+    local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
+    local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
+    local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
+    local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
+    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+    templatecat "$MYLANG" "$ME.sh_person_resendinfos.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
 # Parameter 1: bank name (will be used to call the right parser)
@@ -182,6 +205,8 @@ BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
 test -n "$SQLHOST" || SQLHOST="127.0.0.1"
 mkdir -p "$BANKDIR" || die "Can't create csv archive directory"
 test -d "$SQLDIR" || die "SQL files repository not found. Current path: $SQLDIR"
+mkdir -p "$GPGHOME" || die 'Cannot create GnuPG directory'
+chmod 700 "$GPGHOME"
 
 case "$1" in
     "install")
@@ -216,6 +241,10 @@ case "$1" in
 		shift
 		changepassword "$1"
 		;;
+	    'resendinfos')
+		shift
+		resendinfos "$1"
+		;;
 	    'test')
 		    select GRP in $(runsql 'select shortdesc from hsb_groups order by bit_id') details End; do
 			case "$GRP" in
@@ -232,7 +261,7 @@ case "$1" in
 		    done
 		;;
 	    *)
-		die "Please specify subaction (add|modify|changepass|...)"
+		die "Please specify subaction (add|modify|changepass|resendinfos|...)"
 		;;
 	esac
 	;;
