@@ -35,24 +35,22 @@ create table if not exists person (id int not null auto_increment primary key,
 				    openpgpkeyid char(40), 
 --				    informations text not null,
 				    sshpubkeys text,
-                                    groupbits bigint not null default 0,
+--                                    groupbits bigint not null default 0,
 				    machinestate char(40) not null,
 				    machinestate_data text,
 				    machinestate_expiration_date date -- Date when the state expires
 				    );
 
--- The history of the person state changes
-create table if not exists person_history (id int not null auto_increment primary key,
-				    member_id int not null,
-				    event_timestamp datetime,
-				    machinestate char(40) not null,
-				    machinestate_data text,
-				    freetext text
-				    );
-
+-- List of available groups
 create table if not exists hsb_groups (bit_id int not null auto_increment primary key,
 				    shortdesc char(50) unique not null,
 				    fulldesc text
+				    );
+
+-- Groups a person is member of
+create table if not exists member_groups (id int not null auto_increment primary key,
+				    member_id int not null,
+				    group_id int not null
 				    );
 
 -- Contractors and providers (electricity, water, gas, internet, insurance, bank,...)
@@ -94,11 +92,6 @@ create table if not exists moneymovements (id int not null auto_increment primar
 				    transaction_id char(255) unique not null,
 				    fix_fuckup_msg char (60),
 				    raw_csv_line text
-				    );
-
-create table if not exists member_groups (id int not null auto_increment primary key,
-				    member_id int not null,
-				    group_id int not null
 				    );
 
 create table if not exists expenses (id int not null auto_increment primary key,
