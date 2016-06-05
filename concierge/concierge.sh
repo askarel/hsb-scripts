@@ -25,7 +25,7 @@ readonly SQLDIR="$MYDIR/sql/"
 # Default path to mail templates
 readonly TEMPLATEDIR="$MYDIR/templates"
 readonly GPGHOME="$MYDIR/.gnupg"
-#readonly DEBUGGING=true
+readonly DEBUGGING=true
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -98,7 +98,14 @@ addperson()
 				'OpenPGP key ID' "informations (free text, use '|' to finish)\n")
     local -a REPLY_FIELD
     local SQL_QUERY="insert into person ($(tr ' ' ',' <<< "${REQUESTED_FIELDS[@]}"), passwordhash, machinestate, machinestate_expiration_date) values ("
-    echo "Adding a new person to the system..."
+    local OPS3="$PS3"
+    local persontype='member'
+    PS3="Select person type to add (default: $persontype): "
+    select persontype in member cohabitant guest landlord contractor; do
+	test -n "$persontype" && break
+    done
+    PS3="$OPS3"
+    echo "Adding a new $persontype to the system..."
     PASSWORD="$(pwgen 20 1)"
     for (( i=0; i<${#REQUESTED_FIELDS[@]}; i++ )) do
 	printf '[%s/%s] %20s: ' "$(( $i + 1 ))" "${#REQUESTED_FIELDS[@]}" "${REQUESTED_FIELDS_DESC[$i]}"
@@ -106,18 +113,34 @@ addperson()
 	REPLY_FIELD[$i]="$(sed -e "s/[\\']/\\\\&/g" <<< "${REPLY_FIELD[$i]}")" # Escape quote (avoids SQL injection)
 	SQL_QUERY="$SQL_QUERY '${REPLY_FIELD[$i]}',"
     done
-    # TODO: add group bits processing here
-    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'MEMBER_MANUALLY_ENTERED', date_add(now(), interval 1 month) );"
+    # Key specified ? Import it.
+    test -n  "${REPLY_FIELD[7]}" && gpg --no-permission-warning --homedir "$GPGHOME" --keyserver hkp://keys.gnupg.net --recv-keys "${REPLY_FIELD[7]}"
+    case "$persontype" in
+	'member')
+	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'MEMBER_MANUALLY_ENTERED', date_add(now(), interval 1 month) );"
+	    ;;
+	'cohabitant')
+	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'COHABITANT_ENTERED', NULL );"
+	    ;;
+	'guest')
+	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'GUEST_ENTERED', NULL );"
+	    ;;
+	'landlord')
+	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'LANDLORD_ENTERED', NULL );"
+	    ;;
+	'contractor')
+	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'CONTRACTOR_ENTERED', NULL );"
+	    ;;
+    esac
 #    echo "$SQL_QUERY"
-    runsql "$SQL_QUERY" && echo "$ME: Added to database."
-    gpg --no-permission-warning --homedir "$GPGHOME" --keyserver hkp://keys.gnupg.net --recv-keys "${REPLY_FIELD[7]}"
+    runsql "$SQL_QUERY" && echo "$ME: Added $persontype to database."
+    runsql "insert into member_groups (member_id, group_id) values ( (select max(id) from person),(select bit_id from hsb_groups where shortdesc like '$persontype') )" && echo "$ME: Added to group $persontype"
     # If we're here, we have successfully inserted person data
     STRUCTUREDCOMM="$(runsql 'select structuredcomm from person order by id desc limit 1')"
     EXPIRYDATE="$(runsql 'select machinestate_expiration_date from person order by id desc limit 1')"
     FIRSTNAME="${REPLY_FIELD[1]}"
     JOINREASON="${REPLY_FIELD[8]}"
-    # This must change according to group bits
-    templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add.txt" | do_mail "$MAILFROM" "${REQUESTED_FIELDS[5]}" "${REPLY_FIELD[7]}"
+    templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REQUESTED_FIELDS[5]}" "${REPLY_FIELD[7]}"
 }
 
 # Send a new password for specified user
@@ -126,11 +149,11 @@ changepassword()
 {
     test -z "$1" && die "Specify the nickname or e-mail address of the person that need a new password"
     local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
-    PASSWORD="$(pwgen 20 1)"
+    local PASSWORD="$(pwgen 20 1)"
     test -z "$PERSONID" && die "No match found for user '$1'"
     local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
     local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
-    FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
+    local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
     local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
     if runsql "update person set passwordhash='$(mkpasswd -m sha-512 -s <<< "$PASSWORD")' where id=$PERSONID" ; then
 	templatecat "$MYLANG" "$ME.sh_person_changepassword.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
@@ -141,7 +164,7 @@ changepassword()
 # Parameter 1: user to re-send infos for
 resendinfos()
 {
-    test -z "$1" && die "Specify the nickname or e-mail address of the person that need a new password"
+    test -z "$1" && die "Specify the nickname or e-mail address of the person that need a reminder"
     local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
     test -z "$PERSONID" && die "No match found for user '$1'"
     local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
@@ -174,9 +197,17 @@ importbankcsv()
     rm "$TEMPFILE"
 }
 
+# Refresh PGP key store
+cron_pgp()
+{
+    for i in $(runsql "select openpgpkeyid from person where openpgpkeyid is not null or openpgpkeyid <> ''"); do
+	echo $i
+    done
+}
+
 cron()
 {
-    echo ""
+    cron_pgp
 }
 
 ############### </FUNCTIONS> ###############
@@ -246,23 +277,25 @@ case "$1" in
 		resendinfos "$1"
 		;;
 	    'test')
-		    select GRP in $(runsql 'select shortdesc from hsb_groups order by bit_id') details End; do
-			case "$GRP" in
-			    'details')
-				runsql 'select * from hsb_groups order by bit_id'
-				;;
-			    'End')
-				break
-				;;
-			    *)
-				echo $GRP
-				;;
-			esac
-		    done
+		    echo 'Testing stuff...'
 		;;
 	    *)
 		die "Please specify subaction (add|modify|changepass|resendinfos|...)"
 		;;
+	esac
+	;;
+    'group')
+	shift
+	case "$1" in
+	    'add')
+		echo
+		;;
+	    'listgroups')
+		echo "$ME: Available groups:"
+		runsql 'select * from hsb_groups order by bit_id'
+		;;
+	    *)
+		die "Please specify subaction (add|listgroups|del|...)"
 	esac
 	;;
     "bank")
@@ -297,6 +330,6 @@ case "$1" in
 	legacy
 	;;
     *)
-	echo "Specify the main action (person|bank|cron|install|..."
+	echo "Specify the main action (person|group|bank|cron|install|..."
 	;;
 esac
