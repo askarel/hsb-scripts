@@ -60,6 +60,7 @@ do_mail()
 {
     test -z "$1" && die 'No sender address specified'
     test -z "$2" && die 'No receiver address specified'
+    local SUBJECTLINE
     # This will eat the first line of stdin
     read SUBJECTLINE
     if [ -z "$DEBUGGING" ] ; then 
@@ -143,6 +144,26 @@ addperson()
     templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REQUESTED_FIELDS[5]}" "${REPLY_FIELD[7]}"
 }
 
+# Modify data for an existing user
+# Parameter 1: user to modify (e-mail address or nickname)
+# Parameter 2: name of field to modify
+# Parameter 3: field data
+modifyperson()
+{
+    local SELECTED_FIELD
+    test -z "$1" && die "Specify the nickname or e-mail address of the person that need to be modified"
+    local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
+    test -z "$PERSONID" && die "No match found for user '$1'"
+    local AVAILABLE_FIELDS="$(runsql 'desc person'|cut -f 1|grep -v 'passwordhash'|tr "\\n" ' ' )"
+    test -z "$2" && die "Specify database field to modify. Available fields: ${AVAILABLE_FIELDS}"
+    for i in $AVAILABLE_FIELDS; do
+	test "$i" = "$2" && SELECTED_FIELD="$i"
+    done
+    test -z "$SELECTED_FIELD" && die "Field '$2' does not exist. Available fields: $(tr ' ' ',' <<< "$AVAILABLE_FIELDS")"
+    test -z "$3" && die "Specify the new data"
+    runsql "update person set $SELECTED_FIELD='$3' where id=$PERSONID" && die "Modification Successful" 0
+}
+
 # Send a new password for specified user
 # Parameter 1: user to change password for
 changepassword()
@@ -179,6 +200,8 @@ resendinfos()
 # Parameter 2: bank statements filename
 importbankcsv()
 {
+    test -z "$1" && die 'Specify bank name'
+    test -z "$2" && die 'Specify file name to import'
     test -f "$2" || die "File '$2' does not exist or is not a regular file"
     local BANKPARSER="$(dirname "$0")/unicsv-$1.sh"
     test -x "$BANKPARSER" || die "Cannot find parser '$BANKPARSER' for bank '$1'"
@@ -203,11 +226,6 @@ cron_pgp()
     for i in $(runsql "select openpgpkeyid from person where openpgpkeyid is not null or openpgpkeyid <> ''"); do
 	echo $i
     done
-}
-
-cron()
-{
-    cron_pgp
 }
 
 ############### </FUNCTIONS> ###############
@@ -264,23 +282,39 @@ case "$1" in
 		addperson 
 		;;
 	    'modify')
-		shift
-		test -z "$1" && die 'Spefify person e-mail address'
-		modify "$1"
+		modifyperson "$2" "$3" "$4"
 		;;
 	    'changepass')
-		shift
-		changepassword "$1"
+		changepassword "$2"
 		;;
 	    'resendinfos')
-		shift
-		resendinfos "$1"
+		resendinfos "$2"
+		;;
+	    'list')
+		runsql 'select entrydate,firstname,name,nickname,emailaddress,machinestate from person'
 		;;
 	    'test')
 		    echo 'Testing stuff...'
 		;;
 	    *)
 		die "Please specify subaction (add|modify|changepass|resendinfos|...)"
+		;;
+	esac
+	;;
+    'member')
+	shift
+	case "$1" in
+	    'cancel')
+		test -z "$2" && die 'Spefify person e-mail address'
+		;;
+	    'reactivate')
+		test -z "$2" && die 'Spefify person e-mail address'
+		;;
+	    'listpayments')
+		test -z "$2" && die 'Spefify person e-mail address'
+		;;
+	    *)
+		die "Please specify subaction (cancel|reactivate|listpayments|...)"
 		;;
 	esac
 	;;
@@ -302,10 +336,7 @@ case "$1" in
 	shift
 	case "$1" in
 	    'importcsv')
-		shift
-		test -z "$1" && die 'Specify bank name'
-		test -z "$2" && die 'Specify file name to import'
-		importbankcsv "$1" "$2"
+		importbankcsv "$2" "$3"
 		;;
 	    'balance')
 		echo "Account			balance		date last movement"
@@ -323,13 +354,13 @@ case "$1" in
 	;;
     "cron")
 	shift
-	cron
+	cron_pgp
 	;;
     "legacy")
 	shift
 	legacy
 	;;
     *)
-	echo "Specify the main action (person|group|bank|cron|install|..."
+	echo "Specify the main action (person|group|bank|member|cron|install|..."
 	;;
 esac
