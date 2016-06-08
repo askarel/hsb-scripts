@@ -1,0 +1,20 @@
+Membership cancelled
+
+Hello $FIRSTNAME,
+
+We are sad to know you're leaving us.
+
+You are welcome to come back whenever you want. All you have to do if you ever
+want to come back is to pay your membership fee. The rest will be automatic.
+Here are the informations you will need:
+bank account: $BANKACCOUNT
+Monthly amount: $MONTHLYFEE $CURRENCY
+Communication: $STRUCTUREDCOMM
+
+Keep your credentials around, they will still be useful to you.
+
+Good luck in your future endeavours.
+
+You left for the following reason:
+$LEAVEREASON
+

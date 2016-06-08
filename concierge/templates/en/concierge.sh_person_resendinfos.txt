@@ -1,0 +1,17 @@
+information update
+
+Hello $FIRSTNAME,
+
+You received this mail because you requested the needed informations to honour
+your membership of $ORGNAME.
+
+Here are the needed informations: 
+bank account: $BANKACCOUNT
+Monthly amount: $MONTHLYFEE $CURRENCY
+Communication: $STRUCTUREDCOMM
+
+You *MUST* use the communication string above: it allow us to automate the
+day by day follow up of the financial aspect of the association.
+
+Yearly payments are not supported yet.
+

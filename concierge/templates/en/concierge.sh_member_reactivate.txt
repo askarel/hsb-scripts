@@ -1,0 +1,6 @@
+Welcome back
+
+Hello $FIRSTNAME,
+
+Your membership has been re-activated.
+

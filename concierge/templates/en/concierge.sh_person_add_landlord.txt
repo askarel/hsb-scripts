@@ -1,0 +1,15 @@
+Welcome home
+
+Hello $FIRSTNAME,
+
+This e-mail is the confirmation that you are registered as being the owner of
+the building hosting Hackerspace Brussels VZW/ASBL.
+
+A password has been automatically generated for you for future services. 
+In the future, you will be able to issue access cards. 
+Keep this mail around: since we're hashing your passwords, it cannot be emailed
+back to you.
+
+$PASSWORD
+
+
