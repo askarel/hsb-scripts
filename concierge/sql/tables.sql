@@ -23,7 +23,8 @@
 create table if not exists person (id int not null auto_increment primary key, 
 				    entrydate date not null, 
 				    structuredcomm char(21) unique not null, 
-				    altcomm char(21), -- This is supposed to disappear: migrate from old database
+--				    altcomm char(21), -- This is supposed to disappear: migrate from old database
+--				    altcomm2 char(21), -- This is supposed to disappear: migrate from old database
 				    lang char(6),
 				    firstname char(40) not null, 
 				    name char(40) not null, 
@@ -40,6 +41,10 @@ create table if not exists person (id int not null auto_increment primary key,
 				    machinestate_data text,
 				    machinestate_expiration_date date -- Date when the state expires
 				    );
+
+-- Alternate payment messages: from old application and recurrent fuckups
+create table if not exists old_comms (member_id int not null,
+				    structuredcomm char(21) unique not null);
 
 -- List of available groups
 create table if not exists hsb_groups (bit_id int not null auto_increment primary key,
