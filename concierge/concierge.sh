@@ -102,7 +102,7 @@ addperson()
     local OPS3="$PS3"
     local persontype='member'
     PS3="Select person type to add (default: $persontype): "
-    select persontype in member cohabitant guest landlord contractor; do
+    select persontype in member cohabitants guest landlord contractor; do
 	test -n "$persontype" && break
     done
     PS3="$OPS3"
@@ -120,7 +120,7 @@ addperson()
 	'member')
 	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'MEMBER_MANUALLY_ENTERED', date_add(now(), interval 1 month) );"
 	    ;;
-	'cohabitant')
+	'cohabitants')
 	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'COHABITANT_ENTERED', NULL );"
 	    ;;
 	'guest')
@@ -196,6 +196,16 @@ resendinfos()
     templatecat "$MYLANG" "$ME.sh_person_resendinfos.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
+# Cancel membership for specified member
+# parameter 1: member to expel
+membercancel()
+{
+    test -z "$1" && die "Specify the nickname or e-mail address of the person that need a reminder"
+    local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
+    test -z "$PERSONID" && die "No match found for user '$1'"
+    echo TODO
+}
+
 # Parameter 1: bank name (will be used to call the right parser)
 # Parameter 2: bank statements filename
 importbankcsv()
@@ -226,6 +236,38 @@ cron_pgp()
     for i in $(runsql "select openpgpkeyid from person where openpgpkeyid is not null or openpgpkeyid <> ''"); do
 	echo $i
     done
+}
+
+# Columns never used in old app: mail_flags, activateddate, openpgpkeyid, snailbox, snailnumber, snailstreet, snailpostcode, snailcommune, 
+#			nationalregistry, birthcountry, birthdate, flags, passwordhash
+legacy_import_ex_members()
+{
+    echo "$ME: Importing ex-members..."
+    local record_count=0
+    for i in $(runsql "select id from hsbmembers where exitdate is not null"); do
+	(( record_count += 1 ))
+	local memberdata=($(runsql "select entrydate, exitdate, structuredcomm from hsbmembers where id=$i"))
+	local m_firstname="$(runsql "select firstname from hsbmembers where id=$i")"
+	local m_name="$(runsql "select name from hsbmembers where id=$i")"
+	local m_nickname="$(runsql "select nickname from hsbmembers where id=$i")"
+	local m_phone="$(runsql "select phonenumber from hsbmembers where id=$i")"
+	local m_email="$(runsql "select emailaddress from hsbmembers where id=$i")"
+	local m_why="$(runsql "select why_member from hsbmembers where id=$i" | sed -e "s/[\\']/\\\\&/g")"
+	test "$m_nickname" = 'NULL' && m_nickname=''
+	test "$m_phone" != 'NULL' && m_phone="'$m_phone'"
+	local PASSWORD="$(pwgen 20 1)"
+	local SQL_QUERY="insert into person (entrydate, firstname, name, nickname, phonenumber, emailaddress, passwordhash, machinestate, machinestate_data) values 
+	    ('${memberdata[0]}', '$m_firstname', '$m_name', '$m_nickname', $m_phone, '$m_email', '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'IMPORTED_EX_MEMBER', 'exitdate=\"${memberdata[1]}\";why_member=\"$m_why\"')"
+	runsql "$SQL_QUERY"
+	# Insert successful ? Prime the old_comms table
+	local personid="$(runsql "select id from person where emailaddress like '$m_email'")"
+	local oldmsg_query="insert into old_comms (member_id, structuredcomm) values ($personid, '${memberdata[2]}')"
+	runsql "$oldmsg_query"
+	# delete imported data from old table
+	runsql "delete from hsbmembers where id=$i"
+#	echo "$i, $personid: $SQL_QUERY - $oldmsg_query"
+    done
+    echo "$ME: $record_count ex-members records processed"
 }
 
 ############### </FUNCTIONS> ###############
@@ -306,6 +348,7 @@ case "$1" in
 	case "$1" in
 	    'cancel')
 		test -z "$2" && die 'Spefify person e-mail address'
+		membercancel "$2"
 		;;
 	    'reactivate')
 		test -z "$2" && die 'Spefify person e-mail address'
@@ -358,7 +401,9 @@ case "$1" in
 	;;
     "legacy")
 	shift
-	legacy
+	legacy_import_ex_members
+	echo "Importing current members..."
+	legacy_import_members
 	;;
     *)
 	echo "Specify the main action (person|group|bank|member|cron|install|..."
