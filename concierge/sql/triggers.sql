@@ -35,7 +35,7 @@ create trigger person_auto_entry_date before insert on person for each row
     begin
 	set new.entrydate=current_date;
 	if new.nickname = '' or new.nickname = NULL then
-	    set new.nickname= concat (new.firstname, '_',new.name); -- Craft an unlikely nickname :-)
+	    set new.nickname=replace (concat (new.firstname, '_',new.name), ' ', '_'); -- Craft an unlikely nickname :-)
 	end if;
 	if new.structuredcomm = '' or new.structuredcomm = NULL then
 	    set new.structuredcomm=(select formatbecomm((select ifnull (max(id), 0) + 1 from person)));
