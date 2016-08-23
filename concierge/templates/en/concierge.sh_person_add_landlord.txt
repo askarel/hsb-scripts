@@ -10,6 +10,6 @@ In the future, you will be able to issue access cards.
 Keep this mail around: since we're hashing your passwords, it cannot be emailed
 back to you.
 
-$PASSWORD
-
+Username: $NICKNAME
+Password: $PASSWORD
 

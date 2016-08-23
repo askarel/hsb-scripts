@@ -11,4 +11,6 @@ A password has been automatically generated for you for future services. Keep
 this mail around: since we're hashing your passwords, it cannot be emailed back
 to you.
 
-$PASSWORD
+Username: $NICKNAME
+Password: $PASSWORD
+
