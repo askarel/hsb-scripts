@@ -33,7 +33,9 @@ CREATE TRIGGER log_person_activity_insert AFTER INSERT ON person FOR EACH ROW
 DROP TRIGGER if exists person_auto_entry_date;;
 create trigger person_auto_entry_date before insert on person for each row 
     begin
-	set new.entrydate=current_date;
+	if new.entrydate = '' or new.entrydate = NULL then 
+	    set new.entrydate=current_date;
+	end if;
 	if new.nickname = '' or new.nickname = NULL then
 	    set new.nickname=replace (concat (new.firstname, '_',new.name), ' ', '_'); -- Craft an unlikely nickname :-)
 	end if;
