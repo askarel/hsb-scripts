@@ -5,8 +5,8 @@ Description=De Lift controller startup
 
 [Service]
 #TimeoutStartSec=0
-ExecStart=/home/pi/de_lift start
-ExecStop=/home/pi/de_lift stop
+ExecStart=/usr/local/bin/de_lift start
+ExecStop=/usr/local/bin/de_lift stop
 Type=forking
 #ExecStart=/usr/bin/docker run --name busybox1 busybox /bin/sh -c "while true; do echo Hello World; sleep 1; done"
 
