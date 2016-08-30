@@ -41,8 +41,8 @@ test "$HOUR" -ge 0 -a "$HOUR" -lt 6 && GREETING="Good night"
 
 # Garbage day announcement: only on mondays after 18:00 and until midnight;
 GARBAGE=''
-test "$HOUR" -ge 18 -a "$DAY" -eq 3 -a $(( $WEEKNR % 2 )) -eq 0 && GARBAGE=". $GARBAGE_WHITE_YELLOW"
-test "$HOUR" -ge 18 -a "$DAY" -eq 3 -a $(( $WEEKNR % 2 )) -ne 0 && GARBAGE=". $GARBAGE_WHITE_BLUE"
+test "$HOUR" -ge 18 -a "$DAY" -eq 3 -a $(( $WEEKNR % 2 )) -ne 0 && GARBAGE=". $GARBAGE_WHITE_YELLOW"
+test "$HOUR" -ge 18 -a "$DAY" -eq 3 -a $(( $WEEKNR % 2 )) -eq 0 && GARBAGE=". $GARBAGE_WHITE_BLUE"
 
 speakup()
 {
@@ -79,8 +79,8 @@ case "$1" in
 			speakup "who are you"
 		    ;;
 		    *)
-			remote_speakup "$RES is coming up.$GARBAGE" &
 			speakup "$GREETING $RES, we're going up.$GARBAGE"
+			remote_speakup "$RES is coming up.$GARBAGE" &
 		    ;;
 		esac
 		;;
@@ -101,8 +101,8 @@ case "$1" in
 			speakup "who are you"
 		    ;;
 		    *)
-			remote_speakup "$RES is coming up and has activated tuesday mode.$GARBAGE" &
 			speakup "$GREETING $RES, we're going up. Tuesday mode activated.$GARBAGE"
+			remote_speakup "$RES is coming up and has activated tuesday mode.$GARBAGE" &
 		    ;;
 		esac
 		;;
@@ -113,8 +113,8 @@ case "$1" in
 	
 	;;
     "MSG_TUESDAY_CALL")
-	remote_speakup "Clean your mess: We have a visitor coming up." &
 	speakup "Welcome to Hackerspace Brussels. I'm taking you to the 4th floor."
+	remote_speakup "Clean your mess: We have a visitor coming up." &
 	;;
     "MSG_TUESDAY_TIMEOUT")
 	remote_speakup "Tuesday mode timeout." &
@@ -123,12 +123,12 @@ case "$1" in
 	remote_speakup "Tuesday mode activated." &
 	;;
     "MSG_TUESDAY_FORCE_INACTIVE")
-	remote_speakup "Tuesday mode cancelled from elevator." &
 	speakup "Tuesday mode cancelled"
+	remote_speakup "Tuesday mode cancelled from elevator." &
 	;;
     "MSG_BUTTON_PUSHED")
 	remote_speakup "Ding Dong." &
-	speakup "Ding Dong"
+#	speakup "Ding Dong"
 	;;
     "MSG_BOX_TAMPER")
 	remote_speakup "ALERT: Elevator box is being tampered." &
@@ -143,4 +143,4 @@ case "$1" in
 esac
 
 # Send UDP packet storm to HAL9000 with the current event (just in case TCP is not possible due to bad WiFi)
-for i in $(seq 20); do echo -e "COMMAND=$1&$RANDOM_BLOB" > /dev/udp/hal9000.space.hackerspace.be/54321; sleep 0.2; done
+for i in $(seq 100); do echo -e "COMMAND=$1&$RANDOM_BLOB" > /dev/udp/2001:6f8:147f:4:21d:60ff:fe35:df19/54321; sleep 0.2; done
