@@ -1,0 +1,12 @@
+[Unit]
+Description=Askarel RFID poller
+After=pcscd.target
+
+[Service]
+#TimeoutStartSec=0
+ExecStart=/home/pi/rfidpoll.py
+ExecStop=/home/pi/de_lift stop
+Type=simple
+
+[Install]
+WantedBy=multi-user.target
