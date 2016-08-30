@@ -4,8 +4,8 @@ After=pcscd.target
 
 [Service]
 #TimeoutStartSec=0
-ExecStart=/home/pi/rfidpoll.py
-ExecStop=/home/pi/de_lift stop
+ExecStart=/usr/local/bin/rfidpoll.py
+ExecStop=/usr/local/bin/de_lift stop
 Type=simple
 
 [Install]
