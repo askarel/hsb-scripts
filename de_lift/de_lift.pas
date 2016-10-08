@@ -30,9 +30,9 @@ TYPE    TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of b
 
         // Available error messages
         TLogItems=(MSG_DEMO, MSG_BOX_TAMPER, MSG_BUTTON_PUSHED, MSG_LONG_BUTTON_PUSH, MSG_BUTTON_STUCK, MSG_BUTTON_FIXED, MSG_TUESDAY_INACTIVE,
-                MSG_TUESDAY_ACTIVE_CMDLINE, MSG_TUESDAY_ACTIVE_TAG, MSG_TUESDAY_TIMEOUT, MSG_TUESDAY_FORCE_INACTIVE,
+                MSG_TUESDAY_ACTIVE_CMDLINE, MSG_TUESDAY_ACTIVE_TAG, MSG_TUESDAY_TIMEOUT, MSG_TUESDAY_IS_ACTIVE, MSG_TUESDAY_IS_INACTIVE, MSG_TUESDAY_FORCE_INACTIVE,
                 MSG_TUESDAY_CALL, MSG_BOX_RECLOSED, MSG_SPARE1_CLOSED, MSG_SPARE1_OPEN, MSG_SPARE2_CLOSED, MSG_SPARE2_OPEN, MSG_ELEVATOR_CMDLINE, MSG_BAILOUT);
-       TCommands=(CMD_NONE, CMD_GOHOME, CMD_TUESDAY_START, CMD_TUESDAY_STOP, CMD_STOP);
+       TCommands=(CMD_NONE, CMD_GOHOME, CMD_TUESDAY_START, CMD_QUERYTUESDAY, CMD_TUESDAY_STOP, CMD_STOP);
        TLogItemText= ARRAY[TLogItems] of pchar;
         // Tuesday mode state machine
         TTuesdaySM=(SM_OFF, SM_LOG_START_CMDLINE, SM_LOG_START_VALID_TAG, SM_START, SM_TICK, SM_LOG_STOP_CMDLINE, SM_LOG_STOP_TIMEOUT, SM_LOG_STOP_BUTTON);
@@ -52,7 +52,7 @@ TYPE    TLotsofbits=bitpacked array [0..SHITBITS] of boolean; // A shitload of b
                 end;
 
 CONST
-        CMD_NAME: ARRAY [TCommands] of pchar=('NoCMD','goto_floor','tuesday_start','tuesday_end','stop');
+        CMD_NAME: ARRAY [TCommands] of pchar=('NoCMD','goto_floor','tuesday_start', 'query_tuesday','tuesday_end','stop');
         LOG_ITEM_TEXT_EN: TLogItemText=('WARNING: Error mapping registry: GPIO code disabled, running in demo mode.',
                                         'WARNING: the box is being tampered !',
                                         'Button has been pushed',
@@ -63,6 +63,8 @@ CONST
                                         'Tuesday mode activated by command line. Push lit button to go to 4th floor',
                                         'Tuesday mode activated by valid tag. I''m taking you to the 4th floor',
                                         'Tuesday mode timeout',
+                                        'Tuesday mode is active',
+                                        'Tuesday mode is inactive',
                                         'Tuesday mode forcefully de-activated by button',
                                         'Tuesday mode: elevator called by button',
                                         'Controller box has been re-closed',
@@ -266,6 +268,9 @@ begin
                     else
                      if (ElevatorSM=EL_CALL_RESET) then ElevatorSM:=EL_LOG_CALL;
        CMD_TUESDAY_START: tuesdaystate:=SM_LOG_START_CMDLINE; // Start tuesday timer
+       CMD_QUERYTUESDAY: if TuesdayState=SM_OFF
+                                then log_single_door_event (MSG_TUESDAY_IS_INACTIVE, LOG_ITEM_TEXT_EN, '')
+                                else log_single_door_event (MSG_TUESDAY_IS_ACTIVE, LOG_ITEM_TEXT_EN, '');
        CMD_TUESDAY_STOP: tuesdaystate:=SM_LOG_STOP_CMDLINE; // Early stop of the tuesday mode
       end;
       SHMPointer^.command:=CMD_NONE;
@@ -513,6 +518,7 @@ begin
   'tuesday':   senddaemoncommand (oldpid, CMD_TUESDAY_START, paramstr (2));
   'endtuesday':senddaemoncommand (oldpid, CMD_TUESDAY_STOP, paramstr (2));
   'gohome':    senddaemoncommand (oldpid, CMD_GOHOME, '(cmdline): ' + paramstr (2));
+  'querytuesday': senddaemoncommand (oldpid, CMD_QUERYTUESDAY, paramstr (2));
   'start':
     if iamrunning
      then writeln ('Already started as PID ', oldpid)
@@ -583,6 +589,7 @@ begin
     writeln ('  start      - Start the daemon');
     writeln ('  stop       - Stop the daemon');
     writeln ('  tuesday    - Start open mode');
+    writeln ('  querytuesday - For script usage: Check if tuesday mode is active');
     writeln ('  endtuesday - End open mode');
     writeln ('  gohome     - Send the elevator to our destination. Any extra parameter is logged to syslog as extra text');
     writeln ('  running    - For script usage: tell if the main daemon is running (check exitcode: 0=running 1=not running)');
