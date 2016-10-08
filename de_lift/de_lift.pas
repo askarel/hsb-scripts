@@ -75,8 +75,8 @@ CONST
                                         'Elevator called from commandline',
                                         'Controller is bailing out !' );
 
-//        TUESDAY_DEFAULT_TIME=1000*60*60*3; // tuesday timer: 3 hours
-        TUESDAY_DEFAULT_TIME=1000*60*6; // tuesday timer: 6 minutes (debug)
+        TUESDAY_DEFAULT_TIME=1000*60*60*4; // tuesday timer: 4 hours
+//        TUESDAY_DEFAULT_TIME=1000*60*6; // tuesday timer: 6 minutes (debug)
         CALL_DELAY=100; // 100 mS to trigger the 555
         LONG_PUSH_DELAY=10*1000; // Long push on button (10 seconds)
         STUCK_DELAY=3*60*1000; // Delay to determine being stuck (3 minutes)
