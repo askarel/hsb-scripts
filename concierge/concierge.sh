@@ -87,7 +87,7 @@ templatecat()
     test -f "$TEMPLATEDIR/$1/footer.txt" && myfooter="$TEMPLATEDIR/$1/footer.txt" || myfooter="$TEMPLATEDIR/$DEFAULT_LANGUAGE/footer.txt"
     test -f "$mytemplate" || die "Template '$mytemplate' not found"
     # Variables that needs substitution
-    export STRUCTUREDCOMM BANKACCOUNT CURRENCY YEARLYFEE MONTHLYFEE ORGNAME JOINREASON PASSWORD BIRTHDATE FIRSTNAME NICKNAME EXPIRYDATE
+    export STRUCTUREDCOMM BANKACCOUNT CURRENCY YEARLYFEE MONTHLYFEE ORGNAME JOINREASON PASSWORD BIRTHDATE FIRSTNAME NICKNAME EXPIRYDATE LEAVEREASON QUORUM
     cat "$mytemplate" | envsubst
     test -f "$myfooter" && cat "$myfooter" | envsubst
 }
@@ -152,7 +152,7 @@ modifyperson()
 {
     local SELECTED_FIELD
     test -z "$1" && die "Specify the nickname or e-mail address of the person that need to be modified"
-    local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
+    local PERSONID="$(lookup_person_id "$1")"
     test -z "$PERSONID" && die "No match found for user '$1'"
     local AVAILABLE_FIELDS="$(runsql 'desc person'|cut -f 1|grep -v 'passwordhash'|tr "\\n" ' ' )"
     test -z "$2" && die "Specify database field to modify. Available fields: ${AVAILABLE_FIELDS}"
@@ -169,7 +169,7 @@ modifyperson()
 changepassword()
 {
     test -z "$1" && die "Specify the nickname or e-mail address of the person that need a new password"
-    local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
+    local PERSONID="$(lookup_person_id "$1")"
     local PASSWORD="$(pwgen 20 1)"
     test -z "$PERSONID" && die "No match found for user '$1'"
     local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
@@ -186,7 +186,7 @@ changepassword()
 resendinfos()
 {
     test -z "$1" && die "Specify the nickname or e-mail address of the person that need a reminder"
-    local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
+    local PERSONID="$(lookup_person_id "$1")"
     test -z "$PERSONID" && die "No match found for user '$1'"
     local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
     local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
@@ -200,10 +200,41 @@ resendinfos()
 # parameter 1: member to expel
 membercancel()
 {
-    test -z "$1" && die "Specify the nickname or e-mail address of the person that need a reminder"
-    local PERSONID=$(runsql "select id from person where nickname like '$1' or emailaddress like '$1'")
+    test -z "$1" && die "Specify the nickname or e-mail address of the person that need to be terminated"
+    local PERSONID="$(lookup_person_id "$1")"
     test -z "$PERSONID" && die "No match found for user '$1'"
-    echo TODO
+    test "$(runsql "select machinestate from person where id=$PERSONID")" = 'MEMBERSHIP_CANCELLED' && die 'Membership already cancelled'
+    local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
+    local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
+    local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
+    local NAME="$(runsql "select name from person where id=$PERSONID")"
+    local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
+    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+    local LEAVEREASON
+    printf 'Please type the reason to cancel the membership of %s %s:' "$FIRSTNAME" "$NAME"
+    read LEAVEREASON
+    runsql "update person set machinestate='MEMBERSHIP_CANCELLED', machinestate_data='' where id=$PERSONID"
+#    templatecat "$MYLANG" "$ME.sh_member_cancel.txt"
+    templatecat "$MYLANG" "$ME.sh_member_cancel.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+}
+
+# Reactivate membership for specified member
+# parameter 1: member to reactivate
+member_reactivate()
+{
+    test -z "$1" && die "Specify the nickname or e-mail address of the person that need to be reactivated"
+    local PERSONID="$(lookup_person_id "$1")"
+    test -z "$PERSONID" && die "No match found for user '$1'"
+    test "$(runsql "select machinestate from person where id=$PERSONID")" != 'MEMBERSHIP_CANCELLED' && die 'Membership still active'
+    local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
+    local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
+    local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
+    local NAME="$(runsql "select name from person where id=$PERSONID")"
+    local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
+    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+    runsql "update person set machinestate='MEMBERSHIP_ACTIVE', machinestate_data='' where id=$PERSONID"
+#    templatecat "$MYLANG" "$ME.sh_member_reactivate.txt"
+    templatecat "$MYLANG" "$ME.sh_member_cancel.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
 # Parameter 1: bank name (will be used to call the right parser)
@@ -234,7 +265,7 @@ importbankcsv()
 cron_pgp()
 {
     for i in $(runsql "select openpgpkeyid from person where openpgpkeyid is not null or openpgpkeyid <> ''"); do
-	echo $i
+	echo "TODO: $i"
     done
 }
 
@@ -314,6 +345,92 @@ legacy_import_members()
     echo "$ME: $record_count members records processed"
 }
 
+# This function will:
+# - attribute message strings generated by the old script to the new ones
+# - Fix the paying members that insist on not using the communication string
+bank_fix_membership()
+{
+    for i in $(runsql "select id from person") ; do
+	local THIS_COMM="$(runsql "select structuredcomm from person where id=$i")"
+	for j in $(runsql "select structuredcomm from old_comms where member_id=$i") ; do
+	    runsql "update moneymovements set fix_fuckup_msg='$THIS_COMM' where message like '$j'"
+	done
+	runsql "select fuckup_message from membership_fuckup_messages where member_id=$i"| while read FUCKUP ; do
+	    runsql "update moneymovements set fix_fuckup_msg='$THIS_COMM' where message like '$FUCKUP'"
+	done
+    done
+}
+
+# Add a recurring fix, for people that insist on not using the structured message
+# Parameter 1: person ID
+# Parameter 2: recurring bad message
+fix_multiple_payment_msg()
+{
+    local PERSONID="$(lookup_person_id "$1")"
+    runsql "insert into membership_fuckup_messages (member_id, fuckup_message) values ($PERSONID, '$2')"
+}
+
+# List the payment from specified person
+# Parameter 1: person ID
+# Parameter 2: year. Current year if empty
+list_person_payments()
+{
+    local THISYEAR="${2:-$(date '+%Y')}"
+    local FIRSTNAME="$(runsql "select firstname from person where id=$1")"
+    local NAME="$(runsql "select name from person where id=$1")"
+    local MACHINESTATE="$(runsql "select machinestate from person where id=$1")"
+    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$1")"
+    local ENTRYDATE="$(runsql "select entrydate from person where id=$1")"
+    if test $(date '+%Y' -d "$ENTRYDATE") -le $THISYEAR ; then # Don't bother if the person was not member at the time
+	printf ' -------- %s %s %s %s %s --------\n' "$ENTRYDATE" "$FIRSTNAME" "$NAME" "$MACHINESTATE" "$STRUCTUREDCOMM"
+	runsql "select date_val, this_account, amount, currency, message, fix_fuckup_msg from moneymovements where 
+	    (message like '$STRUCTUREDCOMM' or fix_fuckup_msg like '$STRUCTUREDCOMM') and date_val between '$THISYEAR-01-01' and '$THISYEAR-12-31' order by date_val"
+    fi
+}
+
+# Lookup person ID
+# Parameter 1: nickname or email address
+# Output: valid person ID from database
+function lookup_person_id()
+{
+    test -z "$1" && die 'Spefify person e-mail address or nickname'
+    case "$(runsql "select count(id) from person where nickname like '$1' or emailaddress like '$1'")" in #"
+	'0')
+	    die "No match for user/email '$1'"
+	    ;;
+	'1')
+	    runsql "select id from person where nickname like '$1' or emailaddress like '$1'"
+	    ;;
+	*)
+	    die "Ambiguous result: multiple matches for user/email '$1'"
+	    ;;
+    esac
+}
+
+massmail()
+{
+    test -z "$1" && die 'Spefify template to use'
+    local MACHINESTATE='IMPORTED_MEMBER_INACTIVE'
+    local QUORUM=$(runsql "select round(count(id)/2) from person where machinestate like '$MACHINESTATE'") #"
+    if [ "$2" = 'go' ]; then
+	    for P in $(runsql "select id from person where machinestate like '$MACHINESTATE'"); do
+		local MYLANG="$(runsql "select lang from person where id=$P")"
+		local EMAILADDRESS="$(runsql "select emailaddress from person where id=$P")"
+		local FIRSTNAME="$(runsql "select firstname from person where id=$P")"
+		local GPGID="$(runsql "select openpgpkeyid from person where id=$P")"
+		templatecat "$MYLANG" "$1"
+#		templatecat "$MYLANG" "$1" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+	    done
+	else
+	    local P=$(runsql "select id from person where machinestate like '$MACHINESTATE' limit 1")
+	    local MYLANG="$(runsql "select lang from person where id=$P")"
+	    local EMAILADDRESS="$(runsql "select emailaddress from person where id=$P")"
+	    local FIRSTNAME="$(runsql "select firstname from person where id=$P")"
+	    templatecat "$MYLANG" "$1"
+	    die '--- Dry run: use "go" to launch the mass mailing ---'
+    fi
+}
+
 ############### </FUNCTIONS> ###############
 
 ############### <SANITY CHECKS> ###############
@@ -368,19 +485,19 @@ case "$1" in
 		addperson 
 		;;
 	    'modify')
+		PERSONID="$(lookup_person_id "$2")"
 		modifyperson "$2" "$3" "$4"
 		;;
 	    'changepass')
+		PERSONID="$(lookup_person_id "$2")"
 		changepassword "$2"
 		;;
 	    'resendinfos')
+		PERSONID="$(lookup_person_id "$2")"
 		resendinfos "$2"
 		;;
 	    'list')
 		runsql 'select entrydate,firstname,name,nickname,emailaddress,machinestate from person'
-		;;
-	    'test')
-		    echo 'Testing stuff...'
 		;;
 	    *)
 		die "Please specify subaction (add|modify|changepass|resendinfos|...)"
@@ -396,12 +513,41 @@ case "$1" in
 		;;
 	    'reactivate')
 		test -z "$2" && die 'Spefify person e-mail address'
+		member_reactivate "$2"
 		;;
 	    'listpayments')
+		test -z "$2" && die 'Spefify person e-mail address or "all" for everyone'
+		case "$2" in
+		    'all')
+			PERSON_ID=$(runsql 'select id from person')
+			;;
+		    *)
+			PERSON_ID="$(lookup_person_id "$2")"
+			;;
+		esac
+		for P in $PERSON_ID ; do 
+		    list_person_payments "$P" "$3" 
+		done
+		;;
+	    'list_active')
+		echo "listing active members..."
+		runsql "select id, entrydate, firstname, name, nickname, phonenumber, emailaddress,machinestate from person where machinestate not like 'IMPORTED_EX_MEMBER'"
+		;;
+	    'list_inactive')
+		echo "Listing inactive or ex-members..."
+		runsql "select id, entrydate, firstname, name, nickname, phonenumber, emailaddress,machinestate_data from person where machinestate like 'IMPORTED_EX_MEMBER'"
+		;;
+	    'fix_multiple_payment_msg')
+		PERSONID="$(lookup_person_id "$2")"
 		test -z "$2" && die 'Spefify person e-mail address'
+		test -z "$3" && die 'Spefify the recurring bad message'
+		fix_multiple_payment_msg "$2" "$3"
+		;;
+	    'massmail')
+		massmail "$2" "$3"
 		;;
 	    *)
-		die "Please specify subaction (cancel|reactivate|listpayments|...)"
+		die "Please specify subaction (cancel|reactivate|listpayments|list_active|list_inactive|fix_multiple_payment_msg|massmail|...)"
 		;;
 	esac
 	;;
@@ -417,6 +563,7 @@ case "$1" in
 		;;
 	    *)
 		die "Please specify subaction (add|listgroups|del|...)"
+		;;
 	esac
 	;;
     "bank")
@@ -434,8 +581,12 @@ case "$1" in
 		test -z "$1" && die 'Specify year for the statistics'
 		die 'TODO'
 		;;
+	    'attributes') # TODO: find a better name
+		echo "Updating attributes..."
+		bank_fix_membership
+		;;
 	    *)
-		die "Please specify subaction (importcsv|balance|...)"
+		die "Please specify subaction (importcsv|balance||attributes|...)"
 		;;
 	esac
 	;;
@@ -445,9 +596,19 @@ case "$1" in
 	;;
     "legacy")
 	shift
-	legacy_import_ex_members
-	echo "Importing current members..."
-	legacy_import_members
+	case "$1" in
+	    'import')
+		legacy_import_ex_members
+		echo "Importing current members..."
+		legacy_import_members
+		;;
+	    'activate')
+		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
+		;;
+	    *)
+		die "Please specify subaction (import|activate|...)"
+		;;
+	esac
 	;;
     *)
 	echo "Specify the main action (person|group|bank|member|cron|install|..."
