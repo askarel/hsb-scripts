@@ -42,9 +42,13 @@ create table if not exists person (id int not null auto_increment primary key,
 				    machinestate_expiration_date date -- Date when the state expires
 				    );
 
--- Alternate payment messages: from old application and recurrent fuckups
+-- Alternate payment messages: from old application
 create table if not exists old_comms (member_id int not null,
 				    structuredcomm char(21) unique not null);
+
+-- Alternate payment messages: for recent and not-so-recent fuckups
+create table if not exists membership_fuckup_messages (member_id int not null,
+				    fuckup_message char(60) unique not null);
 
 -- List of available groups
 create table if not exists hsb_groups (bit_id int not null auto_increment primary key,
