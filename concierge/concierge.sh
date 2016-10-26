@@ -67,7 +67,7 @@ do_mail()
 	if gpg --no-permission-warning --homedir "$GPGHOME" --fingerprint "$3" > /dev/null 2>&1; then # Is key usable ?
 	    gpg --no-permission-warning --homedir "$GPGHOME" --encrypt --armor --batch --always-trust --recipient "$3" | mail -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
 	else # Invalid or non-existent key: send cleartext.
-	    mail -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
+	    bsd-mailx -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
 	fi
     else 
 	echo "DEBUG: From: '$1' To: '$2' Suject: '$ORGNAME - $SUBJECTLINE'" 
@@ -234,7 +234,7 @@ member_reactivate()
     local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
     runsql "update person set machinestate='MEMBERSHIP_ACTIVE', machinestate_data='' where id=$PERSONID"
 #    templatecat "$MYLANG" "$ME.sh_member_reactivate.txt"
-    templatecat "$MYLANG" "$ME.sh_member_cancel.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+    templatecat "$MYLANG" "$ME.sh_member_reactivate.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
 # Parameter 1: bank name (will be used to call the right parser)
@@ -431,6 +431,23 @@ massmail()
     fi
 }
 
+# Finish the migration and send new password to member
+# Parameter 1: Member ID
+finish_migration()
+{
+    local FIRSTNAME="$(runsql "select firstname from person where id=$1")"
+    local NICKNAME="$(runsql "select nickname from person where id=$1")"
+    local PASSWORD="$(pwgen 20 1)"
+    local MYLANG="$(runsql "select lang from person where id=$1")"
+    local GPGID="$(runsql "select openpgpkeyid from person where id=$1")"
+    local EMAILADDRESS="$(runsql "select emailaddress from person where id=$1")"
+    if runsql "update person set passwordhash='$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', machinestate='MEMBERSHIP_ACTIVE' where id=$1" ; then
+	echo "Sending new password to $EMAILADDRESS"
+	templatecat "$MYLANG" "$ME.sh_person_migrated.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+    fi
+
+}
+
 ############### </FUNCTIONS> ###############
 
 ############### <SANITY CHECKS> ###############
@@ -470,7 +487,8 @@ case "$1" in
 	    echo "$ME: Priming database..."
 	    runsql "$SQLDIR/tables.sql"
 	    runsql "$SQLDIR/tabledata.sql"
-	    runsql "$SQLDIR/ibandata.sql"
+# Obsolete table: should be removed
+#	    runsql "$SQLDIR/ibandata.sql"
 	    runsql "$SQLDIR/functions.sql"
 	    runsql "$SQLDIR/procedures.sql"
 	    runsql "$SQLDIR/triggers.sql"
@@ -581,6 +599,12 @@ case "$1" in
 		test -z "$1" && die 'Specify year for the statistics'
 		die 'TODO'
 		;;
+	    'fix_one_msg')
+		shift
+		test -z "$1" && die 'Specify faulty transaction ID'
+		test -z "$2" && die 'Specify correct message'
+		runsql "update moneymovements set fix_fuckup_msg='$2' where transaction_id like '$1'"
+		;;
 	    'attributes') # TODO: find a better name
 		echo "Updating attributes..."
 		bank_fix_membership
@@ -604,6 +628,10 @@ case "$1" in
 		;;
 	    'activate')
 		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
+		for i in $(runsql 'select id from person where machinestate like "IMPORTED_MEMBER_INACTIVE"') ; do
+		    #runsql "select id, firstname, name from person where id=$i"
+		    finish_migration $i
+		done
 		;;
 	    *)
 		die "Please specify subaction (import|activate|...)"
