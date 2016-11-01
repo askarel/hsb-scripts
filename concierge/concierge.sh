@@ -25,7 +25,7 @@ readonly SQLDIR="$MYDIR/sql/"
 # Default path to mail templates
 readonly TEMPLATEDIR="$MYDIR/templates"
 readonly GPGHOME="$MYDIR/.gnupg"
-readonly DEBUGGING=true
+#readonly DEBUGGING=true
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -466,6 +466,37 @@ finish_migration()
 
 }
 
+# Export database to LDIF files
+ldapexport()
+{
+    local UIDBASE=1000
+    for i in $(runsql 'select id from person where ldaphash not like ""'); do
+	local FIRSTNAME="$(runsql "select firstname from person where id=$i")"
+	local NAME="$(runsql "select name from person where id=$i")"
+	local NICKNAME="$(runsql "select nickname from person where id=$i")"
+	local MYLANG="$(runsql "select lang from person where id=$i")"
+	local PHONENUMBER="$(runsql "select phonenumber from person where id=$i")"
+	local EMAILADDRESS="$(runsql "select emailaddress from person where id=$i")"
+	local LDAPPASS="$(runsql "select ldaphash from person where id=$i")"
+	local USER_UID=$(( $UIDBASE + $i ))
+	echo "dn: cn=$FIRSTNAME $NAME,ou=users,dc=hsbxl,dc=be"
+	echo "cn:$FIRSTNAME $NAME"
+	echo "gidnumber: 503"
+	echo "givenname: $FIRSTNAME"
+	echo "homedirectory: /home/users/$NICKNAME"
+	echo "homephone: $PHONENUMBER"
+	echo "mail: $EMAILADDRESS"
+	echo "objectclass: inetOrgPerson"
+	echo "objectclass: posixAccount"
+	echo "objectclass: top"
+	echo "sn: $NAME"
+	echo "uid: $NICKNAME"
+	echo "userpassword: $LDAPPASS"
+	echo "uidnumber: $USER_UID"
+	echo ""
+    done
+}
+
 ############### </FUNCTIONS> ###############
 
 ############### <SANITY CHECKS> ###############
@@ -534,6 +565,9 @@ case "$1" in
 		;;
 	    'list')
 		runsql 'select entrydate,firstname,name,nickname,emailaddress,machinestate from person'
+		;;
+	    'ldapexport')
+		ldapexport
 		;;
 	    *)
 		die "Please specify subaction (add|modify|changepass|resendinfos|...)"
@@ -647,8 +681,8 @@ case "$1" in
 	    'activate_all')
 		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
 		for i in $(runsql 'select id from person where machinestate like "IMPORTED_MEMBER_INACTIVE"') ; do
-		    #runsql "select id, firstname, name from person where id=$i"
-		    finish_migration $i
+		    runsql "select id, firstname, name from person where id=$i"
+		    #finish_migration $i
 		done
 		;;
 	    'activate_one')
