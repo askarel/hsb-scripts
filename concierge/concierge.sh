@@ -644,15 +644,22 @@ case "$1" in
 		echo "Importing current members..."
 		legacy_import_members
 		;;
-	    'activate')
+	    'activate_all')
 		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
 		for i in $(runsql 'select id from person where machinestate like "IMPORTED_MEMBER_INACTIVE"') ; do
 		    #runsql "select id, firstname, name from person where id=$i"
-		    finish_migration 33
+		    finish_migration $i
 		done
 		;;
+	    'activate_one')
+		    test -z "$2" && echo "Awaiting activation:"
+		    test -z "$2" && runsql 'select id, nickname, emailaddress from person where machinestate like "IMPORTED_MEMBER_INACTIVE"'
+		    test -z "$2" && die "Specify e-mail address to activate"
+		    PERSONID="$(lookup_person_id "$2")"
+		    finish_migration $PERSONID
+		;;
 	    *)
-		die "Please specify subaction (import|activate|...)"
+		die "Please specify subaction (import|activate_all|activate_one|...)"
 		;;
 	esac
 	;;
