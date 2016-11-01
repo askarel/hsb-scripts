@@ -98,7 +98,7 @@ addperson()
     local REQUESTED_FIELDS_DESC=('Preferred language' 'Firstname' 'Family name' 'Nickname' 'phone number' 'Email address' 'Birth date' 
 				'OpenPGP key ID' "informations (free text, use '|' to finish)\n")
     local -a REPLY_FIELD
-    local SQL_QUERY="insert into person ($(tr ' ' ',' <<< "${REQUESTED_FIELDS[@]}"), passwordhash, machinestate, machinestate_expiration_date) values ("
+    local SQL_QUERY="insert into person ($(tr ' ' ',' <<< "${REQUESTED_FIELDS[@]}"), passwordhash, ldaphash, machinestate, machinestate_expiration_date) values ("
     local OPS3="$PS3"
     local persontype='member'
     PS3="Select person type to add (default: $persontype): "
@@ -116,21 +116,25 @@ addperson()
     done
     # Key specified ? Import it.
     test -n  "${REPLY_FIELD[7]}" && gpg --no-permission-warning --homedir "$GPGHOME" --keyserver hkp://keys.gnupg.net --recv-keys "${REPLY_FIELD[7]}"
+
+    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
+    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
+
     case "$persontype" in
 	'member')
-	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'MEMBER_MANUALLY_ENTERED', date_add(now(), interval 1 month) );"
+	    SQL_QUERY="$SQL_QUERY '$CRYPTPASSWORD', '$LDAPHASH', 'MEMBER_MANUALLY_ENTERED', date_add(now(), interval 1 month) );"
 	    ;;
 	'cohabitants')
-	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'COHABITANT_ENTERED', NULL );"
+	    SQL_QUERY="$SQL_QUERY '$CRYPTPASSWORD', '$LDAPHASH', 'COHABITANT_ENTERED', NULL );"
 	    ;;
 	'guest')
-	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'GUEST_ENTERED', NULL );"
+	    SQL_QUERY="$SQL_QUERY '$CRYPTPASSWORD', '$LDAPHASH', 'GUEST_ENTERED', NULL );"
 	    ;;
 	'landlord')
-	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'LANDLORD_ENTERED', NULL );"
+	    SQL_QUERY="$SQL_QUERY '$CRYPTPASSWORD', '$LDAPHASH', 'LANDLORD_ENTERED', NULL );"
 	    ;;
 	'contractor')
-	    SQL_QUERY="$SQL_QUERY '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'CONTRACTOR_ENTERED', NULL );"
+	    SQL_QUERY="$SQL_QUERY '$CRYPTPASSWORD', '$LDAPHASH', 'CONTRACTOR_ENTERED', NULL );"
 	    ;;
     esac
 #    echo "$SQL_QUERY"
@@ -176,7 +180,11 @@ changepassword()
     local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
     local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
     local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
-    if runsql "update person set passwordhash='$(mkpasswd -m sha-512 -s <<< "$PASSWORD")' where id=$PERSONID" ; then
+
+    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
+    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
+
+    if runsql "update person set passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH' where id=$PERSONID" ; then
 	templatecat "$MYLANG" "$ME.sh_person_changepassword.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
     fi
 }
@@ -288,8 +296,12 @@ legacy_import_ex_members()
 	test "$m_phone" != 'NULL' && m_phone="'$m_phone'"
 	test -z "$m_nickname" && m_nickname="$( tr ' ' '_' <<< "${m_firstname}_${m_name}")" # Craft unlikely nickname
 	local PASSWORD="$(pwgen 20 1)"
-	local SQL_QUERY="insert into person (entrydate, firstname, name, nickname, phonenumber, emailaddress, passwordhash, machinestate, machinestate_data) values 
-	    ('${memberdata[0]}', '$m_firstname', '$m_name', '$m_nickname', $m_phone, '$m_email', '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'IMPORTED_EX_MEMBER', 'exitdate=\"${memberdata[1]}\";why_member=\"$m_why\"')"
+
+    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
+    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
+
+	local SQL_QUERY="insert into person (entrydate, firstname, name, nickname, phonenumber, emailaddress, passwordhash, ldaphash, machinestate, machinestate_data) values 
+	    ('${memberdata[0]}', '$m_firstname', '$m_name', '$m_nickname', $m_phone, '$m_email', '$CRYPTPASSWORD', '$LDAPHASH', 'IMPORTED_EX_MEMBER', 'exitdate=\"${memberdata[1]}\";why_member=\"$m_why\"')"
 	runsql "$SQL_QUERY"
 	# Insert successful ? Prime the old_comms table
 	local personid="$(runsql "select id from person where nickname like '$m_nickname'")"
@@ -321,16 +333,20 @@ legacy_import_members()
 	test "$m_nickname" = 'NULL' && m_nickname=''
 	test "$m_phone" != 'NULL' && m_phone="'$m_phone'"
 	local PASSWORD="$(pwgen 20 1)"
+
+    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
+    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
+
 	test -z "$m_nickname" && m_nickname="$( tr ' ' '_' <<< "${m_firstname}_${m_name}")" # Craft unlikely nickname
 	if [ -n "$(runsql "select nickname from person where nickname like '$m_nickname'")" ]; then # Do i already have an old inactive entry ?
 	    echo "$m_nickname already has a record. Updating it..."
 	    local SQL_QUERY="update person set firstname='$m_firstname', name='$m_name', phonenumber=$m_phone, emailaddress='$m_email', 
-	    passwordhash='$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', machinestate='IMPORTED_MEMBER_INACTIVE', machinestate_data='why_member=\"$m_why\"' 
+	    passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH', machinestate='IMPORTED_MEMBER_INACTIVE', machinestate_data='why_member=\"$m_why\"' 
 	    where nickname like '$m_nickname'"
 	else
 	    echo "Importing $m_nickname..."
-	    local SQL_QUERY="insert into person (entrydate, firstname, name, nickname, phonenumber, emailaddress, passwordhash, machinestate, machinestate_data) values 
-	    ('${memberdata[0]}', '$m_firstname', '$m_name', '$m_nickname', $m_phone, '$m_email', '$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', 'IMPORTED_MEMBER_INACTIVE', 'why_member=\"$m_why\"')"
+	    local SQL_QUERY="insert into person (entrydate, firstname, name, nickname, phonenumber, emailaddress, passwordhash, ldaphash, machinestate, machinestate_data) values 
+	    ('${memberdata[0]}', '$m_firstname', '$m_name', '$m_nickname', $m_phone, '$m_email', '$CRYPTPASSWORD', '$LDAPHASH','IMPORTED_MEMBER_INACTIVE', 'why_member=\"$m_why\"')"
 	fi
 #	echo  "$SQL_QUERY"
 	runsql "$SQL_QUERY"
@@ -441,7 +457,9 @@ finish_migration()
     local MYLANG="$(runsql "select lang from person where id=$1")"
     local GPGID="$(runsql "select openpgpkeyid from person where id=$1")"
     local EMAILADDRESS="$(runsql "select emailaddress from person where id=$1")"
-    if runsql "update person set passwordhash='$(mkpasswd -m sha-512 -s <<< "$PASSWORD")', machinestate='MEMBERSHIP_ACTIVE' where id=$1" ; then
+    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
+    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
+    if runsql "update person set passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH', machinestate='MEMBERSHIP_ACTIVE' where id=$1" ; then
 	echo "Sending new password to $EMAILADDRESS"
 	templatecat "$MYLANG" "$ME.sh_person_migrated.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
     fi
@@ -630,7 +648,7 @@ case "$1" in
 		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
 		for i in $(runsql 'select id from person where machinestate like "IMPORTED_MEMBER_INACTIVE"') ; do
 		    #runsql "select id, firstname, name from person where id=$i"
-		    finish_migration $i
+		    finish_migration 33
 		done
 		;;
 	    *)
