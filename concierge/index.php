@@ -1,4 +1,4 @@
-<?
+<?php
 #
 # Concierge for Hackerspace Brussels - Web front-end
 # (c) 2014 Frederic Pasteleurs <frederic@askarel.be>
@@ -18,56 +18,68 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-# First thing first: it's a modern script supposed to be used on
-# decent browsers.
-header ('Content-type: text/html; charset=utf8');
-# Start a new session or open an existing one
-session_start();
-
-$CONFIGFILE=dirname (__FILE__) . '/config.php';
-
-# Load the common stuff
+# Load the common stuff (first thing)
 include_once('./lib/commonfunctions.php');
-require_once('./lib/password.php');
 
-# Pre-sanitize all inputs
-$SANITIZED_POST = sanitize_input ($_POST);
+try 
+{
+    $MissingUsrText=""; 
+    $MissingPwText="";
+    $dbh = new PDO ("mysql:host=". $CONFIG['dbhostname'] . ";dbname=" . $CONFIG['mydb'] . ";charset=UTF8", $CONFIG['dbuser'], $CONFIG['dbpass']);
+    $dbh->setAttribute (PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $dbh->setAttribute (PDO::ATTR_EMULATE_PREPARES, false);
+    $stmt = $dbh->prepare ("select id, passwordhash from person where nickname = :nickname limit 1", array(PDO::ATTR_CURSOR => PDO::CURSOR_FWDONLY));
 
-# Launch the setup script if the config file is not found
-if (!file_exists($CONFIGFILE))
-    {
-	require('./lib/setup.php');
-    } else
-    {
-# 	Load configuration options
-	require_once ($CONFIGFILE);
-	try 
+    // Validate credentials...
+    if ( ($_SERVER['REQUEST_METHOD'] == "POST") and ($_REQUEST['user'] != "") and ($_REQUEST['pass'] != "") )
 	{
-	    $dbh = new PDO ("mysql:host=". $CONFIG['dbhostname'] . ";dbname=" . $CONFIG['mydb'] . ";charset=UTF8", $CONFIG['dbuser'], $CONFIG['dbpass']);
-	    $dbh->setAttribute (PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-	    $dbh->setAttribute (PDO::ATTR_EMULATE_PREPARES, false);
+	    $stmt->execute( array (':nickname' => $SANITIZED_REQUEST['user'] ) );
+	    $result = $stmt->fetchAll();
 
-	    if (isset ($SANITIZED_POST['newmember'])) // New member ?
-	    {
-		require ('./lib/newmember.php');
+	    if ( $stmt->rowcount() == 1 )
+	    { // The user exist. Check password...
+		if (password_verify ( $_REQUEST['pass'],$result[0]['passwordhash'] ) )
+		{ // Good password: set person ID into session
+		    $_SESSION['person_ID'] = $result[0]['id'];
+		} else 
+		{
+		    $MissingPwText="Invalid credentials"; // Bad password
+		}
 	    } else
 	    {
-		if (isset ($_SESSION['MemberID'])) // Logged in ?
-		{
-		    printf ("Logged in as user '%s'<br />\n", $_SESSION['hsbuser']);
-		} else
-		{
-		    require_once ('./lib/login.php');
-		}
+		$MissingPwText="Invalid credentials"; // Specified user does not exist
 	    }
-	    $dbh = null;
 	}
-	catch (PDOException $e) 
+    $dbh = null;
+}
+catch (PDOException $e) 
+{
+    html_header ('FAIL');
+    printf ("<H1>Database failed: %s</H1><br />\n", $e->GetMessage());
+    die;
+}
+
+### Processing done. Act on/display the results
+if (isset($_SESSION['person_ID']))
+    { // Authenticated bit
+	if ( isset ($_SESSION['redirect']))
 	{
-	    html_header ('FAIL');
-	    printf ("<H1>Database failed: %s</H1><br />\n", $e->GetMessage());
-	}
+	    header ('Location: ' . $_SESSION['redirect']); // Redirect to caller script
+	} else 
+	    header ("Location: user_dashboard.php"); // Redirect to user dashboard page if we were not redirected
+    } else
+    { // Non-authenticated bit: show login page
+	html_header ('Hello');
+	if ( ($_SERVER['REQUEST_METHOD'] == "POST") and ($_REQUEST['user'] == "") ) $MissingUsrText="Field cannot be empty" ;
+	if ( ($_SERVER['REQUEST_METHOD'] == "POST") and ($_REQUEST['pass'] == "") ) $MissingPwText="Field cannot be empty" ;
+	printf (" <H1>%s Members Login Form</H1>\n", $CONFIG['CAorgname']);
+	printf (" <FORM Method=\"POST\" Action=\"%s\">\n", $_SERVER['SCRIPT_NAME']);
+	printf ("  Username: <INPUT type=\"text\" size=20 name=\"user\" value=\"%s\">%s<br />\n", $SANITIZED_REQUEST['user'], $MissingUsrText);
+	printf ("  Password: <INPUT type=\"password\" size=20 name=\"pass\">%s<br />\n", $MissingPwText);
+	printf (" <INPUT type=\"submit\" value=\"Login\">\n");
+	printf (" </FORM>\n");
+	printf ("<A HREF=\"forgotpassword.php\">Forgot password ?</A><BR />\n");
+	printf ("<A HREF=\"newaccount.php\">Create new account</A><BR />\n");
     }
-dumparray ($_SESSION, '$_SESSION');
-html_footer();
+#dumpglobals();
 ?>
