@@ -1,4 +1,4 @@
-<?
+<?php
 #
 # Concierge for Hackerspace Brussels - Web front-end - common functions
 # (c) 2014 Frederic Pasteleurs <frederic@askarel.be>
@@ -20,12 +20,12 @@
 
 
 # redirect to main page
-if ( !isset ($CONFIGFILE))
-{
-    header ('Status: 301 Moved Permanently', false, 301);
-    header ('Location: ../index.php');
-    exit;
-}
+#if ( !isset ($CONFIGFILE))
+#{
+#    header ('Status: 301 Moved Permanently', false, 301);
+#    header ('Location: ../index.php');
+#    exit;
+#}
 
 
 function html_header($TITLE, $EXTRAHEAD = '')
@@ -38,21 +38,25 @@ function html_footer()
     echo ("\n <p>Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/tree/master/concierge\">Concierge</A></p>\n </body>\n</html>\n");
 }
 
+// Dump the content of specified array
 function dumparray($MYARRAY, $arrayname)
 {
-    printf ("<H1>Content of array '%s'</H1>\n", $arrayname);
-    foreach ($MYARRAY as $key => $value)
+    printf ("<H3>Content of array '%s'</H3>\n", $arrayname);
+    printf ("<ul style=\"list-style-type:none\">\n");
+    foreach ($MYARRAY as $mykey => $myvalue)
 	{
-	    if (is_array ($MYARRAY[$key]))
+	    if (is_array ($MYARRAY[$mykey]))
 	    {
-		echo "$key is an array<br />";
+		printf (" %s is a sub-array<br />\n", $mykey);
 	    } else
 	    {
-		printf ("%s=%s<br />\n", $key , $value);
+		printf (" %s=%s<br />\n", $mykey , $myvalue);
 	    }
 	}
+    printf ("</ul>\n");
 }
 
+// Return the content of the parameter, but sanitized for internal use
 function sanitize_input($input)
 {
     if (is_array ($input))
@@ -68,6 +72,27 @@ function sanitize_input($input)
     return $input;
 }
 
+// Dump all global variables and arrays
+function dumpglobals()
+{
+    printf ("<H1>Content of \$GLOBALS array</H1>\n");
+    foreach ($GLOBALS as $key => $value)
+	{
+	    switch ( gettype ($GLOBALS[$key]) )
+		{
+		case "array":
+		    if ($key != "GLOBALS") // We're already dumping the $GLOBALS array
+			dumparray ($GLOBALS[$key], $key); 
+		    break;
+		case "string":
+		    printf ("Text Variable %s=%s<br />\n", $key , $value);
+		    break;
+		default:
+		    printf ("Type of variable %s: %s<br />\n", $key , gettype ($GLOBALS[$key]) );
+		    break;
+		}
+	}
+}
 
 // Generate a random password
 function mypwgen($length = 15)
@@ -79,9 +104,33 @@ function mypwgen($length = 15)
     return substr (trim (base64_encode ($random), "="), 0, $length);
 }
 
-# function get_auth_user()
+############### BOOTSTRAP RED TAPE (execution starts here) ###############
 
+# First thing first: it's a modern script supposed to be used on
+# decent browsers.
+header ('Content-type: text/html; charset=utf8');
+header ("X-Frame-Options: SAMEORIGIN");
+# Start a new session or open an existing one
+session_start();
 // Automagically insert footer on exit
 register_shutdown_function('html_footer');
+
+// Config file location
+$CONFIGFILE=dirname (__FILE__) . '/../config.php';
+
+// Do not trust data from client: Pre-sanitize script parameters.
+$SANITIZED_POST = sanitize_input ($_POST);
+$SANITIZED_GET = sanitize_input ($_GET);
+$SANITIZED_REQUEST = sanitize_input ($_REQUEST);
+
+# Does the config file exist ? Bomb out if it does not.
+if (!file_exists($CONFIGFILE))
+    {
+	html_header ('FAIL');
+	echo ("Please run the setup script to create config file.\n");
+	die();
+    }
+# Import config file
+require_once ($CONFIGFILE);
 
 ?>
