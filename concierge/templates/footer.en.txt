@@ -1,0 +1,5 @@
+-- 
+$ORGNAME
+
+This mail is sent automagically from a broken half-assed bash script. You
+can see the gory details here: https://github.com/askarel/hsb-scripts

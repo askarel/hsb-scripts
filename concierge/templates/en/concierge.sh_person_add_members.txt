@@ -1,0 +1,34 @@
+Welcome aboard
+
+Hello $FIRSTNAME,
+
+This e-mail is the confirmation that you are registered as an official
+member of Hackerspace Brussels VZW/ASBL.
+
+Since we have to spend money for the facilities, internet and electricity,
+we need to ask you some every month. Not much, but it's enough to keep us 
+afloat. You can ask your bank to make an automatic transfer to the following
+bank account: $BANKACCOUNT
+Monthly amount: $MONTHLYFEE $CURRENCY
+Communication: $STRUCTUREDCOMM
+
+The amount specified is the minimum amount agreed on during the general assembly. 
+You can give more if you can afford it.
+
+You *MUST* use the communication string above: it allow us to automate the
+day by day follow up of the financial aspect of the association.
+
+Your membership fee must arrive before $EXPIRYDATE. Past that date, your membership 
+application will be dropped.
+
+A password has been automatically generated for you for future services. Keep 
+this mail around: since we're hashing your passwords, it cannot be emailed back
+to you.
+
+Username: $NICKNAME
+Password: $PASSWORD
+
+
+You decided to join us for the following reason:
+$JOINREASON
+
