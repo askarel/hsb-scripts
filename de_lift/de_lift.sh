@@ -137,6 +137,12 @@ case "$1" in
     "MSG_BOX_RECLOSED")
 	remote_speakup "ALERT: Elevator box has been re-closed." &
 	;;
+    "MSG_TUESDAY_IS_ACTIVE")
+	echo "1" > /run/de_lift.tuesday
+    ;;	
+    "MSG_TUESDAY_IS_INACTIVE")
+	echo "0" > /run/de_lift.tuesday
+    ;;	
     *)
 	speakup "$2"
 	;;
