@@ -100,9 +100,9 @@ addperson()
     local -a REPLY_FIELD
     local SQL_QUERY="insert into person ($(tr ' ' ',' <<< "${REQUESTED_FIELDS[@]}"), passwordhash, ldaphash, machinestate, machinestate_expiration_date) values ("
     local OPS3="$PS3"
-    local persontype='member'
+    local persontype='members'
     PS3="Select person type to add (default: $persontype): "
-    select persontype in member cohabitants guest landlord contractor; do
+    select persontype in members cohabitants guest landlord contractor; do
 	test -n "$persontype" && break
     done
     PS3="$OPS3"
@@ -121,7 +121,7 @@ addperson()
     local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
 
     case "$persontype" in
-	'member')
+	'members')
 	    SQL_QUERY="$SQL_QUERY '$CRYPTPASSWORD', '$LDAPHASH', 'MEMBER_MANUALLY_ENTERED', date_add(now(), interval 1 month) );"
 	    ;;
 	'cohabitants')
@@ -144,8 +144,9 @@ addperson()
     STRUCTUREDCOMM="$(runsql 'select structuredcomm from person order by id desc limit 1')"
     EXPIRYDATE="$(runsql 'select machinestate_expiration_date from person order by id desc limit 1')"
     FIRSTNAME="${REPLY_FIELD[1]}"
+    NICKNAME="${REPLY_FIELD[3]}"
     JOINREASON="${REPLY_FIELD[8]}"
-    templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REQUESTED_FIELDS[5]}" "${REPLY_FIELD[7]}"
+    templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REPLY_FIELD[5]}" "${REPLY_FIELD[7]}"
 }
 
 # Modify data for an existing user
