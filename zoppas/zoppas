@@ -79,6 +79,9 @@ test -z "$CONFIGFILE" && die "No config file found"
 # Bring the config file
 . "$CONFIGFILE"
 # validate config file
+test -n "$SQLUSER" || die "$CONFIGFILE: SQLUSER variable is empty"
+test -n "$SQLPASS" || die "$CONFIGFILE: SQLPASS variable is empty"
+test -n "$SQLDB" || die "$CONFIGFILE: SQLDB: Database to use not specified"
 test -n "$ORGNAME" || die "Variable ORGNAME is empty. Set it to the name of your organization"
 # By default we talk in euros, and we define the full set of coins and notes of the currency.
 # Change it in the config file if you're not in the euro zone.
@@ -717,6 +720,9 @@ test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding
 case "$1" in
     "testmode")
 	testmode
+    ;;
+    "newmain")
+	mainapp
     ;;
     *)
 	oldmain
