@@ -27,12 +27,13 @@
 #    exit;
 #}
 
-
+# This will send the page start to the client
 function html_header($TITLE, $EXTRAHEAD = '')
 {
     printf ("<!DOCTYPE HTML>\n<html>\n <head>\n  <title>%s</title>\n%s\n </head>\n <body>\n", $TITLE, $EXTRAHEAD);
 }
 
+# This will send the page end to the client
 function html_footer()
 {
     echo ("\n <p>Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/tree/master/concierge\">Concierge</A></p>\n </body>\n</html>\n");
@@ -104,6 +105,14 @@ function mypwgen($length = 15)
     return substr (trim (base64_encode ($random), "="), 0, $length);
 }
 
+// Abort and tell user there is something definitely wrong
+function abort($str)
+{
+    html_header ('FAIL');
+    die (sprintf ("<H1>%s</H1><br />\n", $str));
+}
+
+
 ############### BOOTSTRAP RED TAPE (execution starts here) ###############
 
 # First thing first: it's a modern script supposed to be used on
@@ -126,11 +135,46 @@ $SANITIZED_REQUEST = sanitize_input ($_REQUEST);
 # Does the config file exist ? Bomb out if it does not.
 if (!file_exists($CONFIGFILE))
     {
-	html_header ('FAIL');
-	echo ("Please run the setup script to create config file.\n");
-	die();
+	abort ("Please run the setup script to create config file.");
     }
+
 # Import config file
 require_once ($CONFIGFILE);
+
+# Open a database connection if specified in config
+try
+{
+    if (isset ($CONFIG['mydb']))
+    {
+	$sqlconn = new PDO ("mysql:host=". $CONFIG['dbhostname'] . ";dbname=" . $CONFIG['mydb'] . ";charset=UTF8", $CONFIG['dbuser'], $CONFIG['dbpass']);
+	$sqlconn->setAttribute (PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+	$sqlconn->setAttribute (PDO::ATTR_EMULATE_PREPARES, false);
+    }
+}
+catch (PDOException $e) 
+{
+    abort (sprintf ("Database failed: %s", $e->GetMessage()));
+}
+
+# Open a LDAP connection if specified in config
+//try
+//{
+if (isset ($CONFIG['ldaphost']))
+    {
+	$ldapconn = ldap_connect('ldap://' . $CONFIG['ldaphost'], $CONFIG['ldapport']);
+	ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
+	$ldapbind = ldap_bind($ldapconn, $CONFIG['ldaprdn'], $CONFIG['ldappass']);
+	if (!$ldapbind)
+	{
+	    abort (sprintf ("LDAP failed: %s" , ldap_error($ldapconn)));
+	}
+    }
+//}
+//catch ()
+//{
+//    abort (sprintf ("LDAP failed: %s" , ldap_error($ldapconn)));
+//}
+//    
+
 
 ?>
