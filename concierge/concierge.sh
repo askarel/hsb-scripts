@@ -98,7 +98,7 @@ addperson()
     local REQUESTED_FIELDS_DESC=('Preferred language' 'Firstname' 'Family name' 'Nickname' 'phone number' 'Email address' 'Birth date' 
 				'OpenPGP key ID' "informations (free text, use '|' to finish)\n")
     local -a REPLY_FIELD
-    local SQL_QUERY="insert into person ($(tr ' ' ',' <<< "${REQUESTED_FIELDS[@]}"), passwordhash, ldaphash, machinestate, machinestate_expiration_date) values ("
+    local SQL_QUERY="insert into person (entrydate, $(tr ' ' ',' <<< "${REQUESTED_FIELDS[@]}"), passwordhash, ldaphash, machinestate, machinestate_expiration_date) values ( \"$(date '+%Y-%m-%d')\", "
     local OPS3="$PS3"
     local persontype='members'
     PS3="Select person type to add (default: $persontype): "
@@ -480,7 +480,7 @@ ldapexport()
 	local EMAILADDRESS="$(runsql "select emailaddress from person where id=$i")"
 	local LDAPPASS="$(runsql "select ldaphash from person where id=$i")"
 	local USER_UID=$(( $UIDBASE + $i ))
-	echo "dn: uid==$NICKNAME,ou=users,dc=hsbxl,dc=be"
+	echo "dn: uid=$NICKNAME,ou=users,dc=hsbxl,dc=be"
 	echo "cn:$FIRSTNAME $NAME"
 	echo "gidnumber: 503"
 	echo "givenname: $FIRSTNAME"
