@@ -96,7 +96,7 @@ function dumpglobals()
 }
 
 // Generate a random password
-function mypwgen($length = 15)
+function mypwgen($length = 20)
 {
     $fp = fopen ("/dev/urandom", 'r');
     if (!$fp) die ("Can't access /dev/urandom to get random data. Aborting.");
@@ -117,7 +117,7 @@ function abort($str)
 
 # First thing first: it's a modern script supposed to be used on
 # decent browsers.
-header ('Content-type: text/html; charset=utf8');
+header ("Content-type: text/html; charset=utf8");
 header ("X-Frame-Options: SAMEORIGIN");
 # Start a new session or open an existing one
 session_start();
@@ -159,8 +159,12 @@ catch (PDOException $e)
 # Open a LDAP connection if specified in config
 //try
 //{
-if (isset ($CONFIG['ldaphost']))
+if (isset ($CONFIG['ldapdn']))
     {
+	if (!isset ($CONFIG['ldaphost']))
+	{
+	    $CONFIG['ldaphost'] = 'localhost';
+	}
 	$ldapconn = ldap_connect('ldap://' . $CONFIG['ldaphost'], $CONFIG['ldapport']);
 	ldap_set_option($ldapconn, LDAP_OPT_PROTOCOL_VERSION, 3);
 	$ldapbind = ldap_bind($ldapconn, $CONFIG['ldaprdn'], $CONFIG['ldappass']);
@@ -176,5 +180,13 @@ if (isset ($CONFIG['ldaphost']))
 //}
 //    
 
-
+# Handles we have so far:
+# - $sqlconn - Open connection to MySQL database, as specified user and on specified database
+# - $ldapconn - Open connection to LDAP server, bound (authenticated) to whatever is specified in config. Bound as 'anonymous' if no credentials provided.
+# Variables defined and ready to use:
+# - $CONFIG array, with all configuration options from file
+# - $SESSION array
+# Exit procedure: send the footer whenever we decide to die.
+#
+# Now, run the main script...
 ?>
