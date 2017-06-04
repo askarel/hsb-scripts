@@ -21,33 +21,20 @@
 # Load the common stuff (first thing)
 include_once('./lib/commonfunctions.php');
 
+function show_dashboard()
+{
+html_header ("Hello " . $_SESSION['AUTH_RDN']);
+echo ("authenticated <br />");
+printf ("<A HREF=\"%s?action=logout\">Log out user %s</A><BR />\n", $_SERVER['SCRIPT_NAME'], $_SESSION['AUTH_RDN'] );
+}
+
 # Redirect to index page if not already authenticated
-if ( ! isset($_SESSION['person_ID']))
+if ( ! (isset($_SESSION['AUTH_RDN']) and isset($_SESSION['AUTH_RDN_PASS']) ) )
 	{ // Non-Authenticated bit
 	    $_SESSION['redirect'] = "user_dashboard.php";
 	    header ("Location: index.php");
 	    die;
 	}
-
-try 
-{    // Load user data
-    $dbh = new PDO ("mysql:host=". $CONFIG['dbhostname'] . ";dbname=" . $CONFIG['mydb'] . ";charset=UTF8", $CONFIG['dbuser'], $CONFIG['dbpass']);
-    $dbh->setAttribute (PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $dbh->setAttribute (PDO::ATTR_EMULATE_PREPARES, false);
-    $persondataRQ = $dbh->prepare ("select * from person where id = :id", array(PDO::ATTR_CURSOR => PDO::CURSOR_FWDONLY));
-    $persondataRQ->execute( array (':id' => $_SESSION['person_ID'] ) );
-    $persondata = $persondataRQ->fetchAll();
-    $personhistRQ = $dbh->prepare ("select * from person_history where member_id = :id", array(PDO::ATTR_CURSOR => PDO::CURSOR_FWDONLY));
-    $personhistRQ->execute( array (':id' => $_SESSION['person_ID'] ) );
-    $personhistory = $personhistRQ->fetchAll();
-
-    $dbh = null;
-}
-catch (PDOException $e) 
-{
-    html_header ('FAIL');
-    printf ("<H1>Database failed: %s</H1><br />\n", $e->GetMessage());
-}
 
 # Do some actions
 switch ( $_REQUEST['action'] )
@@ -61,13 +48,29 @@ switch ( $_REQUEST['action'] )
 	    break;
     }
 
-
-html_header ("Hello " . $persondata[0]['firstname']);
-
-echo ('authenticated');
+show_dashboard();
 
 dumpglobals();
-dumparray ($persondata[0], 'persondata');
 
-printf ("<A HREF=\"%s?action=logout\">Log out user %s</A><BR />\n", $_SERVER['SCRIPT_NAME'], $persondata[0]['nickname'] );
+#dumparray ($persondata[0], 'persondata');
+#try 
+#{    // Load user data
+#    $dbh = new PDO ("mysql:host=". $CONFIG['dbhostname'] . ";dbname=" . $CONFIG['mydb'] . ";charset=UTF8", $CONFIG['dbuser'], $CONFIG['dbpass']);
+#    $dbh->setAttribute (PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+#    $dbh->setAttribute (PDO::ATTR_EMULATE_PREPARES, false);
+#    $persondataRQ = $dbh->prepare ("select * from person where id = :id", array(PDO::ATTR_CURSOR => PDO::CURSOR_FWDONLY));
+#    $persondataRQ->execute( array (':id' => $_SESSION['person_ID'] ) );
+#    $persondata = $persondataRQ->fetchAll();
+#    $personhistRQ = $dbh->prepare ("select * from person_history where member_id = :id", array(PDO::ATTR_CURSOR => PDO::CURSOR_FWDONLY));
+#    $personhistRQ->execute( array (':id' => $_SESSION['person_ID'] ) );
+#    $personhistory = $personhistRQ->fetchAll();
+#
+#    $dbh = null;
+#}
+#catch (PDOException $e) 
+#{
+#    html_header ('FAIL');
+#    printf ("<H1>Database failed: %s</H1><br />\n", $e->GetMessage());
+#}
+
 ?>
