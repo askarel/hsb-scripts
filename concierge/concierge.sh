@@ -480,7 +480,7 @@ ldapexport()
 	local EMAILADDRESS="$(runsql "select emailaddress from person where id=$i")"
 	local LDAPPASS="$(runsql "select ldaphash from person where id=$i")"
 	local USER_UID=$(( $UIDBASE + $i ))
-	echo "dn: cn=$FIRSTNAME $NAME,ou=users,dc=hsbxl,dc=be"
+	echo "dn: uid==$NICKNAME,ou=users,dc=hsbxl,dc=be"
 	echo "cn:$FIRSTNAME $NAME"
 	echo "gidnumber: 503"
 	echo "givenname: $FIRSTNAME"
