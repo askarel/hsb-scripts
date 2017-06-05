@@ -44,11 +44,11 @@ function login_page()
 // Validate supplied credentials...
 if ( ($_SERVER['REQUEST_METHOD'] == "POST") and ($_REQUEST['user'] != "") and ($_REQUEST['pass'] != "") )
     {
-	$rdn="uid=" . $SANITIZED_REQUEST['user'] . ",ou=users," . $CONFIG['ldapdn'];
+	$rdn="uid=" . $SANITIZED_REQUEST['user'] . ",ou=" . $CONFIG['ldapuserou'] . "," . $CONFIG['ldapdn'];
 	$resu=ldap_bind ($ldapconn, $rdn, $_REQUEST['pass']);
 	if ($resu)
 	    { // Bind operation is successful.
-		$_SESSION['AUTH_RDN'] = $rdn;
+		$_SESSION['AUTH_RDN'] = $rdn; // Pass the RDN and the password to subsequent script
 		$_SESSION['AUTH_RDN_PASS'] = $_REQUEST['pass'];
 	    }
 	    else
@@ -58,7 +58,6 @@ if ( ($_SERVER['REQUEST_METHOD'] == "POST") and ($_REQUEST['user'] != "") and ($
 	// Debug
 	//printf ("<br />rdn=%s<br />resu=%s<br />ldaperror=%s<br />\n", $rdn, $resu, ldap_error ($ldapconn));
     }
-
 
 ### Processing done. Act on/display the results
 if (isset($_SESSION['AUTH_RDN']) and isset($_SESSION['AUTH_RDN_PASS']))
