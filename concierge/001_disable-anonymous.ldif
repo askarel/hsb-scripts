@@ -1,0 +1,10 @@
+#
+# Usr data protection: Disable anonymous bind
+#
+dn: olcDatabase={-1}frontend,cn=config
+add: olcRequires
+olcRequires: authc
+
+dn: olcDatabase={1}mdb,cn=config
+add: olcRequires
+olcRequires: authc

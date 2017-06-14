@@ -1,0 +1,108 @@
+
+dn: cn=hsbxlschema,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: hsbxlschema
+#
+# Hackerspace Brussels - LDAP schema for concierge
+# Initial design: 2015 TQ Hirsch <thequux@thequux.com>
+# (c) 2017 Frederic Pasteleurs <frederic@askarel.be>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program or from the site that you downloaded it
+# from; if not, write to the Free Software Foundation, Inc., 59 Temple
+# Place, Suite 330, Boston, MA  02111-1307   USA
+#
+olcObjectIdentifier: HSBXL 1.3.6.1.4.1.43666
+olcObjectIdentifier: HSBXLexp HSBXL:1
+olcObjectIdentifier: HSBXLldap HSBXL:2
+olcObjectIdentifier: HSBXLat HSBXLldap:1
+olcObjectIdentifier: HSBXLoc HSBXLldap:2
+#
+olcAttributeTypes: ( HSBXLat:1
+  NAME 'x-hsbxl-memberStructComm'
+  DESC 'Structured communication for membership payment'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:2
+  NAME 'x-hsbxl-drinksStructComm'
+  DESC 'Structured communication for drinks payment'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:3
+  NAME 'x-hsbxl-RFIDid'
+  DESC 'UID of an NFC card, as a hex string'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:4
+  NAME 'x-hsbxl-membershipRequested'
+  DESC 'If true, this member has requested membership. Assume TRUE if absent'
+  EQUALITY booleanMatch
+  SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 )
+#
+olcAttributeTypes: ( HSBXLat:5
+  NAME 'x-hsbxl-votingRequested'
+  DESC 'If true, this member has requested to be a voting member. Assume FALSE if absent'
+  EQUALITY booleanMatch
+  SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 )
+#
+olcAttributeTypes: ( HSBXLat:6
+  NAME 'x-hsbxl-sponsor'
+  DESC 'Sponsoring member'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:7
+  NAME 'x-hsbxl-membershipReason'
+  DESC 'Why this person wants to be a member'
+  SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+#
+olcAttributeTypes: ( HSBXLat:8
+  NAME 'x-hsbxl-sshPubKey'
+  DESC 'SSH public key - One key per entry'
+  EQUALITY caseExactIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:9
+  NAME 'x-hsbxl-pgpPubKey'
+  DESC 'PGP Public key used by person'
+  SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+#
+olcAttributeTypes: ( HSBXLat:10
+  NAME 'x-hsbxl-machineState'
+  DESC 'Machine state data'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26
+  SINGLE-VALUE )
+#
+olcAttributeTypes: ( HSBXLat:11
+  NAME 'x-hsbxl-machineStateData'
+  DESC 'Machine state data'
+  SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+#
+olcObjectClasses: ( HSBXLoc:1
+  NAME 'x-hsbxl-person'
+  DESC 'Person associated with the hackerspace in some way'
+  AUXILIARY
+  SUP top
+  MUST ( cn $ uid $ mail $ userPassword )
+  MAY ( x-hsbxl-memberStructComm $ x-hsbxl-drinksStructComm $ x-hsbxl-RFIDid $ 
+        x-hsbxl-membershipRequested $ x-hsbxl-votingRequested $ x-hsbxl-sponsor $ 
+        x-hsbxl-membershipReason $ x-hsbxl-sshPubKey $ x-hsbxl-pgpPubKey $ x-hsbxl-machineState $
+        x-hsbxl-machineStateData ) )
