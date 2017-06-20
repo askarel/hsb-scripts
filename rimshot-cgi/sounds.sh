@@ -196,7 +196,7 @@ case "$( echo "$QUERY_STRING"|cut -d '=' -f 1 )" in
 			$PLAYPROG "$(find "$DIR_AUDIOFILES" -xtype f \( -iname "*" ! -iname ".*" \) -not -path "*/.*"|shuf -n 1)" &
 		        ;;
 		    "$POSTSPEAKMETHOD") # Speech synth method.
-			SPEECHTEXT="$(echo "$POSTDATA"| sed -n 's/^.*SPEAK=\([^&]*\).*$/\1/p')"
+			SPEECHTEXT="$(echo "$POSTDATA"| tr '+' ' ' | sed -n 's/^.*SPEAK=\([^&]*\).*$/\1/p')"
 			SPEECHLANG="$(echo "$POSTDATA"| sed -n 's/^.*SPEECHLANG=\([^&]*\).*$/\1/p')"
 			test -n "$SPEECHMETHOD" && $SPEECHMETHOD "$SPEECHTEXT" "$SPEECHLANG" &
 			;;
