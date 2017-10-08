@@ -28,72 +28,93 @@ olcObjectIdentifier: HSBXLat HSBXLldap:1
 olcObjectIdentifier: HSBXLoc HSBXLldap:2
 #
 olcAttributeTypes: ( HSBXLat:1
-  NAME 'x-hsbxl-memberStructComm'
-  DESC 'Structured communication for membership payment'
-  EQUALITY caseIgnoreIA5Match
-  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+  NAME 'x-hsbxl-ShortComm'
+  DESC 'Communication ID without check digit and separators characters'
+  EQUALITY integerMatch
+  SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 )
 #
 olcAttributeTypes: ( HSBXLat:2
-  NAME 'x-hsbxl-drinksStructComm'
-  DESC 'Structured communication for drinks payment'
+  NAME 'x-hsbxl-fullStructComm'
+  DESC 'Full structured communication for payment'
   EQUALITY caseIgnoreIA5Match
+  SINGLE-VALUE
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
 #
 olcAttributeTypes: ( HSBXLat:3
+  NAME 'x-hsbxl-structCommDesc'
+  DESC 'Text description for structured communication'
+  EQUALITY octetStringMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+#
+olcAttributeTypes: ( HSBXLat:4
+  NAME 'x-hsbxl-structCommOwner'
+  DESC 'Owner of the structured communication'
+  EQUALITY caseIgnoreIA5Match
+  SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:10
   NAME 'x-hsbxl-RFIDid'
   DESC 'UID of an NFC card, as a hex string'
   EQUALITY caseIgnoreIA5Match
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
 #
-olcAttributeTypes: ( HSBXLat:4
+olcAttributeTypes: ( HSBXLat:11
   NAME 'x-hsbxl-membershipRequested'
   DESC 'If true, this member has requested membership. Assume TRUE if absent'
   EQUALITY booleanMatch
   SINGLE-VALUE
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 )
 #
-olcAttributeTypes: ( HSBXLat:5
+olcAttributeTypes: ( HSBXLat:12
   NAME 'x-hsbxl-votingRequested'
   DESC 'If true, this member has requested to be a voting member. Assume FALSE if absent'
   EQUALITY booleanMatch
   SINGLE-VALUE
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 )
 #
-olcAttributeTypes: ( HSBXLat:6
+olcAttributeTypes: ( HSBXLat:13
   NAME 'x-hsbxl-sponsor'
   DESC 'Sponsoring member'
   EQUALITY caseIgnoreIA5Match
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
 #
-olcAttributeTypes: ( HSBXLat:7
-  NAME 'x-hsbxl-membershipReason'
-  DESC 'Why this person wants to be a member'
+olcAttributeTypes: ( HSBXLat:14
+  NAME 'x-hsbxl-socialTariff'
+  DESC 'If true, this member has requested the social tariff. Assume FALSE if absent'
+  EQUALITY booleanMatch
   SINGLE-VALUE
-  SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 )
 #
-olcAttributeTypes: ( HSBXLat:8
+olcAttributeTypes: ( HSBXLat:15
   NAME 'x-hsbxl-sshPubKey'
   DESC 'SSH public key - One key per entry'
   EQUALITY caseExactIA5Match
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
 #
-olcAttributeTypes: ( HSBXLat:9
+olcAttributeTypes: ( HSBXLat:16
   NAME 'x-hsbxl-pgpPubKey'
   DESC 'PGP Public key used by person'
   SINGLE-VALUE
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
 #
-olcAttributeTypes: ( HSBXLat:10
+olcAttributeTypes: ( HSBXLat:17
   NAME 'x-hsbxl-machineState'
-  DESC 'Machine state data'
+  DESC 'Machine state'
   EQUALITY caseIgnoreIA5Match
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.26
   SINGLE-VALUE )
 #
-olcAttributeTypes: ( HSBXLat:11
+olcAttributeTypes: ( HSBXLat:18
   NAME 'x-hsbxl-machineStateData'
   DESC 'Machine state data'
   SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+#
+olcAttributeTypes: ( HSBXLat:19
+  NAME 'x-hsbxl-textDataBlob'
+  DESC 'Free-form blob of text data for user (JSON goes here)'
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
 #
 olcObjectClasses: ( HSBXLoc:1
@@ -102,7 +123,14 @@ olcObjectClasses: ( HSBXLoc:1
   AUXILIARY
   SUP top
   MUST ( cn $ uid $ mail $ userPassword )
-  MAY ( x-hsbxl-memberStructComm $ x-hsbxl-drinksStructComm $ x-hsbxl-RFIDid $ 
+  MAY ( x-hsbxl-RFIDid $ 
         x-hsbxl-membershipRequested $ x-hsbxl-votingRequested $ x-hsbxl-sponsor $ 
-        x-hsbxl-membershipReason $ x-hsbxl-sshPubKey $ x-hsbxl-pgpPubKey $ x-hsbxl-machineState $
-        x-hsbxl-machineStateData ) )
+        x-hsbxl-socialTariff $ x-hsbxl-sshPubKey $ x-hsbxl-pgpPubKey $ x-hsbxl-machineState $
+        x-hsbxl-machineStateData $ x-hsbxl-textDataBlob ) )
+#
+olcObjectClasses: ( HSBXLoc:2
+  NAME 'x-hsbxl-structuredcomm'
+  DESC 'Structured communication for payments'
+  STRUCTURAL
+  MUST ( x-hsbxl-ShortComm $ x-hsbxl-fullStructComm )
+  MAY ( x-hsbxl-structCommDesc $ x-hsbxl-structCommOwner ) )
