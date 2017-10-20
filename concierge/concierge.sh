@@ -65,7 +65,7 @@ do_mail()
     read SUBJECTLINE
     if [ -z "$DEBUGGING" ] ; then 
 	if gpg --no-permission-warning --homedir "$GPGHOME" --fingerprint "$3" > /dev/null 2>&1; then # Is key usable ?
-	    gpg --no-permission-warning --homedir "$GPGHOME" --encrypt --armor --batch --always-trust --recipient "$3" | mail -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
+	    gpg --no-permission-warning --homedir "$GPGHOME" --encrypt --armor --batch --always-trust --recipient "$3" | bsd-mailx -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
 	else # Invalid or non-existent key: send cleartext.
 	    bsd-mailx -a "From: $1" -s "$ORGNAME - $SUBJECTLINE" "$2"
 	fi
@@ -512,8 +512,53 @@ db_dump()
 db_restore()
 {
     test -z "$1" && die "Specify source file to restore"
-    test -f "$1" && die "Specified file does not exist"
+    test -f "$1" || die "Specified file does not exist"
     runsql "$1"
+}
+
+# Migrate all structured memos from two (or more) tables to one.
+# This will ease the treatment of people with multiple messages for their membership payments
+# This will effectively render the old_comms table and the person.structuredcomm column obsolete.
+# The rest of the code to process that new table still need to be written
+account_migrate()
+{
+    for i in $( runsql "select id from person" ) ; do
+	ENTRYDATE="$(runsql "select entrydate from person where id = $i")"
+	STRUCTURED1="$(runsql "select structuredcomm from person where id = $i")"
+	runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$STRUCTURED1')"
+	for j in $(runsql "select structuredcomm from old_comms where member_id = $i"); do
+	    runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$j')"
+	done
+    done 
+}
+
+# Create an internal account. This uses a belgian structured memo as identifier
+# Parameter 1: Person identifier (plain number are treated as MySQL integer, strings are treated as LDAP RDN)
+# Parameter 2: account type
+# Parameter 3: reference object (optional)
+# Parameter 4: Creation date (optional)
+# Returns: structured memo if success
+account_create()
+{
+    test -z "$1" && die "account_create: missing account identifier"
+    test -z "$2" && die "account_create: missing account type"
+    case "$1" in
+	''|*[!0-9]*)
+	    IDTYPE='owner_dn'
+	    MYID="'$1'"
+	    ;;
+	*)
+	    IDTYPE='owner_id'
+	    MYID="$1"
+	    ;;
+    esac
+    # This line will need tweaking at some point.
+    NEWBECOMM="$(runsql 'select formatbecomm(count(structuredcomm)+3) from internal_accounts')"
+    test -z "$3" -a -z "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type) values ('$NEWBECOMM', $MYID, '$2')"
+    test -n "$3" -a -z "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type, ref_dn) values ('$NEWBECOMM', $MYID, '$2', '$3')"
+    test -z "$3" -a -n "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type, created_on) values ('$NEWBECOMM', $MYID, '$2', '$4')"
+    test -n "$3" -a -n "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type, ref_dn, created_on) values ('$NEWBECOMM', $MYID, '$2', '$3', '$4')"
+    runsql "$SQLQUERY" a > /dev/null && echo "$NEWBECOMM"
 }
 
 ############### </FUNCTIONS> ###############
@@ -722,9 +767,16 @@ case "$CASEVAR" in
     'backup/run')
 	db_dump "$3"
 	;;
-
     'backup/restore')
 	db_restore "$3"
+	;;
+
+### Internal accounting
+    'accounting/migrate')
+	account_migrate
+	;;
+    'accounting/create')
+	account_create "$3" "$4" "$5" "$6"
 	;;
 
 ### Catch-all parts: in case of invalid arguments
@@ -748,6 +800,9 @@ case "$CASEVAR" in
 	;;
     'backup/'*)
 	die "Please specify subaction (run|restore)"
+	;;
+    'accounting/'*)
+	die "Please specify subaction (create|transfer|balance|sync)"
 	;;
 
 ### Debugging aid: runsql from command line

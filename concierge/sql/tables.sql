@@ -43,6 +43,16 @@ create table if not exists person (id int not null auto_increment primary key,
 				    machinestate_expiration_date date -- Date when the state expires
 				    );
 
+-- Internal accounts - for memberships, drinks, hosting and other things you can imagine
+create table if not exists internal_accounts (
+				    structuredcomm char(21) unique not null primary key,
+				    created_on timestamp default current_timestamp,
+				    owner_id int, -- MySQL person owner ID: should go away
+				    account_type char(20),
+				    owner_dn char(255), -- LDAP person owner ID: should be primary
+				    description text,
+				    ref_dn char(255) -- Subject: membership or hosting
+				    );
 -- Alternate payment messages: from old application
 create table if not exists old_comms (member_id int not null,
 				    structuredcomm char(21) unique not null);
@@ -139,21 +149,6 @@ create table if not exists validiban (id int not null auto_increment primary key
 				    validlength int not null);
 
 
--- Legacy: for JavaScript web interface
-DROP TABLE IF EXISTS `logs_bell`;
-CREATE TABLE `logs_bell` (
-  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
-DROP TABLE IF EXISTS `logs_door`;
-CREATE TABLE `logs_door` (
-  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `login` varchar(100) NOT NULL DEFAULT '',
-  `date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- Old object: we assumed people in the database are effective members. This will disappear due to lack of flexibility.
 create table if not exists hsbmembers (id int not null auto_increment primary key,
