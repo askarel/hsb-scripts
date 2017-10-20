@@ -278,89 +278,6 @@ cron_pgp()
     done
 }
 
-# Columns never used in old app: mail_flags, activateddate, openpgpkeyid, snailbox, snailnumber, snailstreet, snailpostcode, snailcommune, 
-#			nationalregistry, birthcountry, birthdate, flags, passwordhash
-legacy_import_ex_members()
-{
-    echo "$ME: Importing ex-members..."
-    local record_count=0
-    for i in $(runsql "select id from hsbmembers where exitdate is not null"); do
-	(( record_count += 1 ))
-	local memberdata=($(runsql "select entrydate, exitdate, structuredcomm from hsbmembers where id=$i"))
-	local m_firstname="$(runsql "select firstname from hsbmembers where id=$i")"
-	local m_name="$(runsql "select name from hsbmembers where id=$i")"
-	local m_nickname="$(runsql "select nickname from hsbmembers where id=$i")"
-	local m_phone="$(runsql "select phonenumber from hsbmembers where id=$i")"
-	local m_email="$(runsql "select emailaddress from hsbmembers where id=$i")"
-	local m_why="$(runsql "select why_member from hsbmembers where id=$i" | sed -e "s/[\\']/\\\\&/g")"
-	test "$m_nickname" = 'NULL' && m_nickname=''
-	test "$m_phone" != 'NULL' && m_phone="'$m_phone'"
-	test -z "$m_nickname" && m_nickname="$( tr ' ' '_' <<< "${m_firstname}_${m_name}")" # Craft unlikely nickname
-	local PASSWORD="$(pwgen 20 1)"
-
-    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
-    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
-
-	local SQL_QUERY="insert into person (entrydate, firstname, name, nickname, phonenumber, emailaddress, passwordhash, ldaphash, machinestate, machinestate_data) values 
-	    ('${memberdata[0]}', '$m_firstname', '$m_name', '$m_nickname', $m_phone, '$m_email', '$CRYPTPASSWORD', '$LDAPHASH', 'IMPORTED_EX_MEMBER', 'exitdate=\"${memberdata[1]}\";why_member=\"$m_why\"')"
-	runsql "$SQL_QUERY"
-	# Insert successful ? Prime the old_comms table
-	local personid="$(runsql "select id from person where nickname like '$m_nickname'")"
-	local oldmsg_query="insert into old_comms (member_id, structuredcomm) values ($personid, '${memberdata[2]}')"
-	runsql "$oldmsg_query"
-	# delete imported data from old table
-	runsql "delete from hsbmembers where id=$i"
-#	echo "$i, $personid: $SQL_QUERY - $oldmsg_query"
-    done
-    echo "$ME: $record_count ex-members records processed"
-}
-
-# Columns never used in old app: mail_flags, activateddate, openpgpkeyid, snailbox, snailnumber, snailstreet, snailpostcode, snailcommune, 
-#			nationalregistry, birthcountry, birthdate, flags, passwordhash
-legacy_import_members()
-{
-    echo "$ME: Importing members (and keeping them in a silent state)..."
-    local record_count=0
-    for i in $(runsql "select id from hsbmembers where exitdate is null"); do
-#    for i in $(runsql "select id from hsbmembers where exitdate is null and id <> 69 and id <> 101"); do
-	(( record_count += 1 ))
-	local memberdata=($(runsql "select entrydate, exitdate, structuredcomm from hsbmembers where id=$i"))
-	local m_firstname="$(runsql "select firstname from hsbmembers where id=$i")"
-	local m_name="$(runsql "select name from hsbmembers where id=$i")"
-	local m_nickname="$(runsql "select nickname from hsbmembers where id=$i")"
-	local m_phone="$(runsql "select phonenumber from hsbmembers where id=$i")"
-	local m_email="$(runsql "select emailaddress from hsbmembers where id=$i")"
-	local m_why="$(runsql "select why_member from hsbmembers where id=$i" | sed -e "s/[\\']/\\\\&/g")"
-	test "$m_nickname" = 'NULL' && m_nickname=''
-	test "$m_phone" != 'NULL' && m_phone="'$m_phone'"
-	local PASSWORD="$(pwgen 20 1)"
-
-    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
-    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
-
-	test -z "$m_nickname" && m_nickname="$( tr ' ' '_' <<< "${m_firstname}_${m_name}")" # Craft unlikely nickname
-	if [ -n "$(runsql "select nickname from person where nickname like '$m_nickname'")" ]; then # Do i already have an old inactive entry ?
-	    echo "$m_nickname already has a record. Updating it..."
-	    local SQL_QUERY="update person set firstname='$m_firstname', name='$m_name', phonenumber=$m_phone, emailaddress='$m_email', 
-	    passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH', machinestate='IMPORTED_MEMBER_INACTIVE', machinestate_data='$m_why' 
-	    where nickname like '$m_nickname'"
-	else
-	    echo "Importing $m_nickname..."
-	    local SQL_QUERY="insert into person (entrydate, firstname, name, nickname, phonenumber, emailaddress, passwordhash, ldaphash, machinestate, machinestate_data) values 
-	    ('${memberdata[0]}', '$m_firstname', '$m_name', '$m_nickname', $m_phone, '$m_email', '$CRYPTPASSWORD', '$LDAPHASH','IMPORTED_MEMBER_INACTIVE', 'why_member=\"$m_why\"')"
-	fi
-#	echo  "$SQL_QUERY"
-	runsql "$SQL_QUERY"
-	# Insert successful ? Prime the old_comms table
-	local personid="$(runsql "select id from person where nickname like '$m_nickname'")"
-	local oldmsg_query="insert into old_comms (member_id, structuredcomm) values ($personid, '${memberdata[2]}')"
-	runsql "$oldmsg_query"
-#	# delete imported data from old table
-	runsql "delete from hsbmembers where id=$i"
-#	echo "$i, $personid: $SQL_QUERY - $oldmsg_query"
-    done
-    echo "$ME: $record_count members records processed"
-}
 
 ### NEED REPAIR
 # This function will:
@@ -684,11 +601,6 @@ case "$1" in
     "legacy")
 	shift
 	case "$1" in
-	    'import')
-		legacy_import_ex_members
-		echo "Importing current members..."
-		legacy_import_members
-		;;
 	    'activate_all')
 		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
 		for i in $(runsql 'select id from person where machinestate like "IMPORTED_MEMBER_INACTIVE"') ; do
