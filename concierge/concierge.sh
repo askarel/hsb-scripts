@@ -342,7 +342,7 @@ legacy_import_members()
 	if [ -n "$(runsql "select nickname from person where nickname like '$m_nickname'")" ]; then # Do i already have an old inactive entry ?
 	    echo "$m_nickname already has a record. Updating it..."
 	    local SQL_QUERY="update person set firstname='$m_firstname', name='$m_name', phonenumber=$m_phone, emailaddress='$m_email', 
-	    passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH', machinestate='IMPORTED_MEMBER_INACTIVE', machinestate_data='why_member=\"$m_why\"' 
+	    passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH', machinestate='IMPORTED_MEMBER_INACTIVE', machinestate_data='$m_why' 
 	    where nickname like '$m_nickname'"
 	else
 	    echo "Importing $m_nickname..."
@@ -496,6 +496,24 @@ ldapexport()
 	echo "uidnumber: $USER_UID"
 	echo ""
     done
+}
+
+# Perform a backup of the database
+# Parameter 1: destination filename
+db_dump()
+{
+    test -z "$1" && die "Specify destination file for backup"
+    mysqldump -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" --routines --triggers --hex-blob --add-drop-database --add-drop-table --flush-privileges --databases "$SQLDB" > "$1"
+}
+
+
+# Perform a restore of the database
+# Parameter 1: source filename
+db_restore()
+{
+    test -z "$1" && die "Specify source file to restore"
+    test -f "$1" && die "Specified file does not exist"
+    runsql "$1"
 }
 
 ############### </FUNCTIONS> ###############
@@ -700,6 +718,15 @@ case "$CASEVAR" in
 	ldapexport
 	;;
 
+### database backups
+    'backup/run')
+	db_dump "$3"
+	;;
+
+    'backup/restore')
+	db_restore "$3"
+	;;
+
 ### Catch-all parts: in case of invalid arguments
     'cron/'*)
 	die "Please specify subaction (install|uninstall|yearly|monthly|weekly|daily|hourly|all)"
@@ -718,6 +745,9 @@ case "$CASEVAR" in
 	;;
     'member/'*)
 	die "Please specify subaction (cancel|reactivate|listpayments|list_active|list_inactive|fix_multiple_payment_msg|massmail|...)"
+	;;
+    'backup/'*)
+	die "Please specify subaction (run|restore)"
 	;;
 
 ### Debugging aid: runsql from command line
