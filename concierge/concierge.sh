@@ -527,25 +527,10 @@ test -d "$SQLDIR" || die "SQL files repository not found. Current path: $SQLDIR"
 mkdir -p "$GPGHOME" || die 'Cannot create GnuPG directory'
 chmod 700 "$GPGHOME"
 
+CASEVAR="$1/$2"
+
+# Nested case statement is shit and unreadable: to delete
 case "$1" in
-    "install")
-	shift
-	TABLECOUNT="$(runsql "show tables;" 'a')"
-	test "$?" = '0' || die "Please create database first"
-	test "$1" = 'force' && unset TABLECOUNT
-	if [ -z "$TABLECOUNT" ]; then
-	    echo "$ME: Priming database..."
-	    runsql "$SQLDIR/tables.sql"
-	    runsql "$SQLDIR/tabledata.sql"
-# Obsolete table: should be removed
-#	    runsql "$SQLDIR/ibandata.sql"
-	    runsql "$SQLDIR/functions.sql"
-	    runsql "$SQLDIR/procedures.sql"
-	    runsql "$SQLDIR/triggers.sql"
-	else
-	    die "Database already populated. Use 'force' to override"
-	fi
-	;;
     "person")
 	shift
 	case "$1" in
@@ -566,12 +551,6 @@ case "$1" in
 		;;
 	    'list')
 		runsql 'select entrydate,firstname,name,nickname,emailaddress,machinestate from person'
-		;;
-	    'ldapexport')
-		ldapexport
-		;;
-	    *)
-		die "Please specify subaction (add|modify|changepass|resendinfos|...)"
 		;;
 	esac
 	;;
@@ -617,9 +596,6 @@ case "$1" in
 	    'massmail')
 		massmail "$2" "$3"
 		;;
-	    *)
-		die "Please specify subaction (cancel|reactivate|listpayments|list_active|list_inactive|fix_multiple_payment_msg|massmail|...)"
-		;;
 	esac
 	;;
     'group')
@@ -632,21 +608,11 @@ case "$1" in
 		echo "$ME: Available groups:"
 		runsql 'select * from hsb_groups order by bit_id'
 		;;
-	    *)
-		die "Please specify subaction (add|listgroups|del|...)"
-		;;
 	esac
 	;;
     "bank")
 	shift
 	case "$1" in
-	    'importcsv')
-		importbankcsv "$2" "$3"
-		;;
-	    'balance')
-		echo "Account			balance		date last movement"
-		runsql 'select this_account, sum(amount), max(date_val) from moneymovements group by this_account'
-		;;
 	    'showflow')
 		shift
 		test -z "$1" && die 'Specify year for the statistics'
@@ -662,14 +628,7 @@ case "$1" in
 		echo "Updating attributes..."
 		bank_fix_membership
 		;;
-	    *)
-		die "Please specify subaction (importcsv|balance||attributes|...)"
-		;;
 	esac
-	;;
-    "cron")
-	shift
-	cron_pgp
 	;;
     "legacy")
 	shift
@@ -693,12 +652,83 @@ case "$1" in
 		    PERSONID="$(lookup_person_id "$2")"
 		    finish_migration $PERSONID
 		;;
-	    *)
-		die "Please specify subaction (import|activate_all|activate_one|...)"
-		;;
 	esac
 	;;
+esac
+
+# Flattened case statement for easier argument processing.
+case "$CASEVAR" in
+    "install/" | "install/force")
+	shift
+	TABLECOUNT="$(runsql "show tables;" 'a')"
+	test "$?" = '0' || die "Please create database first"
+	test "$1" = 'force' && unset TABLECOUNT
+	if [ -z "$TABLECOUNT" ]; then
+	    echo "$ME: Priming database..."
+	    runsql "$SQLDIR/tables.sql"
+	    runsql "$SQLDIR/tabledata.sql"
+# Obsolete table: should be removed
+#	    runsql "$SQLDIR/ibandata.sql"
+	    runsql "$SQLDIR/functions.sql"
+	    runsql "$SQLDIR/procedures.sql"
+	    runsql "$SQLDIR/triggers.sql"
+	else
+	    die "Database already populated. Use 'force' to override"
+	fi
+	;;
+    "install/ldap")
+	shift
+	;;
+
+### Cron processing
+    "cron/daily")
+	shift
+	cron_pgp
+	;;
+
+### Bank processing
+    'bank/balance')
+	echo "Account			balance		date last movement"
+	runsql 'select this_account, sum(amount), max(date_val) from moneymovements group by this_account'
+	;;
+    'bank/importcsv')
+	importbankcsv "$2" "$3"
+	;;
+
+### Person processing
+    'person/ldapexport')
+	ldapexport
+	;;
+
+### Catch-all parts: in case of invalid arguments
+    'cron/'*)
+	die "Please specify subaction (install|uninstall|yearly|monthly|weekly|daily|hourly|all)"
+	;;
+    'person/'*)
+	die "Please specify subaction (add|modify|changepass|resendinfos|...)"
+	;;
+    'bank/'*)
+	die "Please specify subaction (importcsv|balance||attributes|...)"
+	;;
+    'legacy/'*)
+	die "Please specify subaction (import|activate_all|activate_one|...)"
+	;;
+    'group/'*)
+	die "Please specify subaction (add|listgroups|del|...)"
+	;;
+    'member/'*)
+	die "Please specify subaction (cancel|reactivate|listpayments|list_active|list_inactive|fix_multiple_payment_msg|massmail|...)"
+	;;
+
+### Debugging aid: runsql from command line
+    'runsql/'*)
+	shift
+	test -z "$1" && die 'Specify SQL query to run'
+	runsql "$*"
+	;;
+
+# when everything else fails...
     *)
-	echo "Specify the main action (person|group|bank|member|cron|install|..."
+	die "Specify the main action (person|group|bank|member|cron|install|...)"
 	;;
 esac
