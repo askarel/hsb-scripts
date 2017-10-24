@@ -93,6 +93,7 @@ templatecat()
 }
 
 # NEED REPAIR
+# This function is a fucking mess ! Being clever is too much. :-(
 addperson()
 {
     local REQUESTED_FIELDS=(lang firstname name nickname phonenumber emailaddress birthdate openpgpkeyid machinestate_data)
@@ -191,7 +192,7 @@ changepassword()
     fi
 }
 
-### NEED REPAIR
+### NEED REPAIR ?
 # Re-send the payment infos for specified user
 # Parameter 1: user to re-send infos for
 resendinfos()
@@ -207,7 +208,7 @@ resendinfos()
     templatecat "$MYLANG" "$ME.sh_person_resendinfos.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
-### NEED REPAIR
+### NEED REPAIR ?
 # Cancel membership for specified member
 # parameter 1: member to expel
 membercancel()
@@ -230,7 +231,7 @@ membercancel()
     templatecat "$MYLANG" "$ME.sh_member_cancel.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
-### NEED REPAIR
+### NEED REPAIR ?
 # Reactivate membership for specified member
 # parameter 1: member to reactivate
 member_reactivate()
@@ -393,16 +394,20 @@ finish_migration()
 ldapexport()
 {
     local UIDBASE=1000
-    for i in $(runsql 'select id from person where ldaphash not like ""'); do
+#    for i in $(runsql 'select id from person where ldaphash not like ""'); do
+    for i in $(runsql 'select id from person'); do
 	local FIRSTNAME="$(runsql "select firstname from person where id=$i")"
 	local NAME="$(runsql "select name from person where id=$i")"
 	local NICKNAME="$(runsql "select nickname from person where id=$i")"
 	local MYLANG="$(runsql "select lang from person where id=$i")"
 	local PHONENUMBER="$(runsql "select phonenumber from person where id=$i")"
 	local EMAILADDRESS="$(runsql "select emailaddress from person where id=$i")"
-	local LDAPPASS="$(runsql "select ldaphash from person where id=$i")"
+	local LDAPPASS="$(runsql "select to_base64(ldaphash) from person where id=$i")" #"
+	local PASSWDHASH="$(runsql "select to_base64(concat ('{CRYPT}', passwordhash)) from person where id=$i")" #"
+	local DESCRIPTION="$(runsql "select to_base64(machinestate_data) from person where id=$i")" #"
 	local USER_UID=$(( $UIDBASE + $i ))
-	echo "dn: uid=$NICKNAME,ou=users,dc=hsbxl,dc=be"
+	test -z "$LDAPPASS" && LDAPPASS="$PASSWDHASH"
+	echo "dn: uid=$NICKNAME,ou=users,$BASEDN"
 	echo "cn:$FIRSTNAME $NAME"
 	echo "gidnumber: 503"
 	echo "givenname: $FIRSTNAME"
@@ -414,8 +419,9 @@ ldapexport()
 	echo "objectclass: top"
 	echo "sn: $NAME"
 	echo "uid: $NICKNAME"
-	echo "userpassword: $LDAPPASS"
+	echo "userpassword:: $LDAPPASS"
 	echo "uidnumber: $USER_UID"
+	echo "description:: $DESCRIPTION"
 	echo ""
     done
 }
@@ -497,6 +503,7 @@ test -n "$SQLUSER" || die "$CONFIGFILE: SQLUSER variable is empty"
 test -n "$SQLPASS" || die "$CONFIGFILE: SQLPASS variable is empty"
 test -n "$SQLDB" || die "$CONFIGFILE: SQLDB: Database to use not specified"
 test -n "$ORGNAME" || die "$CONFIGFILE: ORGNAME: Organisation name is not set"
+test -n "$BASEDN" || die "$CONFIGFILE: BASEDN for LDAP server is not set"
 # By default we talk in euros
 test -n "$CURRENCY" || CURRENCY="EUR"
 # A year is (usually) 12 months. This is an override if needed
