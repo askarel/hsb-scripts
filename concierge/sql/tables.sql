@@ -51,7 +51,8 @@ create table if not exists internal_accounts (
 				    account_type char(20),
 				    owner_dn char(255), -- LDAP person owner ID: should be primary
 				    description text,
-				    ref_dn char(255) -- Subject: membership or hosting
+				    ref_dn char(255), -- Subject: membership or hosting
+				    in_use TINYINT(1)
 				    );
 -- Alternate payment messages: from old application
 create table if not exists old_comms (member_id int not null,
