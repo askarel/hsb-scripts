@@ -20,6 +20,7 @@
 -- New object - describe a person related to the hackerspace.
 -- This allow us to describe a person that is not a member, but is related to the hackerspace.
 -- It can be the neighbour(s), the landlord(s), and/or visitors. This allow us to have visitor access card.
+-- Once we go full LDAP, this will go away.
 create table if not exists person (id int not null auto_increment primary key, 
 				    entrydate date not null, 
 				    structuredcomm char(21) unique not null, 
@@ -54,27 +55,27 @@ create table if not exists internal_accounts (
 				    ref_dn char(255), -- Subject: membership or hosting
 				    in_use TINYINT(1)
 				    );
--- Alternate payment messages: from old application
-create table if not exists old_comms (member_id int not null,
-				    structuredcomm char(21) unique not null);
 
 -- Alternate payment messages: for recent and not-so-recent fuckups
 create table if not exists membership_fuckup_messages (member_id int not null,
 				    fuckup_message char(60) unique not null);
 
 -- List of available groups
+-- Once we go full LDAP, this will go away
 create table if not exists hsb_groups (bit_id int not null auto_increment primary key,
 				    shortdesc char(50) unique not null,
 				    fulldesc text
 				    );
 
 -- Groups a person is member of
+-- Once we go full LDAP, this will go away
 create table if not exists member_groups (id int not null auto_increment primary key,
 				    member_id int not null,
 				    group_id int not null
 				    );
 
 -- Contractors and providers (electricity, water, gas, internet, insurance, bank,...)
+-- Once we go full LDAP, this will go away
 create table if not exists contractors (id int not null auto_increment primary key,
 				    business_name char(30),
 				    customer_id char(25), -- Usually our customer number
@@ -85,6 +86,7 @@ create table if not exists contractors (id int not null auto_increment primary k
 				    description text
 				    );
 
+-- Once we go full LDAP, this will go away
 create table if not exists member_sponsors (id int not null auto_increment primary key,
 				    member_id int not null,
 				    sponsor_id int
@@ -132,6 +134,7 @@ create table if not exists expenses (id int not null auto_increment primary key,
 				    category int not null, -- should be enum
 				    in_year_seq_no int not null);
 
+-- Once we go full LDAP, this will go away
 create table if not exists user_tags (id int not null auto_increment primary key,
 				    owner_id int,
 				    tag_uid char(100),
@@ -142,46 +145,5 @@ create table if not exists user_tags (id int not null auto_increment primary key
 create table if not exists tag_states (id int not null auto_increment primary key,
 				    shortdesc char(50) unique not null,
 				    fulldesc text
-				    );
-
--- Must go away: use an array instead
-create table if not exists validiban (id int not null auto_increment primary key,
-				    country char(2) unique not null,
-				    validlength int not null);
-
-
-
--- Old object: we assumed people in the database are effective members. This will disappear due to lack of flexibility.
-create table if not exists hsbmembers (id int not null auto_increment primary key,
-                                    entrydate date not null,
-                                    structuredcomm char(21) unique not null,
-                                    firstname char(30) not null,
-                                    name char(30) not null,
-                                    nickname char(30),
-                                    phonenumber char(15),
-                                    emailaddress char(60) not null,
-                                    exitdate date,
-                                    passwordhash char(60) not null default 'mouh',
-                                    birthdate date,
-                                    openpgpkeyid char(20),
-                                    activateddate date,
-                                    mail_flags bigint not null default 0,
-                                    why_member text not null,
-                                    json_data text,
-                                    sshpubkeys text
-                                    );
-
--- The old: this was designed to hold only the bank statements
-create table if not exists bankstatements (id int not null auto_increment primary key,
-				    date_val date,
-				    date_account date,
-				    this_account char(40),
-				    other_account char (40),
-				    amount decimal (15,4) not null,
-				    currency char (5) not null, -- should be enum
-				    message char (60),
-				    other_account_name char (50),
-				    transactionhash binary(20) unique not null,
-				    fix_fuckup_msg char (60)
 				    );
 
