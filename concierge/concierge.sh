@@ -400,11 +400,11 @@ ldapexport()
 	local NAME="$(runsql "select name from person where id=$i")"
 	local NICKNAME="$(runsql "select nickname from person where id=$i")"
 	local MYLANG="$(runsql "select lang from person where id=$i")"
-	local PHONENUMBER="$(runsql "select phonenumber from person where id=$i")"
+	local PHONENUMBER="$(runsql "select phonenumber from person where id=$i")" #"
 	local EMAILADDRESS="$(runsql "select emailaddress from person where id=$i")"
-	local LDAPPASS="$(runsql "select to_base64(ldaphash) from person where id=$i")" #"
+	local LDAPPASS="$(runsql "select ldaphash from person where id=$i")" #"
 	local PASSWDHASH="$(runsql "select to_base64(concat ('{CRYPT}', passwordhash)) from person where id=$i")" #"
-	local DESCRIPTION="$(runsql "select to_base64(machinestate_data) from person where id=$i")" #"
+	local DESCRIPTION="$(runsql "select machinestate_data from person where id=$i" | tr [:punct:][:cntrl:] ' ' )" #"
 	local USER_UID=$(( $UIDBASE + $i ))
 	test -z "$LDAPPASS" && LDAPPASS="$PASSWDHASH"
 	echo "dn: uid=$NICKNAME,ou=users,$BASEDN"
@@ -412,16 +412,16 @@ ldapexport()
 	echo "gidnumber: 503"
 	echo "givenname: $FIRSTNAME"
 	echo "homedirectory: /home/users/$NICKNAME"
-	echo "homephone: $PHONENUMBER"
+	test -n "$PHONENUMBER" && echo "homephone: $PHONENUMBER"
 	echo "mail: $EMAILADDRESS"
 	echo "objectclass: inetOrgPerson"
 	echo "objectclass: posixAccount"
 	echo "objectclass: top"
 	echo "sn: $NAME"
 	echo "uid: $NICKNAME"
-	echo "userpassword:: $LDAPPASS"
+	echo "userpassword: $LDAPPASS"
 	echo "uidnumber: $USER_UID"
-	echo "description:: $DESCRIPTION"
+	test -n "$DESCRIPTION" && echo "description: $DESCRIPTION"
 	echo ""
     done
 }
@@ -451,9 +451,10 @@ db_restore()
 account_migrate()
 {
     for i in $( runsql "select id from person" ) ; do
-	ENTRYDATE="$(runsql "select entrydate from person where id = $i")"
-	STRUCTURED1="$(runsql "select structuredcomm from person where id = $i")"
-	runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$STRUCTURED1')" a > /dev/null || echo "$STRUCTURED1 already imported"
+	local ENTRYDATE="$(runsql "select entrydate from person where id = $i")"
+	local STRUCTURED1="$(runsql "select structuredcomm from person where id = $i")"
+	local LDAP_UID="uid=$(runsql "select nickname from person where id = $i"),ou=users,$BASEDN"
+	runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm, owner_dn, ref_dn, in_use ) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$STRUCTURED1', '$LDAP_UID', '$LDAP_UID', 1)" a > /dev/null || echo "$STRUCTURED1 already imported"
 	for j in $(runsql "select structuredcomm from old_comms where member_id = $i"); do
 	    runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$j')" a > /dev/null || echo "$STRUCTURED1 already imported"
 	done
