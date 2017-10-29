@@ -1,0 +1,12 @@
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+delete: olcAccess
+olcAccess: {0}to attrs=userPassword by self write by anonymous auth by * none
+-
+add: olcAccess
+olcAccess: {0}to attrs=userPassword,shadowLastChange 
+ by self write 
+ by anonymous auth 
+ by dn.subtree="ou=LDAP replicators,$BASEDN" read 
+ by * none
+-

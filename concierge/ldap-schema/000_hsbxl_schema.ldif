@@ -1,4 +1,3 @@
-
 dn: cn=hsbxlschema,cn=schema,cn=config
 objectClass: olcSchemaConfig
 cn: hsbxlschema
@@ -21,12 +20,19 @@ cn: hsbxlschema
 # from; if not, write to the Free Software Foundation, Inc., 59 Temple
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
+# Rules:
+# - Unused and obsolete attributes should NEVER be removed (but they can be marked as obsolete in the description)
+# - Attributes OIDs should NEVER be changed
+#
 olcObjectIdentifier: HSBXL 1.3.6.1.4.1.43666
 olcObjectIdentifier: HSBXLexp HSBXL:1
 olcObjectIdentifier: HSBXLldap HSBXL:2
 olcObjectIdentifier: HSBXLat HSBXLldap:1
 olcObjectIdentifier: HSBXLoc HSBXLldap:2
-#
+olcObjectIdentifier: HSBXLpersonAttr HSBXLat:100
+olcObjectIdentifier: HSBXLserverAttr HSBXLat:101
+######################################################################################
+# Is this still relevant ?
 olcAttributeTypes: ( HSBXLat:1
   NAME 'x-hsbxl-ShortComm'
   DESC 'Communication ID without check digit and separators characters'
@@ -54,6 +60,13 @@ olcAttributeTypes: ( HSBXLat:4
   SINGLE-VALUE
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
 #
+olcAttributeTypes: ( HSBXLat:5
+  NAME 'x-hsbxl-structCommType'
+  DESC 'Type of structured communication (donation/membership/drinks/...)'
+  EQUALITY CaseIgnoreIA5Match
+  SINGLE-VALUE
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+######################################################################################
 olcAttributeTypes: ( HSBXLat:10
   NAME 'x-hsbxl-RFIDid'
   DESC 'UID of an NFC card, as a hex string'
@@ -62,7 +75,7 @@ olcAttributeTypes: ( HSBXLat:10
 #
 olcAttributeTypes: ( HSBXLat:11
   NAME 'x-hsbxl-membershipRequested'
-  DESC 'If true, this member has requested membership. Assume TRUE if absent'
+  DESC 'If true, this person has requested membership. Assume TRUE if absent'
   EQUALITY booleanMatch
   SINGLE-VALUE
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 )
@@ -117,6 +130,13 @@ olcAttributeTypes: ( HSBXLat:19
   DESC 'Free-form blob of text data for user (JSON goes here)'
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
 #
+olcAttributeTypes: ( HSBXLat:20
+  NAME 'x-hsbxl-creationDate'
+  DESC 'Holds the legacy creation date'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26
+  SINGLE-VALUE )
+#######################################################################################
 olcObjectClasses: ( HSBXLoc:1
   NAME 'x-hsbxl-person'
   DESC 'Person associated with the hackerspace in some way'
@@ -126,7 +146,7 @@ olcObjectClasses: ( HSBXLoc:1
   MAY ( x-hsbxl-RFIDid $ 
         x-hsbxl-membershipRequested $ x-hsbxl-votingRequested $ x-hsbxl-sponsor $ 
         x-hsbxl-socialTariff $ x-hsbxl-sshPubKey $ x-hsbxl-pgpPubKey $ x-hsbxl-machineState $
-        x-hsbxl-machineStateData $ x-hsbxl-textDataBlob ) )
+        x-hsbxl-machineStateData $ x-hsbxl-textDataBlob $ x-hsbxl-creationDate) )
 #
 olcObjectClasses: ( HSBXLoc:2
   NAME 'x-hsbxl-structuredcomm'
