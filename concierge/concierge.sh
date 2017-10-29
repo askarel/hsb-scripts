@@ -22,6 +22,8 @@ readonly MYDIR="$(dirname "$0")"
 readonly CONFIGFILE="$ME.conf"
 # Default path for the SQL files
 readonly SQLDIR="$MYDIR/sql/"
+# Default path to LDAP custom schema
+readonly LDAPSCHEMADIR="$MYDIR/ldap-schema/"
 # Default path to mail templates
 readonly TEMPLATEDIR="$MYDIR/templates"
 readonly GPGHOME="$MYDIR/.gnupg"
@@ -94,6 +96,7 @@ templatecat()
 
 # NEED REPAIR
 # This function is a fucking mess ! Being clever is too much. :-(
+# Once we go full LDAP, this will disappear: add user from LDAP server
 addperson()
 {
     local REQUESTED_FIELDS=(lang firstname name nickname phonenumber emailaddress birthdate openpgpkeyid machinestate_data)
@@ -155,6 +158,7 @@ addperson()
 # Parameter 1: user to modify (e-mail address or nickname)
 # Parameter 2: name of field to modify
 # Parameter 3: field data
+# Once we go full LDAP, this will disappear: add user from LDAP server
 modifyperson()
 {
     local SELECTED_FIELD
@@ -319,9 +323,10 @@ list_person_payments()
     local NAME="$(runsql "select name from person where id=$1")"
     local MACHINESTATE="$(runsql "select machinestate from person where id=$1")"
     local ENTRYDATE="$(runsql "select entrydate from person where id=$1")"
+    local EMAIL="$(runsql "select emailaddress from person where id=$1")"
     if test $(date '+%Y' -d "$ENTRYDATE") -le $THISYEAR ; then # Don't bother if the person was not member at the time
 	for i in $(runsql "select structuredcomm from internal_accounts where owner_id=$1") ; do
-	    printf ' -------- %s %s %s %s %s --------\n' "$ENTRYDATE" "$FIRSTNAME" "$NAME" "$MACHINESTATE" "$i"
+	    printf ' -------- %s %s %s <%s> %s %s --------\n' "$ENTRYDATE" "$FIRSTNAME" "$NAME" "$EMAIL" "$MACHINESTATE" "$i"
 
 	runsql "select date_val, this_account, amount, currency, message, fix_fuckup_msg from moneymovements where 
 	    (message like '$i' or fix_fuckup_msg like '$i') and date_val between '$THISYEAR-01-01' and '$THISYEAR-12-31' order by date_val"
@@ -403,10 +408,10 @@ ldapexport()
 	local PHONENUMBER="$(runsql "select phonenumber from person where id=$i")" #"
 	local EMAILADDRESS="$(runsql "select emailaddress from person where id=$i")"
 	local LDAPPASS="$(runsql "select ldaphash from person where id=$i")" #"
-	local PASSWDHASH="$(runsql "select to_base64(concat ('{CRYPT}', passwordhash)) from person where id=$i")" #"
+	local PASSWDHASH="$(runsql "select concat ('{CRYPT}', passwordhash) from person where id=$i")" #"
 	local DESCRIPTION="$(runsql "select machinestate_data from person where id=$i" | tr [:punct:][:cntrl:] ' ' )" #"
 	local USER_UID=$(( $UIDBASE + $i ))
-	test -z "$LDAPPASS" && LDAPPASS="$PASSWDHASH"
+	test -z "$LDAPPASS" && LDAPPASS="$PASSWDHASH" # junk password for that user
 	echo "dn: uid=$NICKNAME,ou=users,$BASEDN"
 	echo "cn:$FIRSTNAME $NAME"
 	echo "gidnumber: 503"
@@ -455,9 +460,9 @@ account_migrate()
 	local STRUCTURED1="$(runsql "select structuredcomm from person where id = $i")"
 	local LDAP_UID="uid=$(runsql "select nickname from person where id = $i"),ou=users,$BASEDN"
 	runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm, owner_dn, ref_dn, in_use ) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$STRUCTURED1', '$LDAP_UID', '$LDAP_UID', 1)" a > /dev/null || echo "$STRUCTURED1 already imported"
-	for j in $(runsql "select structuredcomm from old_comms where member_id = $i"); do
-	    runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$j')" a > /dev/null || echo "$STRUCTURED1 already imported"
-	done
+#	for j in $(runsql "select structuredcomm from old_comms where member_id = $i"); do
+#	    runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$j')" a > /dev/null || echo "$STRUCTURED1 already imported"
+#	done
     done 
 }
 
@@ -488,6 +493,64 @@ account_create()
     test -z "$3" -a -n "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type, created_on) values ('$NEWBECOMM', $MYID, '$2', '$4')"
     test -n "$3" -a -n "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type, ref_dn, created_on) values ('$NEWBECOMM', $MYID, '$2', '$3', '$4')"
     runsql "$SQLQUERY" a > /dev/null && echo "$NEWBECOMM"
+}
+
+# This will create the new payment account for any new user in OU machines, users and internal
+cron_mail_new_user()
+{
+    echo
+}
+
+# Set the machine state for specified DN
+# PArameter 1: User DN
+# Parameter 2: machinestate data
+set_machine_state()
+{
+    echo
+}
+
+# Get the machine state for specified DN
+# PArameter 1: User DN
+# output: machinestate data
+get_machine_state()
+{
+    echo
+}
+
+# Set the RFID tag hash for specified DN
+# PArameter 1: User DN
+# Parameter 2: tag data
+set_rfid_tag()
+{
+    echo
+}
+
+# Get the RFID tag hash list for specified DN
+# PArameter 1: User DN
+# output: all tags from specified user
+get_rfid_tag()
+{
+    echo
+}
+
+
+# Get the RFID tag hash list for specified access control DN
+# PArameter 1: Access control DN
+# output: all valid tags for that access controller
+get_rfid_tags()
+{
+    echo
+}
+
+# Install LDAP schemas
+ldap_install()
+{
+    echo "$ME: Performing LDAP schema installation..."
+    for i in $LDAPSCHEMADIR/*.ldif* ; do
+	echo "  -- Processing $i..."
+	test "${i: -5}" == ".ldif" && cat "$i" | ldapadd -Y EXTERNAL -H ldapi:///
+	test "${i: -14}" == ".ldif.template" && cat "$i" | envsubst | ldapadd -Y EXTERNAL -H ldapi:///
+    done
 }
 
 ############### </FUNCTIONS> ###############
@@ -575,8 +638,8 @@ case "$1" in
 	    'activate_all')
 		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
 		for i in $(runsql 'select id from person where machinestate like "IMPORTED_MEMBER_INACTIVE"') ; do
-		    runsql "select id, firstname, name from person where id=$i"
-		    #finish_migration $i
+		    runsql "select id, firstname, name, emailaddress from person where id=$i"
+		    finish_migration $i
 		done
 		;;
 	    'activate_one')
@@ -601,8 +664,6 @@ case "$CASEVAR" in
 	    echo "$ME: Priming database..."
 	    runsql "$SQLDIR/tables.sql"
 	    runsql "$SQLDIR/tabledata.sql"
-# Obsolete table: should be removed
-#	    runsql "$SQLDIR/ibandata.sql"
 	    runsql "$SQLDIR/functions.sql"
 	    runsql "$SQLDIR/procedures.sql"
 	    runsql "$SQLDIR/triggers.sql"
@@ -611,7 +672,7 @@ case "$CASEVAR" in
 	fi
 	;;
     "install/ldap")
-	shift
+	ldap_install
 	;;
 
 ### Person processing
@@ -644,6 +705,9 @@ case "$CASEVAR" in
 	;;
 
 ### Cron processing
+    "cron/hourly")
+	cron_mail_new_user
+	;;
     "cron/daily")
 	shift
 	cron_pgp
