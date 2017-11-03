@@ -467,32 +467,57 @@ account_migrate()
 }
 
 # Create an internal account. This uses a belgian structured memo as identifier
-# Parameter 1: Person identifier (plain number are treated as MySQL integer, strings are treated as LDAP RDN)
-# Parameter 2: account type
+# Parameter 1: account type
+# Parameter 2: Person identifier (plain number are treated as MySQL integer, strings are treated as LDAP RDN, empty means anonymous account for drink tickets)
 # Parameter 3: reference object (optional)
 # Parameter 4: Creation date (optional)
 # Returns: structured memo if success
 account_create()
 {
-    test -z "$1" && die "account_create: missing account identifier"
-    test -z "$2" && die "account_create: missing account type"
-    case "$1" in
-	''|*[!0-9]*)
+    test -z "$1" && die "account_create: missing account type"
+#    test -z "$2" && die "account_create: missing account identifier"
+    case "$2" in
+	*[!0-9]*)
 	    IDTYPE='owner_dn'
-	    MYID="'$1'"
+	    MYID="'$2'"
+	    ;;
+	'') # Anonymous
+	    IDTYPE='owner_dn'
+	    MYID="NULL"
 	    ;;
 	*)
 	    IDTYPE='owner_id'
-	    MYID="$1"
+	    MYID="$2"
 	    ;;
     esac
-    # This line will need tweaking at some point.
-    NEWBECOMM="$(runsql 'select formatbecomm(count(structuredcomm)+3) from internal_accounts')"
-    test -z "$3" -a -z "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type) values ('$NEWBECOMM', $MYID, '$2')"
-    test -n "$3" -a -z "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type, ref_dn) values ('$NEWBECOMM', $MYID, '$2', '$3')"
-    test -z "$3" -a -n "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type, created_on) values ('$NEWBECOMM', $MYID, '$2', '$4')"
-    test -n "$3" -a -n "$4" && SQLQUERY="insert into internal_accounts (structuredcomm, $IDTYPE, account_type, ref_dn, created_on) values ('$NEWBECOMM', $MYID, '$2', '$3', '$4')"
+    NEWBECOMM="$(runsql 'select structuredcomm from internal_accounts where account_type is null limit 1')"
+    test -z "$3" -a -z "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on=CURRENT_TIMESTAMP where structuredcomm like '$NEWBECOMM'"
+    test -n "$3" -a -z "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on=CURRENT_TIMESTAMP, ref_dn='$3' where structuredcomm like '$NEWBECOMM'"
+    test -z "$3" -a -n "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on='$4' where structuredcomm like '$NEWBECOMM'"
+    test -n "$3" -a -n "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on='$4', ref_dn='$3' where structuredcomm like '$NEWBECOMM'"
     runsql "$SQLQUERY" a > /dev/null && echo "$NEWBECOMM"
+#    test -n "$5" && echo 'insert into moneymovements (date_val, date_account, amount, currency) VALUES (curdate(), curdate(), concat ("-", abs ($5)), $CURRENCY)'
+}
+
+# Pre-load an account with some cash
+# Parameter 1: account ID (belgian structured message)
+# Parameter 2: Point of sale identifier
+# Parameter 3: amount to preload
+preload_account()
+{
+    echo
+}
+
+
+# Pre-load some internal accounts into database for future use (cron job)
+preload_internal_accounts()
+{
+    if [ $(runsql 'select count(structuredcomm) from internal_accounts where account_type is null') -lt $ACCOUNT_PRELOAD ]; then #'
+	echo 'pre-loading some spare accounts...'
+	for i in $(seq 1 $ACCOUNT_PRELOAD) ; do
+	    runsql 'insert into internal_accounts (structuredcomm) values ( mkbecomm())'
+	done
+    fi
 }
 
 # This will create the new payment account for any new user in OU machines, users and internal
@@ -576,6 +601,8 @@ test -n "$YEARLYFEE" || YEARLYFEE="$((12*$MONTHLYFEE))"
 test -n "$DEFAULT_LANGUAGE" || DEFAULT_LANGUAGE='en'
 # In case the bank account number has spaces
 BANKACCOUNT=$(echo $BANKACCOUNT|tr -d ' ')
+# Minimum Amount of spare accounts to keep aside
+test -n "$ACCOUNT_PRELOAD" || ACCOUNT_PRELOAD=10
 # If empty, use localhost
 test -n "$SQLHOST" || SQLHOST="127.0.0.1"
 mkdir -p "$BANKDIR" || die "Can't create csv archive directory"
@@ -707,6 +734,7 @@ case "$CASEVAR" in
 ### Cron processing
     "cron/hourly")
 	cron_mail_new_user
+	preload_internal_accounts
 	;;
     "cron/daily")
 	shift
