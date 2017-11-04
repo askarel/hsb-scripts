@@ -23,9 +23,7 @@
 -- Once we go full LDAP, this will go away.
 create table if not exists person (id int not null auto_increment primary key, 
 				    entrydate date not null, 
-				    structuredcomm char(21) unique not null, 
---				    altcomm char(21), -- This is supposed to disappear: migrate from old database
---				    altcomm2 char(21), -- This is supposed to disappear: migrate from old database
+				    structuredcomm char(21) unique not null, -- Next on the chopping block
 				    lang char(6),
 				    firstname char(40) not null, 
 				    name char(40) not null, 
@@ -38,7 +36,6 @@ create table if not exists person (id int not null auto_increment primary key,
 				    openpgpkeyid char(40), 
 --				    informations text not null,
 				    sshpubkeys text,
---                                    groupbits bigint not null default 0,
 				    machinestate char(40) not null,
 				    machinestate_data text,
 				    machinestate_expiration_date date -- Date when the state expires
@@ -95,6 +92,7 @@ create table if not exists member_sponsors (id int not null auto_increment prima
 -- The history of the person state changes
 create table if not exists person_history (id int not null auto_increment primary key,
 				    member_id int not null,
+				    member_dn char(255),
 				    event_timestamp datetime,
 				    machinestate char(40) not null,
 				    machinestate_data text,
