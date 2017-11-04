@@ -89,7 +89,7 @@ templatecat()
     test -f "$TEMPLATEDIR/$1/footer.txt" && myfooter="$TEMPLATEDIR/$1/footer.txt" || myfooter="$TEMPLATEDIR/$DEFAULT_LANGUAGE/footer.txt"
     test -f "$mytemplate" || die "Template '$mytemplate' not found"
     # Variables that needs substitution
-    export STRUCTUREDCOMM BANKACCOUNT CURRENCY YEARLYFEE MONTHLYFEE ORGNAME JOINREASON PASSWORD BIRTHDATE FIRSTNAME NICKNAME EXPIRYDATE LEAVEREASON QUORUM
+    export MEMBERSHIP_STRUCTUREDCOMM BAR_STRUCTUREDCOMM STRUCTUREDCOMM BANKACCOUNT CURRENCY YEARLYFEE MONTHLYFEE ORGNAME JOINREASON PASSWORD BIRTHDATE FIRSTNAME NICKNAME EXPIRYDATE LEAVEREASON QUORUM
     cat "$mytemplate" | envsubst
     test -f "$myfooter" && cat "$myfooter" | envsubst
 }
@@ -377,6 +377,185 @@ massmail()
     fi
 }
 
+############################################# <BACKUP/RESTORE> #############################################
+
+# Perform a backup of the database
+# Parameter 1: destination filename
+db_dump()
+{
+    test -z "$1" && die "Specify destination file for backup"
+    mysqldump -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" --routines --triggers --hex-blob --add-drop-database --add-drop-table --flush-privileges --databases "$SQLDB" > "$1"
+}
+
+# Perform a restore of the database
+# Parameter 1: source filename
+db_restore()
+{
+    test -z "$1" && die "Specify source file to restore"
+    test -f "$1" || die "Specified file does not exist"
+    runsql "$1"
+}
+
+############################################# </BACKUP/RESTORE> #############################################
+
+############################################# <INTERNAL ACCOUNTING> #############################################
+
+# Create an internal account. This uses a belgian structured memo as identifier
+# Parameter 1: account type
+# Parameter 2: Person identifier (plain number are treated as MySQL integer, strings are treated as LDAP RDN, empty means anonymous account for drink tickets)
+# Parameter 3: reference object (optional)
+# Parameter 4: Creation date (optional)
+# Returns: structured memo if success
+account_create()
+{
+    test -z "$1" && die "account_create: missing account type"
+#    test -z "$2" && die "account_create: missing account identifier"
+    case "$2" in
+	*[!0-9]*)
+	    IDTYPE='owner_dn'
+	    MYID="'$2'"
+	    ;;
+	'') # Anonymous
+	    IDTYPE='owner_dn'
+	    MYID="NULL"
+	    ;;
+	*)
+	    IDTYPE='owner_id'
+	    MYID="$2"
+	    ;;
+    esac
+    NEWBECOMM="$(runsql 'select structuredcomm from internal_accounts where account_type is null limit 1')"
+    test -z "$3" -a -z "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on=CURRENT_TIMESTAMP where structuredcomm like '$NEWBECOMM'"
+    test -n "$3" -a -z "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on=CURRENT_TIMESTAMP, ref_dn='$3' where structuredcomm like '$NEWBECOMM'"
+    test -z "$3" -a -n "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on='$4' where structuredcomm like '$NEWBECOMM'"
+    test -n "$3" -a -n "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on='$4', ref_dn='$3' where structuredcomm like '$NEWBECOMM'"
+    runsql "$SQLQUERY" a > /dev/null && echo "$NEWBECOMM"
+}
+
+# Pre-load an account with some cash
+# Parameter 1: account ID (belgian structured message)
+# Parameter 2: Point of sale identifier
+# Parameter 3: amount to preload
+# Parameter 4: payment message
+preload_account()
+{
+    local ACCOUNTID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
+    test -z "$ACCOUNTID" && die "Account $ACCOUNTID does not exist"
+    test -z "$2" && die "Specify Point-of-sale ID"
+    test -z "$3" && die "Specify amount to pre-load on account $ACCOUNTID"
+    test -z "$4" && die "Specify message for account $ACCOUNTID"
+    runsql "insert into moneymovements (date_val, date_account, amount, currency, other_account, this_account, message, transaction_id) VALUES 
+	    (curdate(), curdate(), concat ('-', abs ($3)), '$CURRENCY', '$2', '$ACCOUNTID', '$4', concat ('INTERNAL/$ACCOUNTID/$2/', sha1(concat (current_timestamp(), '$4'))) )"
+}
+
+# Consume cash from account
+# Parameter 1: account ID (belgian structured message)
+# Parameter 2: Point of sale identifier
+# Parameter 3: amount to consume
+# Parameter 4: payment message
+consume_account()
+{
+    local ACCOUNTID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
+    test -z "$ACCOUNTID" && die "Account $1 does not exist"
+    test -z "$2" && die "Specify Point-of-sale ID"
+    test -z "$3" && die "Specify amount to consume from account $ACCOUNTID"
+    test -z "$4" && die "Specify message for account $ACCOUNTID"
+    runsql "insert into moneymovements (date_val, date_account, amount, currency, other_account, this_account, message, transaction_id) VALUES 
+	    (curdate(), curdate(), abs($3), '$CURRENCY', '$2', '$ACCOUNTID', '$4', concat ('INTERNAL/$ACCOUNTID/$2/', sha1(concat (current_timestamp(), '$4'))) )"
+}
+
+# BUG: it does not check the balance before doing the transfer
+# Transfer cash from account to account
+# Parameter 1: source account ID
+# PArameter 2: destination account ID
+# Parameter 3: Point of sale identifier
+# Parameter 4: amount to transfer
+# Parameter 5: payment message
+transfer_account()
+{
+    local SRC_ID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
+    test -z "$SRC_ID" && die "Source account $1 does not exist"
+    local DST_ID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$2'")"
+    test -z "$DST_ID" && die "Destination account $2 does not exist"
+    test "$1" == "$2" && die "Source and destination accounts are identical"
+    test -z "$3" && die "Specify Point-of-sale ID"
+    test -z "$4" && die "Specify amount to transfer from account $SRC_ID to $DST_ID"
+    test -z "$5" && die "Specify message for transaction"
+    runsql "start transaction;
+insert into moneymovements (date_val, date_account, amount, currency, other_account, this_account, message, transaction_id) VALUES 
+	    (curdate(), curdate(), abs($4), '$CURRENCY', '$DST_ID', '$SRC_ID', '$5', concat ('INTERNAL/$SRC_ID/$3/', sha1(concat (current_timestamp(), '$5'))) );
+insert into moneymovements (date_val, date_account, amount, currency, other_account, this_account, message, transaction_id) VALUES 
+	    (curdate(), curdate(), concat ('-', abs ($4)), '$CURRENCY', '$SRC_ID', '$DST_ID', '$5', concat ('INTERNAL/$DST_ID/$3/', sha1(concat (current_timestamp(), '$5'))) );
+commit;"
+}
+
+# Pre-load some internal accounts into database for future use (cron job)
+preload_internal_accounts()
+{
+    if [ $(runsql 'select count(structuredcomm) from internal_accounts where account_type is null') -lt $ACCOUNT_PRELOAD ]; then #'
+	echo 'pre-loading some spare accounts...'
+	for i in $(seq 1 $ACCOUNT_PRELOAD) ; do
+	    runsql 'insert into internal_accounts (structuredcomm) values ( mkbecomm())'
+	done
+    fi
+}
+
+############################################# </INTERNAL ACCOUNTING> #############################################
+
+
+# This will create the new payment account for any new user in OU machines, users and internal
+cron_mail_new_user()
+{
+    echo
+}
+
+# Set the machine state for specified DN
+# PArameter 1: User DN
+# Parameter 2: machinestate data
+set_machine_state()
+{
+    echo
+}
+
+# Get the machine state for specified DN
+# PArameter 1: User DN
+# output: machinestate data
+get_machine_state()
+{
+    echo
+}
+
+############################################# <RFID> #############################################
+
+# Set the RFID tag hash for specified DN
+# PArameter 1: User DN
+# Parameter 2: tag data
+set_rfid_tag()
+{
+    echo
+}
+
+# Get the RFID tag hash list for specified DN
+# PArameter 1: User DN
+# output: all tags from specified user
+get_rfid_tag()
+{
+    echo
+}
+
+
+# Get the RFID tag hash list for specified access control DN
+# PArameter 1: Access control DN
+# output: all valid tags for that access controller
+get_rfid_tags()
+{
+    echo
+}
+
+############################################# </RFID> #############################################
+
+############################################# <MIGRATION> #############################################
+# TO DELETE
 # Finish the migration and send new password to member
 # Parameter 1: Member ID
 finish_migration()
@@ -431,24 +610,6 @@ ldapexport()
     done
 }
 
-# Perform a backup of the database
-# Parameter 1: destination filename
-db_dump()
-{
-    test -z "$1" && die "Specify destination file for backup"
-    mysqldump -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" --routines --triggers --hex-blob --add-drop-database --add-drop-table --flush-privileges --databases "$SQLDB" > "$1"
-}
-
-
-# Perform a restore of the database
-# Parameter 1: source filename
-db_restore()
-{
-    test -z "$1" && die "Specify source file to restore"
-    test -f "$1" || die "Specified file does not exist"
-    runsql "$1"
-}
-
 # Migrate all structured memos from two (or more) tables to one.
 # This will ease the treatment of people with multiple messages for their membership payments
 # This will effectively render the old_comms table and the person.structuredcomm column obsolete.
@@ -466,127 +627,9 @@ account_migrate()
     done 
 }
 
-# Create an internal account. This uses a belgian structured memo as identifier
-# Parameter 1: account type
-# Parameter 2: Person identifier (plain number are treated as MySQL integer, strings are treated as LDAP RDN, empty means anonymous account for drink tickets)
-# Parameter 3: reference object (optional)
-# Parameter 4: Creation date (optional)
-# Returns: structured memo if success
-account_create()
-{
-    test -z "$1" && die "account_create: missing account type"
-#    test -z "$2" && die "account_create: missing account identifier"
-    case "$2" in
-	*[!0-9]*)
-	    IDTYPE='owner_dn'
-	    MYID="'$2'"
-	    ;;
-	'') # Anonymous
-	    IDTYPE='owner_dn'
-	    MYID="NULL"
-	    ;;
-	*)
-	    IDTYPE='owner_id'
-	    MYID="$2"
-	    ;;
-    esac
-    NEWBECOMM="$(runsql 'select structuredcomm from internal_accounts where account_type is null limit 1')"
-    test -z "$3" -a -z "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on=CURRENT_TIMESTAMP where structuredcomm like '$NEWBECOMM'"
-    test -n "$3" -a -z "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on=CURRENT_TIMESTAMP, ref_dn='$3' where structuredcomm like '$NEWBECOMM'"
-    test -z "$3" -a -n "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on='$4' where structuredcomm like '$NEWBECOMM'"
-    test -n "$3" -a -n "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on='$4', ref_dn='$3' where structuredcomm like '$NEWBECOMM'"
-    runsql "$SQLQUERY" a > /dev/null && echo "$NEWBECOMM"
-}
+############################################# </MIGRATION> #############################################
 
-# Pre-load an account with some cash
-# Parameter 1: account ID (belgian structured message)
-# Parameter 2: Point of sale identifier
-# Parameter 3: amount to preload
-# Parameter 4: payment message
-preload_account()
-{
-    local ACCOUNTID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
-    test -z "$ACCOUNTID" && die "Account $ACCOUNTID does not exist"
-    test -z "$2" && die "Specify Point-of-sale ID"
-    test -z "$3" && die "Specify amount to pre-load on account $ACCOUNTID"
-    test -z "$4" && die "Specify message for account $ACCOUNTID"
-    runsql "insert into moneymovements (date_val, date_account, amount, currency, other_account, this_account, message, transaction_id) VALUES 
-	    (curdate(), curdate(), concat ('-', abs ($3)), '$CURRENCY', '$2', '$ACCOUNTID', '$4', concat ('INTERNAL/$ACCOUNTID/$2/', sha1(concat (current_timestamp(), '$4'))) )"
-}
-
-
-# Consume cash from account
-# Parameter 1: account ID (belgian structured message)
-# Parameter 2: Point of sale identifier
-# Parameter 3: amount to consume
-# Parameter 4: payment message
-consume_account()
-{
-    local ACCOUNTID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
-    test -z "$ACCOUNTID" && die "Account $ACCOUNTID does not exist"
-    test -z "$2" && die "Specify Point-of-sale ID"
-    test -z "$3" && die "Specify amount to consume from account $ACCOUNTID"
-    test -z "$4" && die "Specify message for account $ACCOUNTID"
-}
-
-
-# Pre-load some internal accounts into database for future use (cron job)
-preload_internal_accounts()
-{
-    if [ $(runsql 'select count(structuredcomm) from internal_accounts where account_type is null') -lt $ACCOUNT_PRELOAD ]; then #'
-	echo 'pre-loading some spare accounts...'
-	for i in $(seq 1 $ACCOUNT_PRELOAD) ; do
-	    runsql 'insert into internal_accounts (structuredcomm) values ( mkbecomm())'
-	done
-    fi
-}
-
-# This will create the new payment account for any new user in OU machines, users and internal
-cron_mail_new_user()
-{
-    echo
-}
-
-# Set the machine state for specified DN
-# PArameter 1: User DN
-# Parameter 2: machinestate data
-set_machine_state()
-{
-    echo
-}
-
-# Get the machine state for specified DN
-# PArameter 1: User DN
-# output: machinestate data
-get_machine_state()
-{
-    echo
-}
-
-# Set the RFID tag hash for specified DN
-# PArameter 1: User DN
-# Parameter 2: tag data
-set_rfid_tag()
-{
-    echo
-}
-
-# Get the RFID tag hash list for specified DN
-# PArameter 1: User DN
-# output: all tags from specified user
-get_rfid_tag()
-{
-    echo
-}
-
-
-# Get the RFID tag hash list for specified access control DN
-# PArameter 1: Access control DN
-# output: all valid tags for that access controller
-get_rfid_tags()
-{
-    echo
-}
+############################################# <INSTALLER> #############################################
 
 # Install LDAP schemas
 ldap_install()
@@ -598,6 +641,8 @@ ldap_install()
 	test "${i: -14}" == ".ldif.template" && cat "$i" | envsubst | ldapadd -Y EXTERNAL -H ldapi:///
     done
 }
+
+############################################# </INSTALLER> #############################################
 
 ############### </FUNCTIONS> ###############
 
@@ -683,14 +728,14 @@ case "$1" in
     "legacy")
 	shift
 	case "$1" in
-	    'activate_all')
+	    'activate_all') # To delete
 		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
 		for i in $(runsql 'select id from person where machinestate like "IMPORTED_MEMBER_INACTIVE"') ; do
 		    runsql "select id, firstname, name, emailaddress from person where id=$i"
 		    finish_migration $i
 		done
 		;;
-	    'activate_one')
+	    'activate_one') # to delete
 		    test -z "$2" && echo "Awaiting activation:"
 		    test -z "$2" && runsql 'select id, nickname, emailaddress from person where machinestate like "IMPORTED_MEMBER_INACTIVE"'
 		    test -z "$2" && die "Specify e-mail address to activate"
@@ -805,7 +850,7 @@ case "$CASEVAR" in
 	;;
 
 ### Internal accounting
-    'accounting/migrate')
+    'accounting/migrate') # should disappear
 	account_migrate
 	;;
     'accounting/create')
@@ -818,7 +863,7 @@ case "$CASEVAR" in
 	consume_account "$3" "$4" "$5" "$6"
 	;;
     'accounting/transfer')
-	transfer_account "$3" "$4" "$5" "$6"
+	transfer_account "$3" "$4" "$5" "$6" "$7"
 	;;
     'accounting/balance')
 	show_account_balance "$3" "$4" "$5" "$6"
