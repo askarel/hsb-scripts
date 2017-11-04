@@ -496,16 +496,37 @@ account_create()
     test -z "$3" -a -n "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on='$4' where structuredcomm like '$NEWBECOMM'"
     test -n "$3" -a -n "$4" && SQLQUERY="update internal_accounts set in_use=1, account_type='$1', $IDTYPE=$MYID, created_on='$4', ref_dn='$3' where structuredcomm like '$NEWBECOMM'"
     runsql "$SQLQUERY" a > /dev/null && echo "$NEWBECOMM"
-#    test -n "$5" && echo 'insert into moneymovements (date_val, date_account, amount, currency) VALUES (curdate(), curdate(), concat ("-", abs ($5)), $CURRENCY)'
 }
 
 # Pre-load an account with some cash
 # Parameter 1: account ID (belgian structured message)
 # Parameter 2: Point of sale identifier
 # Parameter 3: amount to preload
+# Parameter 4: payment message
 preload_account()
 {
-    echo
+    local ACCOUNTID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
+    test -z "$ACCOUNTID" && die "Account $ACCOUNTID does not exist"
+    test -z "$2" && die "Specify Point-of-sale ID"
+    test -z "$3" && die "Specify amount to pre-load on account $ACCOUNTID"
+    test -z "$4" && die "Specify message for account $ACCOUNTID"
+    runsql "insert into moneymovements (date_val, date_account, amount, currency, other_account, this_account, message, transaction_id) VALUES 
+	    (curdate(), curdate(), concat ('-', abs ($3)), '$CURRENCY', '$2', '$ACCOUNTID', '$4', concat ('INTERNAL/$ACCOUNTID/$2/', sha1(concat (current_timestamp(), '$4'))) )"
+}
+
+
+# Consume cash from account
+# Parameter 1: account ID (belgian structured message)
+# Parameter 2: Point of sale identifier
+# Parameter 3: amount to consume
+# Parameter 4: payment message
+consume_account()
+{
+    local ACCOUNTID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
+    test -z "$ACCOUNTID" && die "Account $ACCOUNTID does not exist"
+    test -z "$2" && die "Specify Point-of-sale ID"
+    test -z "$3" && die "Specify amount to consume from account $ACCOUNTID"
+    test -z "$4" && die "Specify message for account $ACCOUNTID"
 }
 
 
@@ -790,6 +811,18 @@ case "$CASEVAR" in
     'accounting/create')
 	account_create "$3" "$4" "$5" "$6"
 	;;
+    'accounting/preload')
+	preload_account "$3" "$4" "$5" "$6"
+	;;
+    'accounting/consume')
+	consume_account "$3" "$4" "$5" "$6"
+	;;
+    'accounting/transfer')
+	transfer_account "$3" "$4" "$5" "$6"
+	;;
+    'accounting/balance')
+	show_account_balance "$3" "$4" "$5" "$6"
+	;;
 
 ### Catch-all parts: in case of invalid arguments
     'cron/'*)
@@ -814,7 +847,7 @@ case "$CASEVAR" in
 	die "Please specify subaction (run|restore)"
 	;;
     'accounting/'*)
-	die "Please specify subaction (create|transfer|balance|sync)"
+	die "Please specify subaction (create|preload|consume|transfer|balance|sync)"
 	;;
 
 ### Debugging aid: runsql from command line
