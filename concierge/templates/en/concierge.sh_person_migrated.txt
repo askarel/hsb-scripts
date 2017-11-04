@@ -10,3 +10,4 @@ Username: $NICKNAME
 Password: $PASSWORD
 
 You don't need to do anything at the moment.
+Keep an eye on the mailing list for announcements...
