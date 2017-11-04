@@ -154,6 +154,26 @@ addperson()
     templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REPLY_FIELD[5]}" "${REPLY_FIELD[7]}"
 }
 
+# Lookup person ID
+# Parameter 1: nickname or email address
+# Output: valid person ID from database
+# Bail out if requested data is not found
+function lookup_person_id()
+{
+    test -z "$1" && die 'Spefify person e-mail address or nickname'
+    case "$(runsql "select count(id) from person where nickname like '$1' or emailaddress like '$1'")" in #"
+	'0')
+	    die "No match for user/email '$1'"
+	    ;;
+	'1')
+	    runsql "select id from person where nickname like '$1' or emailaddress like '$1'"
+	    ;;
+	*)
+	    die "Ambiguous result: multiple matches for user/email '$1'"
+	    ;;
+    esac
+}
+
 # Modify data for an existing user
 # Parameter 1: user to modify (e-mail address or nickname)
 # Parameter 2: name of field to modify
@@ -196,7 +216,6 @@ changepassword()
     fi
 }
 
-### NEED REPAIR ?
 # Re-send the payment infos for specified user
 # Parameter 1: user to re-send infos for
 resendinfos()
@@ -208,11 +227,11 @@ resendinfos()
     local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
     local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
     local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
-    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+#    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+    local STRUCTUREDCOMM="$(runsql "select structuredcomm from internal_accounts where account_type like 'MEMBERSHIP' and owner_id=$PERSONID")"
     templatecat "$MYLANG" "$ME.sh_person_resendinfos.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
-### NEED REPAIR ?
 # Cancel membership for specified member
 # parameter 1: member to expel
 membercancel()
@@ -226,7 +245,8 @@ membercancel()
     local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
     local NAME="$(runsql "select name from person where id=$PERSONID")"
     local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
-    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+#    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+    local STRUCTUREDCOMM="$(runsql "select structuredcomm from internal_accounts where account_type like 'MEMBERSHIP' and owner_id=$PERSONID")"
     local LEAVEREASON
     printf 'Please type the reason to cancel the membership of %s %s:' "$FIRSTNAME" "$NAME"
     read LEAVEREASON
@@ -235,7 +255,6 @@ membercancel()
     templatecat "$MYLANG" "$ME.sh_member_cancel.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
-### NEED REPAIR ?
 # Reactivate membership for specified member
 # parameter 1: member to reactivate
 member_reactivate()
@@ -249,7 +268,8 @@ member_reactivate()
     local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
     local NAME="$(runsql "select name from person where id=$PERSONID")"
     local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
-    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+#    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
+    local STRUCTUREDCOMM="$(runsql "select structuredcomm from internal_accounts where account_type like 'MEMBERSHIP' and owner_id=$PERSONID")"
     runsql "update person set machinestate='MEMBERSHIP_ACTIVE', machinestate_data='' where id=$PERSONID"
 #    templatecat "$MYLANG" "$ME.sh_member_reactivate.txt"
     templatecat "$MYLANG" "$ME.sh_member_reactivate.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
@@ -279,22 +299,13 @@ importbankcsv()
     rm "$TEMPFILE"
 }
 
-# Refresh PGP key store
-cron_pgp()
-{
-    for i in $(runsql "select openpgpkeyid from person where openpgpkeyid is not null or openpgpkeyid <> ''"); do
-	echo "TODO: $i"
-    done
-}
-
-
-### NEED REPAIR
 # This function will:
 # - Fix the paying members that insist on not using the communication string
 bank_fix_membership()
 {
     for i in $(runsql "select id from person") ; do
-	local THIS_COMM="$(runsql "select structuredcomm from person where id=$i")"
+#	local THIS_COMM="$(runsql "select structuredcomm from person where id=$i")"
+	local THIS_COMM="$(runsql "select structuredcomm from internal_accounts where account_type like 'MEMBERSHIP' and owner_id=$PERSONID")"
 #	for j in $(runsql "select structuredcomm from old_comms where member_id=$i") ; do
 #	    runsql "update moneymovements set fix_fuckup_msg='$THIS_COMM' where message like '$j'"
 #	done
@@ -334,24 +345,6 @@ list_person_payments()
     fi
 }
 
-# Lookup person ID
-# Parameter 1: nickname or email address
-# Output: valid person ID from database
-function lookup_person_id()
-{
-    test -z "$1" && die 'Spefify person e-mail address or nickname'
-    case "$(runsql "select count(id) from person where nickname like '$1' or emailaddress like '$1'")" in #"
-	'0')
-	    die "No match for user/email '$1'"
-	    ;;
-	'1')
-	    runsql "select id from person where nickname like '$1' or emailaddress like '$1'"
-	    ;;
-	*)
-	    die "Ambiguous result: multiple matches for user/email '$1'"
-	    ;;
-    esac
-}
 
 massmail()
 {
@@ -409,7 +402,6 @@ db_restore()
 account_create()
 {
     test -z "$1" && die "account_create: missing account type"
-#    test -z "$2" && die "account_create: missing account identifier"
     case "$2" in
 	*[!0-9]*)
 	    IDTYPE='owner_dn'
@@ -440,7 +432,7 @@ account_create()
 preload_account()
 {
     local ACCOUNTID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
-    test -z "$ACCOUNTID" && die "Account $ACCOUNTID does not exist"
+    test -z "$ACCOUNTID" && die "Account $1 does not exist"
     test -z "$2" && die "Specify Point-of-sale ID"
     test -z "$3" && die "Specify amount to pre-load on account $ACCOUNTID"
     test -z "$4" && die "Specify message for account $ACCOUNTID"
@@ -489,12 +481,24 @@ insert into moneymovements (date_val, date_account, amount, currency, other_acco
 commit;"
 }
 
+# Retrieve amount of money left on the account
+# Parameter 1: account ID (belgian structured message)
+# output: amount of money left
+show_account_balance()
+{
+    local ACCOUNTID="$(runsql "select structuredcomm from internal_accounts where structuredcomm like '$1'")"
+    test -z "$ACCOUNTID" && die "Account $1 does not exist"
+    runsql "select abs (sum(amount)) from moneymovements where this_account like '$ACCOUNTID'"
+}
+
 # Pre-load some internal accounts into database for future use (cron job)
+# Parameter 1: threshold
 preload_internal_accounts()
 {
-    if [ $(runsql 'select count(structuredcomm) from internal_accounts where account_type is null') -lt $ACCOUNT_PRELOAD ]; then #'
+    test -z "$1" && die "preload_internal_accounts(): specify amount of messages to pre-load"
+    if [ $(runsql 'select count(structuredcomm) from internal_accounts where account_type is null') -lt $1 ]; then #'
 	echo 'pre-loading some spare accounts...'
-	for i in $(seq 1 $ACCOUNT_PRELOAD) ; do
+	for i in $(seq 1 $1) ; do
 	    runsql 'insert into internal_accounts (structuredcomm) values ( mkbecomm())'
 	done
     fi
@@ -644,6 +648,18 @@ ldap_install()
 
 ############################################# </INSTALLER> #############################################
 
+############################################# <CRON> #############################################
+# Refresh PGP key store
+cron_pgp()
+{
+    for i in $(runsql "select openpgpkeyid from person where openpgpkeyid is not null or openpgpkeyid <> ''"); do
+	echo "TODO: $i"
+    done
+}
+
+
+############################################# </CRON> #############################################
+
 ############### </FUNCTIONS> ###############
 
 ############### <SANITY CHECKS> ###############
@@ -773,16 +789,16 @@ case "$CASEVAR" in
 	addperson 
 	;;
     'person/modify')
-	PERSONID="$(lookup_person_id "$2")"
-	modifyperson "$2" "$3" "$4"
+	PERSONID="$(lookup_person_id "$3")"
+	modifyperson "$3" "$4" "$5"
 	;;
     'person/changepass')
-	PERSONID="$(lookup_person_id "$2")"
-	changepassword "$2"
+	PERSONID="$(lookup_person_id "$3")"
+	changepassword "$3"
 	;;
     'person/resendinfos')
-	PERSONID="$(lookup_person_id "$2")"
-	resendinfos "$2"
+	PERSONID="$(lookup_person_id "$3")"
+	resendinfos "$3"
 	;;
     'person/list')
 	runsql 'select entrydate,firstname,name,nickname,emailaddress,machinestate from person'
@@ -800,7 +816,7 @@ case "$CASEVAR" in
 ### Cron processing
     "cron/hourly")
 	cron_mail_new_user
-	preload_internal_accounts
+	preload_internal_accounts $ACCOUNT_PRELOAD
 	;;
     "cron/daily")
 	shift
@@ -866,7 +882,7 @@ case "$CASEVAR" in
 	transfer_account "$3" "$4" "$5" "$6" "$7"
 	;;
     'accounting/balance')
-	show_account_balance "$3" "$4" "$5" "$6"
+	show_account_balance "$3"
 	;;
 
 ### Catch-all parts: in case of invalid arguments
