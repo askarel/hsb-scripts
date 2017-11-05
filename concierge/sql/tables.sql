@@ -22,7 +22,7 @@
 -- It can be the neighbour(s), the landlord(s), and/or visitors. This allow us to have visitor access card.
 -- Once we go full LDAP, this will go away.
 create table if not exists person (id int not null auto_increment primary key, 
-				    entrydate date not null, 
+				    entrydate timestamp default current_timestamp, 
 				    structuredcomm char(21) unique not null, -- Next on the chopping block
 				    lang char(6),
 				    firstname char(40) not null, 
