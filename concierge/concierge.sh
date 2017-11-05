@@ -124,7 +124,8 @@ addperson()
 
     local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
     local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
-
+    # Empty nickname field ?
+    test -z "${REPLY_FIELD[3]}" && REPLY_FIELD[3]="$(tr -s ' ' '_' <<< "${REPLY_FIELD[1]}_${REPLY_FIELD[2]}")"
     case "$persontype" in
 	'members')
 	    SQL_QUERY="$SQL_QUERY '$CRYPTPASSWORD', '$LDAPHASH', 'MEMBER_MANUALLY_ENTERED', date_add(now(), interval 1 month) );"
@@ -146,12 +147,20 @@ addperson()
     runsql "$SQL_QUERY" && echo "$ME: Added $persontype to database."
     runsql "insert into member_groups (member_id, group_id) values ( (select max(id) from person),(select bit_id from hsb_groups where shortdesc like '$persontype') )" && echo "$ME: Added to group $persontype"
     # If we're here, we have successfully inserted person data
-    STRUCTUREDCOMM="$(runsql 'select structuredcomm from person order by id desc limit 1')"
+    STRUCTUREDCOMM="$(account_create "MEMBERSHIP" "$(lookup_person_id "${REPLY_FIELD[5]}")")" #"
+#    STRUCTUREDCOMM="$(runsql 'select structuredcomm from person order by id desc limit 1')"
     EXPIRYDATE="$(runsql 'select machinestate_expiration_date from person order by id desc limit 1')"
     FIRSTNAME="${REPLY_FIELD[1]}"
     NICKNAME="${REPLY_FIELD[3]}"
     JOINREASON="${REPLY_FIELD[8]}"
     templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REPLY_FIELD[5]}" "${REPLY_FIELD[7]}"
+}
+
+# Attempt to rewrite above function in a cleaner way.
+addperson2()
+{
+    local REQUESTED_FIELDS=(lang firstname name nickname phonenumber emailaddress birthdate openpgpkeyid machinestate_data)
+    echo
 }
 
 # Lookup person ID
