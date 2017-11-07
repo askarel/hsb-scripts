@@ -1,0 +1,18 @@
+Your $ORGNAME cashless payment token
+
+Hello $FIRSTNAME,
+
+Here is the payment informations for your cashless token for the fridge.
+
+You can ask your bank to make a regular automatic transfer or do it manually 
+whenever you feel like it.
+
+bank account: $BANKACCOUNT
+Communication: $STRUCTUREDCOMM
+
+The amount to transfer is totally up to you.
+
+The structured memo is your account ID. You can use Inkscape to render a barcode
+version of it: use Code39 or Code128.
+
+Good luck !
