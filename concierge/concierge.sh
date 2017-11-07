@@ -313,11 +313,7 @@ importbankcsv()
 bank_fix_membership()
 {
     for i in $(runsql "select id from person") ; do
-#	local THIS_COMM="$(runsql "select structuredcomm from person where id=$i")"
 	local THIS_COMM="$(runsql "select structuredcomm from internal_accounts where account_type like 'MEMBERSHIP' and owner_id=$PERSONID")"
-#	for j in $(runsql "select structuredcomm from old_comms where member_id=$i") ; do
-#	    runsql "update moneymovements set fix_fuckup_msg='$THIS_COMM' where message like '$j'"
-#	done
 	runsql "select fuckup_message from membership_fuckup_messages where member_id=$i"| while read FUCKUP ; do
 	    runsql "update moneymovements set fix_fuckup_msg='$THIS_COMM' where message like '$FUCKUP'"
 	done
@@ -513,6 +509,21 @@ preload_internal_accounts()
     fi
 }
 
+# Create an account for fridge payments
+# Parameter 1: member ID
+add_bar_account()
+{
+    local PERSONID="$(lookup_person_id "$1")"
+    test -z "$PERSONID" && die "No match found for user '$1'"
+    local STRUCTUREDCOMM="$(account_create 'BAR' "$PERSONID" )"
+    test -z "$STRUCTUREDCOMM" && die "Account creation failure"
+    local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
+    local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
+    local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
+    local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
+    templatecat "$MYLANG" "$ME.sh_person_add_bar.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+}
+
 ############################################# </INTERNAL ACCOUNTING> #############################################
 
 
@@ -623,22 +634,6 @@ ldapexport()
     done
 }
 
-# Migrate all structured memos from two (or more) tables to one.
-# This will ease the treatment of people with multiple messages for their membership payments
-# This will effectively render the old_comms table and the person.structuredcomm column obsolete.
-# The rest of the code to process that new table still need to be written
-account_migrate()
-{
-    for i in $( runsql "select id from person" ) ; do
-	local ENTRYDATE="$(runsql "select entrydate from person where id = $i")"
-	local STRUCTURED1="$(runsql "select structuredcomm from person where id = $i")"
-	local LDAP_UID="uid=$(runsql "select nickname from person where id = $i"),ou=users,$BASEDN"
-	runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm, owner_dn, ref_dn, in_use ) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$STRUCTURED1', '$LDAP_UID', '$LDAP_UID', 1)" a > /dev/null || echo "$STRUCTURED1 already imported"
-#	for j in $(runsql "select structuredcomm from old_comms where member_id = $i"); do
-#	    runsql "insert into internal_accounts (owner_id, created_on, account_type ,structuredcomm) values ($i, '$ENTRYDATE', 'MEMBERSHIP', '$j')" a > /dev/null || echo "$STRUCTURED1 already imported"
-#	done
-    done 
-}
 
 ############################################# </MIGRATION> #############################################
 
@@ -809,6 +804,9 @@ case "$CASEVAR" in
 	PERSONID="$(lookup_person_id "$3")"
 	resendinfos "$3"
 	;;
+    'person/addbar')
+	add_bar_account "$3"
+	;;
     'person/list')
 	runsql 'select entrydate,firstname,name,nickname,emailaddress,machinestate from person'
 	;;
@@ -875,9 +873,6 @@ case "$CASEVAR" in
 	;;
 
 ### Internal accounting
-    'accounting/migrate') # should disappear
-	account_migrate
-	;;
     'accounting/create')
 	account_create "$3" "$4" "$5" "$6"
 	;;
