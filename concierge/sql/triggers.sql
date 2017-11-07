@@ -31,14 +31,14 @@ CREATE TRIGGER log_person_activity_insert AFTER INSERT ON person FOR EACH ROW
 	INSERT INTO person_history (event_timestamp, member_id, machinestate, machinestate_data, machinestate_expiration_date) VALUES (NOW(), new.id, new.machinestate, new.machinestate_data, new.machinestate_expiration_date);;
 
 DROP TRIGGER if exists person_auto_entry_date;;
-create trigger person_auto_entry_date before insert on person for each row 
-    begin
-	if new.nickname = '' or new.nickname = NULL then
-	    set new.nickname=replace (concat (new.firstname, '_',new.name), ' ', '_'); -- Craft an unlikely nickname :-)
-	end if;
-	if new.structuredcomm = '' or new.structuredcomm = NULL then
-	    set new.structuredcomm=(select formatbecomm((select ifnull (max(id), 0) + 1 from person)));
-	end if;
-    end;;
+--create trigger person_auto_entry_date before insert on person for each row 
+--    begin
+--	if new.nickname = '' or new.nickname = NULL then
+--	    set new.nickname=replace (concat (new.firstname, '_',new.name), ' ', '_'); -- Craft an unlikely nickname :-)
+--	end if;
+--	if new.structuredcomm = '' or new.structuredcomm = NULL then
+--	    set new.structuredcomm=(select formatbecomm((select ifnull (max(id), 0) + 1 from person)));
+--	end if;
+--    end;;
 
 DELIMITER ;
