@@ -1,0 +1,81 @@
+#!/bin/bash
+
+readonly ME="$(basename "$0" .sh)"
+
+############### <FUNCTIONS> ###############
+# Function to call when we bail out
+die()
+{
+    echo "$ME: $1. Exit" >&2
+    test -n "$2" && exit $2
+    exit 1
+}
+
+# run a SQL command.
+# Parameter 1: SQL request. If it's a valid file, run it's content
+# Parameter 2: if set, do not bail out on error
+# output: tab-separated data
+# exit code 0: request successful
+runsql()
+{
+    test -z "$1" && die "Empty SQL request"
+    local SQPROG='echo'
+    test -f "$1" && SQPROG='cat'
+    if [ -z "$2" ]; then $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  || die "Failed query: '$1'" # Fix your junk !
+		    else $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  2>&1 # We want the error
+    fi
+}
+
+installzoppas()
+{
+    SQLINSTALL="./zoppas-install.sql"
+    test -f "$SQLINSTALL" || die "File $SQLINSTALL not found"
+    runsql "$SQLINSTALL"
+}
+
+
+############### CONFIG FILE ###############
+# Look for config file in the following locations: /etc, user directory and 
+# script directory. Script directory always wins.
+readonly ZOPPAS='zoppas'
+test -e "/etc/$ZOPPAS.conf" && CONFIGFILE="/etc/$ZOPPAS.conf"
+test -e "$HOME/$ZOPPAS.conf" && CONFIGFILE="$HOME/$ZOPPAS.conf"
+test -e "$ZOPPAS.conf" && CONFIGFILE="$ZOPPAS.conf"
+test -z "$CONFIGFILE" && die "No config file found"
+# Bring the config file
+# Load config file and check sanity
+test -f "$CONFIGFILE" || die "No config file found ($CONFIGFILE)"
+. $CONFIGFILE
+test -n "$SQLUSER" || die "$CONFIGFILE: SQLUSER variable is empty"
+test -n "$SQLPASS" || die "$CONFIGFILE: SQLPASS variable is empty"
+test -n "$SQLDB" || die "$CONFIGFILE: SQLDB: Database to use not specified"
+test -n "$ORGNAME" || die "$CONFIGFILE: ORGNAME: Organisation name is not set"
+# By default we talk in euros
+test -n "$CURRENCY" || CURRENCY="EUR"
+# If empty, use localhost
+test -n "$SQLHOST" || SQLHOST="127.0.0.1"
+
+
+case "$1" in
+    'install')
+	installzoppas
+	;;
+    'importoldcsv')
+	echo
+	;;
+    'addprod')
+	echo
+	;;
+    'modifyprod')
+	echo
+	;;
+    'listprod')
+	echo
+	;;
+    'lookup')
+	echo
+	;;
+    *)
+	echo "Specify the main action (install|addprod|modifyprod|lookup|..."
+	;;
+esac
