@@ -25,8 +25,6 @@ set @commbase:=lpad (floor (1 + (rand() * 9999999999 )),10, '0');
 return (select concat ('+++', insert (insert (@commbase, 8, 0, '/'), 4, 0, '/'), lpad ((case mod (@commbase, 97) when 0 then 97 else (mod (@commbase, 97))end),2,'0'), '+++'));
 end ;;
 
-
-
 -- Format any number between 0 and 9999999999 into a belgian style structured communication
 CREATE FUNCTION formatbecomm (commnumber BIGINT) RETURNS char(20)
 begin

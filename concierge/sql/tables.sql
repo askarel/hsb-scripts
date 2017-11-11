@@ -23,7 +23,6 @@
 -- Once we go full LDAP, this will go away.
 create table if not exists person (id int not null auto_increment primary key, 
 				    entrydate timestamp default current_timestamp, 
---				    structuredcomm char(21) unique not null, -- Next on the chopping block
 				    lang char(6),
 				    firstname char(40) not null, 
 				    name char(40) not null, 
