@@ -8,13 +8,13 @@ changetype: modify
 delete: olcAccess
 $LDAPACL
 -
-add:olcAccess
+add: olcAccess
 olcAccess: {0}to attrs=userPassword by self write by anonymous auth by * none
 -
-add:olcAccess
+add: olcAccess
 olcAccess: {1}to attrs=shadowLastChange by self write by * read
 -
-add:olcAccess
+add: olcAccess
 olcAccess: {2}to * by * read
 -
 EOF
