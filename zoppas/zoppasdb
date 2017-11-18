@@ -26,6 +26,7 @@ runsql()
     fi
 }
 
+# This will make a fresh install of the database
 installzoppas()
 {
     SQLINSTALL="./zoppas-install.sql"
@@ -74,6 +75,9 @@ case "$1" in
 	;;
     'lookup')
 	echo
+	;;
+    'runsql')
+	runsql "$2"
 	;;
     *)
 	echo "Specify the main action (install|addprod|modifyprod|lookup|..."
