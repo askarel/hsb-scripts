@@ -1,0 +1,20 @@
+#!/bin/bash
+
+LDAPACL="$(ldapsearch -Y EXTERNAL -H ldapi:/// -b "olcDatabase={1}mdb,cn=config" "olcAccess" |grep -v '#' |head -n -3 |tail -n +3)"
+
+cat << EOF
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+delete: olcAccess
+$LDAPACL
+-
+add:olcAccess
+olcAccess: {0}to attrs=userPassword by self write by anonymous auth by * none
+-
+add:olcAccess
+olcAccess: {1}to attrs=shadowLastChange by self write by * read
+-
+add:olcAccess
+olcAccess: {2}to * by * read
+-
+EOF
