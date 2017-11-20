@@ -52,6 +52,12 @@ olcAccess: {4}to attrs=x-hsbxl-machineState,x-hsbxl-machineStateData
   by * read
 -
 add: olcAccess
+olcAccess: {5} to attrs=x-hsbxl-providerUserName,x-hsbxl-providerPassword
+  by group.exact="cn=Password manager,ou=groups,$BASEDN" write
+  by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
+  by * none
+-
+add: olcAccess
 olcAccess: {10}to *
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read

@@ -136,6 +136,31 @@ olcAttributeTypes: ( HSBXLat:20
   EQUALITY caseIgnoreIA5Match
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.26
   SINGLE-VALUE )
+######################################################################################
+olcAttributeTypes: ( HSBXLat:21
+  NAME 'x-hsbxl-providerName'
+  DESC 'Name of the service provider'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26
+  SINGLE-VALUE )
+#
+olcAttributeTypes: ( HSBXLat:22
+  NAME 'x-hsbxl-providerUserName'
+  DESC 'Username(s) used to connect to provider website'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:23
+  NAME 'x-hsbxl-providerPassword'
+  DESC 'Password(s) used to connect to provider website'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:24
+  NAME 'x-hsbxl-providerDataBlob'
+  DESC 'Free-form blob of text or data about the provider'
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+#
 #######################################################################################
 olcObjectClasses: ( HSBXLoc:1
   NAME 'x-hsbxl-person'
@@ -154,3 +179,10 @@ olcObjectClasses: ( HSBXLoc:2
   STRUCTURAL
   MUST ( x-hsbxl-ShortComm $ x-hsbxl-fullStructComm )
   MAY ( x-hsbxl-structCommDesc $ x-hsbxl-structCommOwner ) )
+#
+olcObjectClasses: ( HSBXLoc:3
+  NAME 'x-hsbxl-passwordmanager'
+  DESC '3rd party providers with username and password'
+  STRUCTURAL
+  MUST ( x-hsbxl-providerName )
+  MAY ( x-hsbxl-providerUserName $ x-hsbxl-providerPassword $ x-hsbxl-providerDataBlob ) )
