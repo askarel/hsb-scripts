@@ -603,7 +603,7 @@ ldapexport()
 {
     local UIDBASE=1000
 #    for i in $(runsql 'select id from person where ldaphash not like ""'); do
-    for i in $(runsql 'select id from person'); do
+    for i in $(runsql 'select id from person order by id'); do
 	local FIRSTNAME="$(runsql "select firstname from person where id=$i")"
 	local NAME="$(runsql "select name from person where id=$i")"
 	local NICKNAME="$(runsql "select nickname from person where id=$i")"
