@@ -81,18 +81,14 @@ helptext()
 cat << HELPTEXT
 Usage: $ME [addtag|gettaginfo|revoketag|listusers|listusertags|listalltags|edituser|showlog]
 
-#    addtag user [taghash]	Add a tag ID to a user. If taghash empty, try to read it from RFID reader
-#    gettaginfo taghash		Get user infos from tag
-#    revoketag taghash		Blacklist a tag. Add STOLEN or LOST to make the ban permanent
+    tagmanager <username>	Start interactive tag manager
     listusertags user		List all tags used by user
     gettaghash		Show the hash of an RFID tag (requires working RFID reader)
     dumpflat		Dump a flat text version of the valid tags data (for embedded use)
 
-* not implemented
 HELPTEXT
 exit 1
 }
-
 
 # Add tag to user
 # Parameter 1: LDAP server to use
@@ -105,7 +101,6 @@ addtag()
     test -z "$2" && die "Specify user DN (example: uid=john_doe,ou=users,dc=hsbxl,dc=be)"
     test -z "$3" && die "Specify password for account '$2'"
 }
-
 
 # Dump a list of tags used by specified user
 # Parameter 1: LDAP server to use
@@ -121,6 +116,31 @@ dumpusertags()
     local USERDN="$4"
     test -z "$4" && USERDN="$2"
     ldapsearch -o ldif-wrap=no -x -h "$1" -D "$2" -w "$3" -b "$USERDN" -LLL 'x-hsbxl-RFIDid' | grep 'x-hsbxl-RFIDid' | cut -d ' ' -f 2-
+}
+
+# Manage user tags
+# Parameter 1: LDAP server to use
+# Parameter 2: username
+# parameter 3: password
+managetags()
+{
+    test -z "$1" && die "Specify LDAP server to use"
+    test -z "$2" && die "Specify user name"
+    test -z "$3" && die "Specify password for account '$2'"
+#    tput smcup
+#    clear
+    TAGSARRAY=( $(dumpusertags "$1" "uid=$2,ou=users,$BASEDN" "$3" ) )
+    printf "Index|Scanned|ver.|Createtime    |Validity start|Validity end  |Tag hash                        |Status  |Nickname\n"
+    for (( i=0 ; i<${#TAGSARRAY[@]} ; i++ )) do 
+	for (( j=1 ; j<8 ; j++ )) do 
+	    SPLITTAGS[$(( $j - 1 ))]="$( cut -d ';' -f $j <<< "${TAGSARRAY[$i]}" )"
+	    test -z "${SPLITTAGS[$(( $j - 1 ))]}" && SPLITTAGS[$(( $j - 1 ))]=0
+	done
+	printf '  %-3s| [ %-2s] | %-3s|%-14s|%-14s|%-14s|%-32s|%-8s|%s\n' "$i" 0 "${SPLITTAGS[0]}" "$(date --iso-8601 --date="@${SPLITTAGS[1]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[2]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[3]}" 2> /dev/null)" "${SPLITTAGS[4]}" "${SPLITTAGS[5]}" "${SPLITTAGS[6]}"
+#	echo "  $i		${TAGSARRAY[$i]}"  "${SPLITTAGS[1]}"
+    done
+#    read
+#    tput rmcup
 }
 
 # Dump a flat text file for the access controller
@@ -154,19 +174,17 @@ formattoV1()
     done
 }
 
-# mysql -urfid_web_user -pChangeMe rfid_db_hsbxl  --skip-column-names -e "select user_login, unix_timestamp(validitystart), unix_timestamp(validitystart), '', uid , '', user_login from tags,users_vs_tags where tags.uid=users_vs_tags.tag_uid and tags.status = 'ACTIVE' and tags.validityend is null order by user_login"|tr '\t' ';' > activetags.csv
-
-test -x "$(which ldapsearch)" || die "ldapsearch not found or not installed"
+test -x "$(which ldapsearch)" || die "ldapsearch not found or not installed (apt-get install ldapscripts)"
+test -x "$(which scriptor)" || die "scriptor not found or not installed (apt-get install pcsc-tools)"
 
 case "$1" in
-    "addtag")
-	addtag "$2" "$3"
-	;;
-    "gettaginfo")
-	gettaginfo "$2"
-	;;
-    "revoketag")
-	revoketag "$2" "$3"
+    'tagmanager')
+	SCRIPT_USERNAME="$2"
+	SCRIPT_PASSWORD="$3"
+	test -z "$SCRIPT_USERNAME" && read -p 'Username: ' SCRIPT_USERNAME
+	test -z "$SCRIPT_PASSWORD" && read -s -p 'Password: ' SCRIPT_PASSWORD
+	echo
+	managetags "$LDAPSERVER"  "$SCRIPT_USERNAME" "$SCRIPT_PASSWORD" "$4" "$5" "$6"
 	;;
     "listusertags")
 	dumpusertags "$LDAPSERVER" "$2" "$3" "$4" "$5" "$6"
