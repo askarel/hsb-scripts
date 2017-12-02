@@ -176,7 +176,7 @@ managetags()
 	'q'|'Q') # Quit command
 	    if [ "$OLDDATAHASH" != "$( md5sum <<< "${TAGSARRAY[*]}" )" ]; then
 		read -n 1 -r -p "Data changed. Do you want to commit to LDAP server (y/n)? [N]: " COMMITYESNO
-		test "$COMMITYESNO" = 'Y' -o "$COMMITYESNO" = 'y' && ldiftags "$USERDN" "${TAGSARRAY[@]}" #| ldapadd -c -h "$1" -D "$USERDN" -w "$3"
+		test "$COMMITYESNO" = 'Y' -o "$COMMITYESNO" = 'y' && ldiftags "$USERDN" "${TAGSARRAY[@]}" | ldapadd -c -h "$1" -D "$USERDN" -w "$3"
 	    fi
 #	    tput rmcup
 	    exit
@@ -276,11 +276,13 @@ dumpflat()
 formattoV1()
 {
     while read line3; do
-	test "$(cut -d ';' -f 1 <<< "$line3" )" == 'v1' && awk -e  'BEGIN {FS=";"; OFS="\t" ;} { if (!$4) {print $5,$3,"NULL","0","0",$7} else {print $5,$3,$4,"0","0",$7 } }' <<< "$line3"
+	test "$(cut -d ';' -f 1 <<< "$line3" )" == 'v1' && \
+	    awk -e  'BEGIN {FS=";"; OFS="\t" ;} $3~/^[0-9]+$/ && ( $4~/^[0-9]+$/ || $4~/^$/ ) { if (!$4) {print $5,$3,"NULL","0","0",$7} else {print $5,$3,$4,"0","0",$7 } }' <<< "$line3"
     done
 }
 
 test -x "$(which ldapsearch)" || die "ldapsearch not found or not installed (apt-get install ldapscripts)"
+test -x "$(which ldapadd)" || die "ldapadd not found or not installed (apt-get install ldapscripts)"
 test -x "$(which scriptor)" || die "scriptor not found or not installed (apt-get install pcsc-tools)"
 
 case "$1" in
