@@ -79,27 +79,16 @@ gettaghash()
 helptext()
 {
 cat << HELPTEXT
-Usage: $ME [addtag|gettaginfo|revoketag|listusers|listusertags|listalltags|edituser|showlog]
+Usage: $ME [tagmanager|password|listusertags|gettaghash|dumpflat]
 
     tagmanager <username>	Start interactive tag manager
+    password <username>		Change password for specified user
     listusertags user		List all tags used by user
-    gettaghash		Show the hash of an RFID tag (requires working RFID reader)
-    dumpflat		Dump a flat text version of the valid tags data (for embedded use)
+    gettaghash			Show the hash of an RFID tag (requires working RFID reader)
+    dumpflat			Dump a flat text version of the valid tags data (for embedded use)
 
 HELPTEXT
 exit 1
-}
-
-# Add tag to user
-# Parameter 1: LDAP server to use
-# Parameter 2: Bind DN (user DN or access controller DN
-# Parameter 3: Password for above DN
-# Parameter 4: tag hash (if known)
-addtag()
-{
-    test -z "$1" && die "Specify LDAP server to use"
-    test -z "$2" && die "Specify user DN (example: uid=john_doe,ou=users,dc=hsbxl,dc=be)"
-    test -z "$3" && die "Specify password for account '$2'"
 }
 
 # Dump a list of tags used by specified user
@@ -118,6 +107,59 @@ dumpusertags()
     ldapsearch -o ldif-wrap=no -x -h "$1" -D "$2" -w "$3" -b "$USERDN" -LLL 'x-hsbxl-RFIDid' | grep 'x-hsbxl-RFIDid' | cut -d ' ' -f 2-
 }
 
+# Dump a user-friendly list of tags used by specified user
+# Parameter 1: Index of scanned tag
+# Parameter 2: Array of valid tags
+# output: user-readable list of tags for specified user DN 
+friendlyusertags()
+{
+    local INDEX="$1"
+    shift
+    local ARR=( "$@" )
+    local i j
+    printf "Index|Scanned|ver.|Createtime    |Validity start|Validity end  |Tag hash                        |Status  |Nickname\n"
+    for (( i=0 ; i<${#ARR[@]} ; i++ )) do 
+	for (( j=1 ; j<8 ; j++ )) do 
+	test -n "$INDEX" -a "$i" == "$INDEX" && TAGMARK='>' || TAGMARK=''
+	    SPLITTAGS[$(( $j - 1 ))]="$( cut -d ';' -f $j <<< "${ARR[$i]}" )"
+	    test -z "${SPLITTAGS[$(( $j - 1 ))]}" && SPLITTAGS[$(( $j - 1 ))]=0
+	done
+	test -n "${ARR[$i]}" && printf '  %-3s| [ %-2s] | %-3s|%-14s|%-14s|%-14s|%-32s|%-8s|%s\n' "$i" "$TAGMARK" "${SPLITTAGS[0]}" "$(date --iso-8601 --date="@${SPLITTAGS[1]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[2]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[3]}" 2> /dev/null)" "${SPLITTAGS[4]}" "${SPLITTAGS[5]}" "${SPLITTAGS[6]}"
+#	echo "  $i		${TAGSARRAY[$i]}"  "${SPLITTAGS[1]}"
+    done
+}
+
+# Generate LDIF to update RFID tags
+# Parameter 1: User DN
+# Parameter 2: array of valid tags
+# output: LDIF data to be submitted to LDAP server
+ldiftags()
+{
+    echo "dn: $1"
+    echo 'ChangeType: modify'
+    echo 'delete: x-hsbxl-RFIDid'
+    # BUG: The rest of this function should be skipped in case the user deletes all his/her tags
+    printf '%s\nChangeType: modify\nadd: x-hsbxl-RFIDid\n' '-'
+    shift
+    local ARR=( "$@" )
+    local i
+    for (( i=0 ; i<${#ARR[@]} ; i++ )) do 
+	test -n "${ARR[$i]}" && printf 'x-hsbxl-RFID: %s\n' "${ARR[$i]}"
+    done
+}
+
+# Change password for user
+# Parameter 1: LDAP server to use
+# Parameter 2: User name
+# Parameter 3: password for specified DN
+ldap_password()
+{
+    test -z "$1" && die "Specify LDAP server to use"
+    test -z "$2" && die "Specify user name"
+    local USERDN="uid=$2,ou=users,$BASEDN"
+    ldappasswd -H "ldap://$1" -x -D "$USERDN" -W -S
+}
+
 # Manage user tags
 # Parameter 1: LDAP server to use
 # Parameter 2: username
@@ -127,19 +169,32 @@ managetags()
     test -z "$1" && die "Specify LDAP server to use"
     test -z "$2" && die "Specify user name"
     test -z "$3" && die "Specify password for account '$2'"
+    local USERDN="uid=$2,ou=users,$BASEDN"
+    TAGSARRAY=( $(dumpusertags "$1" "$USERDN" "$3" ) )
+    OLDDATAHASH="$( md5sum <<< "${TAGSARRAY[*]}" )" # To ask if the user want to save the data
 #    tput smcup
 #    clear
-    TAGSARRAY=( $(dumpusertags "$1" "uid=$2,ou=users,$BASEDN" "$3" ) )
-    printf "Index|Scanned|ver.|Createtime    |Validity start|Validity end  |Tag hash                        |Status  |Nickname\n"
-    for (( i=0 ; i<${#TAGSARRAY[@]} ; i++ )) do 
-	for (( j=1 ; j<8 ; j++ )) do 
-	    SPLITTAGS[$(( $j - 1 ))]="$( cut -d ';' -f $j <<< "${TAGSARRAY[$i]}" )"
-	    test -z "${SPLITTAGS[$(( $j - 1 ))]}" && SPLITTAGS[$(( $j - 1 ))]=0
-	done
-	printf '  %-3s| [ %-2s] | %-3s|%-14s|%-14s|%-14s|%-32s|%-8s|%s\n' "$i" 0 "${SPLITTAGS[0]}" "$(date --iso-8601 --date="@${SPLITTAGS[1]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[2]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[3]}" 2> /dev/null)" "${SPLITTAGS[4]}" "${SPLITTAGS[5]}" "${SPLITTAGS[6]}"
-#	echo "  $i		${TAGSARRAY[$i]}"  "${SPLITTAGS[1]}"
+    while true; do
+	case "$LOCALCOMMAND" in
+	'q'|'Q')
+	    exit
+	    ;;
+	'c'|'C')
+	    unset LOCALCOMMAND
+	    ldiftags "$USERDN" "${TAGSARRAY[@]}"
+	    ;;
+	'd'|'D')
+	    unset LOCALCOMMAND
+	    test -z "$LOCALPARAMETER" && read -p 'Specify tag index to delete: ' LOCALPARAMETER
+	    test -n "$LOCALPARAMETER" && TAGSARRAY["$LOCALPARAMETER"]=''
+	    ;;
+	*)
+	    friendlyusertags "$TAGGEDENTRY" "${TAGSARRAY[@]}"
+	    echo
+	    read -p "Actions: (a)dd tag, (d)elete tag, (s)can tag, (e)dit tag, (c)ommit, (q)uit :" LOCALCOMMAND LOCALPARAMETER
+	    ;;
+	esac
     done
-#    read
 #    tput rmcup
 }
 
@@ -194,6 +249,11 @@ case "$1" in
 	;;
     'debugfunc')
 	dumpusertags "$LDAPSERVER" "$2" "$3" "$4" "$5" "$6"
+	;;
+    'password')
+	SCRIPT_USERNAME="$2"
+	test -z "$SCRIPT_USERNAME" && read -p 'Username: ' SCRIPT_USERNAME
+	ldap_password "$LDAPSERVER"  "$SCRIPT_USERNAME"
 	;;
     'gettaghash')
 	gettaghash
