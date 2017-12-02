@@ -135,16 +135,13 @@ friendlyusertags()
 # output: LDIF data to be submitted to LDAP server
 ldiftags()
 {
-    echo "dn: $1"
-    echo 'ChangeType: modify'
-    echo 'delete: x-hsbxl-RFIDid'
-    # BUG: The rest of this function should be skipped in case the user deletes all his/her tags
-    printf '%s\nChangeType: modify\nadd: x-hsbxl-RFIDid\n' '-'
+    local DN="$1"
     shift
     local ARR=( "$@" )
     local i
+    printf 'dn: %s\nchangetype: modify\ndelete: x-hsbxl-RFIDid\n' "$DN"
     for (( i=0 ; i<${#ARR[@]} ; i++ )) do 
-	test -n "${ARR[$i]}" && printf 'x-hsbxl-RFID: %s\n' "${ARR[$i]}"
+	test -n "${ARR[$i]}" && printf '\ndn: %s\nchangetype: modify\nadd: x-hsbxl-RFIDid\nx-hsbxl-RFIDid: %s\n' "$DN" "${ARR[$i]}"
     done
 }
 
@@ -169,33 +166,87 @@ managetags()
     test -z "$1" && die "Specify LDAP server to use"
     test -z "$2" && die "Specify user name"
     test -z "$3" && die "Specify password for account '$2'"
-    local USERDN="uid=$2,ou=users,$BASEDN"
+    local i SCANNEDTAG USERDN="uid=$2,ou=users,$BASEDN"
     TAGSARRAY=( $(dumpusertags "$1" "$USERDN" "$3" ) )
     OLDDATAHASH="$( md5sum <<< "${TAGSARRAY[*]}" )" # To ask if the user want to save the data
 #    tput smcup
 #    clear
     while true; do
 	case "$LOCALCOMMAND" in
-	'q'|'Q')
+	'q'|'Q') # Quit command
+	    if [ "$OLDDATAHASH" != "$( md5sum <<< "${TAGSARRAY[*]}" )" ]; then
+		read -n 1 -r -p "Data changed. Do you want to commit to LDAP server (y/n)? [N]: " COMMITYESNO
+		test "$COMMITYESNO" = 'Y' -o "$COMMITYESNO" = 'y' && ldiftags "$USERDN" "${TAGSARRAY[@]}" #| ldapadd -c -h "$1" -D "$USERDN" -w "$3"
+	    fi
+#	    tput rmcup
 	    exit
 	    ;;
-	'c'|'C')
+	'c'|'C') # Commit command
 	    unset LOCALCOMMAND
-	    ldiftags "$USERDN" "${TAGSARRAY[@]}"
+	    if [ "$OLDDATAHASH" != "$( md5sum <<< "${TAGSARRAY[*]}" )" ]; then
+		ldiftags "$USERDN" "${TAGSARRAY[@]}" | ldapadd -c -h "$1" -D "$USERDN" -w "$3"
+		test $? -eq 0 && OLDDATAHASH="$( md5sum <<< "${TAGSARRAY[*]}" )" # To ask if the user want to save the data
+	    else
+		echo 'There are no changes to commit'
+	    fi
 	    ;;
-	'd'|'D')
+	'd'|'D') # Delete command
 	    unset LOCALCOMMAND
 	    test -z "$LOCALPARAMETER" && read -p 'Specify tag index to delete: ' LOCALPARAMETER
 	    test -n "$LOCALPARAMETER" && TAGSARRAY["$LOCALPARAMETER"]=''
+	    unset LOCALPARAMETER
+	    ;;
+	'e'|'E') # Edit command
+	    unset LOCALCOMMAND
+	    test -z "$LOCALPARAMETER" && read -p 'Specify tag index to edit: ' LOCALPARAMETER
+#	    read -p "Subactions: validity (s)tart, validity (e)nd, tag stat(u)s, (n)ickname, (q)uit :" LOCALSUBCOMMAND LOCALSUBPARAMETER
+#	    while true; do
+#		case "$LOCALSUBCOMMAND" in
+#		    's'|'S') # Validity start
+#			test -z "$LOCALSUBPARAMETER" && read -p 'Specify validity start date (YYYY-MM-DD): ' LOCALSUBPARAMETER
+#		    ;;
+#		    'e'|'E') # Validity end
+#			test -z "$LOCALSUBPARAMETER" && read -p 'Specify validity end date (YYYY-MM-DD): ' LOCALSUBPARAMETER
+#		    ;;
+#		    'u'|'U') # Tag status
+#			test -z "$LOCALSUBPARAMETER" && read -p 'Specify tag status: ' LOCALSUBPARAMETER
+#		    ;;
+#		    'n'|'N') # Nickname
+#			test -z "$LOCALSUBPARAMETER" && read -p 'Specify name to be spoken (keep empty for silence): ' LOCALSUBPARAMETER
+#		    ;;
+#		    *)
+#		    break
+#		    ;;
+#		esac
+#	    done
+	    echo "TODO: this is non functional at the moment."
+	    unset LOCALPARAMETER LOCALSUBCOMMAND LOCALSUBPARAMETER
+	    ;;
+	'a'|'A') # Add command
+	    unset LOCALCOMMAND
+	    test -z "$SCANNEDTAG" && SCANNEDTAG="$(gettaghash)"
+	    TAGSARRAY[${#TAGSARRAY[@]}]="v1;$(date '+%s');$(date '+%s');;$SCANNEDTAG;;$2"
+	    unset LOCALPARAMETER
+	    ;;
+	's'|'S') # Scan tag command
+	    unset LOCALCOMMAND TAGGEDENTRY
+	    SCANNEDTAG="$(gettaghash)"
+	    for (( i=0 ; i<${#TAGSARRAY[@]} ; i++ )) do 
+		if [ "$( cut -d ';' -f 5 <<< "${TAGSARRAY[$i]}")" = "$SCANNEDTAG" ]; then
+		    TAGGEDENTRY="$i"
+		    break
+		fi
+	    test -z "$TAGGEDENTRY" && TAGGEDENTRY='NOTFOUND'
+	    done
 	    ;;
 	*)
 	    friendlyusertags "$TAGGEDENTRY" "${TAGSARRAY[@]}"
 	    echo
+	    test "$TAGGEDENTRY" = 'NOTFOUND' && printf "Tag '%s' not found.\n" "$SCANNEDTAG"
 	    read -p "Actions: (a)dd tag, (d)elete tag, (s)can tag, (e)dit tag, (c)ommit, (q)uit :" LOCALCOMMAND LOCALPARAMETER
 	    ;;
 	esac
     done
-#    tput rmcup
 }
 
 # Dump a flat text file for the access controller
@@ -253,7 +304,7 @@ case "$1" in
     'password')
 	SCRIPT_USERNAME="$2"
 	test -z "$SCRIPT_USERNAME" && read -p 'Username: ' SCRIPT_USERNAME
-	ldap_password "$LDAPSERVER"  "$SCRIPT_USERNAME"
+	ldap_password "$LDAPSERVER" "$SCRIPT_USERNAME"
 	;;
     'gettaghash')
 	gettaghash
