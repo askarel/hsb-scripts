@@ -120,7 +120,7 @@ friendlyusertags()
     printf "Index|Scanned|ver.|Createtime    |Validity start|Validity end  |Tag hash                        |Status  |Nickname\n"
     for (( i=0 ; i<${#ARR[@]} ; i++ )) do 
 	for (( j=1 ; j<8 ; j++ )) do 
-	test -n "$INDEX" -a "$i" == "$INDEX" && TAGMARK='>' || TAGMARK=''
+	    test -n "$INDEX" -a "$i" == "$INDEX" && TAGMARK='>' || TAGMARK=''
 	    SPLITTAGS[$(( $j - 1 ))]="$( cut -d ';' -f $j <<< "${ARR[$i]}" )"
 	    test -z "${SPLITTAGS[$(( $j - 1 ))]}" && SPLITTAGS[$(( $j - 1 ))]=0
 	done
@@ -199,27 +199,43 @@ managetags()
 	'e'|'E') # Edit command
 	    unset LOCALCOMMAND
 	    test -z "$LOCALPARAMETER" && read -p 'Specify tag index to edit: ' LOCALPARAMETER
-#	    read -p "Subactions: validity (s)tart, validity (e)nd, tag stat(u)s, (n)ickname, (q)uit :" LOCALSUBCOMMAND LOCALSUBPARAMETER
-#	    while true; do
-#		case "$LOCALSUBCOMMAND" in
+	    for (( j=1 ; j<8 ; j++ )) do # Explode tag line in sub-elements
+		EDITTAG[$(( $j - 1 ))]="$( cut -d ';' -f $j <<< "${TAGSARRAY[$LOCALPARAMETER]}" )"
+	    done
+	    echo "TODO: this is non functional at the moment."
+	    while true; do
+		case "$LOCALSUBCOMMAND" in
 #		    's'|'S') # Validity start
+#			unset LOCALSUBCOMMAND
 #			test -z "$LOCALSUBPARAMETER" && read -p 'Specify validity start date (YYYY-MM-DD): ' LOCALSUBPARAMETER
-#		    ;;
+#			;;
 #		    'e'|'E') # Validity end
+#			unset LOCALSUBCOMMAND
 #			test -z "$LOCALSUBPARAMETER" && read -p 'Specify validity end date (YYYY-MM-DD): ' LOCALSUBPARAMETER
 #		    ;;
 #		    'u'|'U') # Tag status
+#			unset LOCALSUBCOMMAND
 #			test -z "$LOCALSUBPARAMETER" && read -p 'Specify tag status: ' LOCALSUBPARAMETER
 #		    ;;
-#		    'n'|'N') # Nickname
-#			test -z "$LOCALSUBPARAMETER" && read -p 'Specify name to be spoken (keep empty for silence): ' LOCALSUBPARAMETER
-#		    ;;
-#		    *)
-#		    break
-#		    ;;
-#		esac
-#	    done
-	    echo "TODO: this is non functional at the moment."
+		    'n'|'N') # Nickname
+			unset LOCALSUBCOMMAND
+			test -z "$LOCALSUBPARAMETER" && read -p 'Specify name to be spoken (keep empty for silence): ' LOCALSUBPARAMETER
+			EDITTAG[6]="$LOCALSUBPARAMETER"
+		    ;;
+		    'a'|'A') # Abort
+			unset LOCALSUBCOMMAND
+			break
+			;;
+		    'o'|'O') # Update tag data and quit
+			unset LOCALSUBCOMMAND
+			TAGSARRAY[$LOCALPARAMETER]="${EDITTAG[0]};${EDITTAG[1]};${EDITTAG[2]};${EDITTAG[3]};${EDITTAG[4]};${EDITTAG[5]};${EDITTAG[6]}"
+			break
+			;;
+		    *)
+		        read -p "Subactions: validity (s)tart, validity (e)nd, tag stat(u)s, (n)ickname, (a)bort, (o)k :" LOCALSUBCOMMAND LOCALSUBPARAMETER
+			;;
+		esac
+	    done
 	    unset LOCALPARAMETER LOCALSUBCOMMAND LOCALSUBPARAMETER
 	    ;;
 	'a'|'A') # Add command
@@ -253,7 +269,6 @@ managetags()
 # Parameter 1: LDAP server to use
 # Parameter 2: access controller DN
 # Parameter 3: access controller password
-# Parameter 4: access controller group
 # Return: text list of allowed tags
 dumpflat()
 {
