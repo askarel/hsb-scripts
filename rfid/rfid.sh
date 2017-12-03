@@ -202,20 +202,33 @@ managetags()
 	    for (( j=1 ; j<8 ; j++ )) do # Explode tag line in sub-elements
 		EDITTAG[$(( $j - 1 ))]="$( cut -d ';' -f $j <<< "${TAGSARRAY[$LOCALPARAMETER]}" )"
 	    done
-	    echo "TODO: this is non functional at the moment."
 	    while true; do
 		case "$LOCALSUBCOMMAND" in
-#		    's'|'S') # Validity start
-#			unset LOCALSUBCOMMAND
-#			test -z "$LOCALSUBPARAMETER" && read -p 'Specify validity start date (YYYY-MM-DD): ' LOCALSUBPARAMETER
-#			;;
-#		    'e'|'E') # Validity end
-#			unset LOCALSUBCOMMAND
-#			test -z "$LOCALSUBPARAMETER" && read -p 'Specify validity end date (YYYY-MM-DD): ' LOCALSUBPARAMETER
-#		    ;;
+		    's'|'S') # Validity start
+			unset LOCALSUBCOMMAND
+			test -z "$LOCALSUBPARAMETER" && read -p 'Specify validity start date (YYYY-MM-DD): ' LOCALSUBPARAMETER
+			if [ -n "$LOCALSUBPARAMETER" ]; then
+				SUBDATE="$(date '+%s' -d "$LOCALSUBPARAMETER" )"
+				test -n "$SUBDATE" && EDITTAG[2]="$SUBDATE"
+			else
+			    echo "Start date unchanged"
+			fi
+			;;
+		    'e'|'E') # Validity end
+			unset LOCALSUBCOMMAND
+			test -z "$LOCALSUBPARAMETER" && read -p 'Specify validity end date (YYYY-MM-DD): ' LOCALSUBPARAMETER
+			if [ -n "$LOCALSUBPARAMETER" ]; then
+				SUBDATE="$(date '+%s' -d "$LOCALSUBPARAMETER" )"
+				test -n "$SUBDATE" && EDITTAG[3]="$SUBDATE"
+			else
+			    echo "Expiration date removed"
+			    EDITTAG[3]=""
+			fi
+		    ;;
 #		    'u'|'U') # Tag status
 #			unset LOCALSUBCOMMAND
 #			test -z "$LOCALSUBPARAMETER" && read -p 'Specify tag status: ' LOCALSUBPARAMETER
+#			echo "TODO: this is non functional at the moment."
 #		    ;;
 		    'n'|'N') # Nickname
 			unset LOCALSUBCOMMAND
