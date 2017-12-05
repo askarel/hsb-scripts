@@ -9,9 +9,9 @@
 dn: olcDatabase={1}mdb,cn=config
 changetype: modify
 delete: olcAccess
-olcAccess: {0}to attrs=userPassword by self write by anonymous auth by * none
-olcAccess: {1}to attrs=shadowLastChange by self write by * read
-olcAccess: {2}to * by * read
+#olcAccess: {0}to attrs=userPassword by self write by anonymous auth by * none
+#olcAccess: {1}to attrs=shadowLastChange by self write by * read
+#olcAccess: {2}to * by * read
 -
 # Password access
 add: olcAccess
@@ -20,10 +20,10 @@ olcAccess: {0}to attrs=userPassword
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by anonymous auth 
-  by * none
+  by * auth
 -
 add: olcAccess
-olcAccess: {1}to attrs=shadowLastChange
+olcAccess: {1}to attrs=shadowLastChange,loginShell,gecos
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
@@ -37,7 +37,7 @@ olcAccess: {2}to attrs=x-hsbxl-RFIDid
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by dn.subtree="ou=access controllers,$BASEDN" read
 -
-# User-writeable data
+# User-writeable data (TO REWORK FOR PRIVACY)
 add: olcAccess
 olcAccess: {3}to attrs=x-hsbxl-pgpPubKey,x-hsbxl-sshPubKey,mail,homePhone,carLicense,jpegPhoto,homePostalAddress,mobile,mobileTelephoneNumber,photo 
   by self write
