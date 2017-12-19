@@ -21,13 +21,14 @@
 
 # CONFIG AREA ##############################################
 
-READER="ACS ACR122U PICC Interface 00 00"
-LDAPSERVER='vps318480.hsbxl.be'
-BASEDN='dc=hsbxl,dc=be'
+readonly READER="ACS ACR122U PICC Interface 00 00"
+readonly LDAPSERVER='vps318480.hsbxl.be'
+readonly BASEDN='dc=hsbxl,dc=be'
+readonly TAGFILE='/var/local/rfidpoll.txt'
 
 #############################################################
-ME="$(basename $0)"
-PAUSEFILE="/tmp/RFID.register"
+readonly ME="$(basename $0)"
+readonly PAUSEFILE="/tmp/RFID.register"
 
 # Function to call when we bail out
 # Parameter 1: text to output
@@ -289,7 +290,7 @@ dumpflat()
     test -z "$2" && die "Specify access controller DN (example: uid=door1,ou=machines,dc=hsbxl,dc=be)"
     test -z "$3" && die "Specify password for account '$2'"
     SEARCHFILTER="(&(objectClass=groupOfNames))"
-#    echo "searchfilter: $SEARCHFILTER"
+#    echo "searchfilter: $SEARCHFILTER '$1' '$2' '$3'"
     ldapsearch -o ldif-wrap=no -x -h "$1" -D "$2" -w "$3" -b "cn=user_tags,$2" -LLL "$SEARCHFILTER" | grep '^member' | cut -d ' ' -f 2- \
 	| while read line; do
 	    ldapsearch -o ldif-wrap=no -x -h "$1" -D "$2" -w "$3" -b "cn=Members,ou=groups,$BASEDN" -LLL member | grep '^member' | cut -d ' ' -f 2- \
@@ -307,6 +308,24 @@ formattoV1()
 	test "$(cut -d ';' -f 1 <<< "$line3" )" == 'v1' && \
 	    awk -e  'BEGIN {FS=";"; OFS="\t" ;} $3~/^[0-9]+$/ && ( $4~/^[0-9]+$/ || $4~/^$/ ) { if (!$4) {print $5,$3,"NULL","0","0",$7} else {print $5,$3,$4,"0","0",$7 } }' <<< "$line3"
     done
+}
+
+# Update the flat text file for the access controller
+# Parameter 1: LDAP server to use
+# Parameter 2: access controller DN
+# Parameter 3: access controller password
+# Output: none, file updated on success
+run_cron()
+{   # Start with making a backup copy
+    test -f '/root/rfidpoll.txt.original' || cp "$TAGFILE" '/root/rfidpoll.txt.original'
+    TEMPFILE="$(mktemp /tmp/$ME.XXXXXXXXXXXXXXXXXXX)"
+    dumpflat "$1" "$2" "$3" | formattoV1 > "$TEMPFILE"
+    if [ "$(md5sum <<< "$TAGFILE")" != "$(md5sum <<< "$TEMPFILE")" -a $(cat "$TEMPFILE" | wc -l) -ge 1 ]; then
+	test -f "$TAGFILE.OLD" && rm "$TAGFILE.OLD"
+	test -f "$TAGFILE.OLD" && mv "$TAGFILE" "$TAGFILE.OLD"
+	cp "$TEMPFILE" "$TAGFILE"
+    fi 
+    rm -f "$TEMPFILE"
 }
 
 test -x "$(which ldapsearch)" || die "ldapsearch not found or not installed (apt-get install ldapscripts)"
@@ -338,6 +357,26 @@ case "$1" in
 	;;
     'gettaghash')
 	gettaghash
+	;;
+    'cron')
+	case "$2" in
+	    'run') # Just don't do shit if the required parameters are empty
+		test -n "$3" -a -n "$4" -a -n "$5" && run_cron "$3" "$4" "$5"
+		;;
+	    'install') # Reinstallation will just overwrite the cronjob file: that's okay.
+		test -z "$3" && die "Specify LDAP server to use"
+		test -z "$4" && die "Specify access controller DN (example: uid=door1,ou=machines,dc=hsbxl,dc=be)"
+		test -z "$5" && die "Specify password for account '$4'"
+		# Run every 10 minutes
+		echo "*/10 *	* * * root [-x \"$(realpath "$0")\" ] && $(realpath "$0") cron run \"$3\" \"$4\" \"$5\"" #> "/etc/cron.d/$ME"
+		;;
+	    'uninstall')
+		rm "/etc/cron.d/$ME"
+		;;
+	    *)
+		die 'Syntax: $ME cron [install|run|uninstall]'
+		;;
+	esac
 	;;
     *)
 	helptext
