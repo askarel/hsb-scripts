@@ -322,7 +322,7 @@ run_cron()
     dumpflat "$1" "$2" "$3" | formattoV1 > "$TEMPFILE"
     if [ "$(md5sum <<< "$TAGFILE")" != "$(md5sum <<< "$TEMPFILE")" -a $(cat "$TEMPFILE" | wc -l) -ge 1 ]; then
 	test -f "$TAGFILE.OLD" && rm "$TAGFILE.OLD"
-	test -f "$TAGFILE.OLD" && mv "$TAGFILE" "$TAGFILE.OLD"
+	test ! -f "$TAGFILE.OLD" && mv "$TAGFILE" "$TAGFILE.OLD"
 	cp "$TEMPFILE" "$TAGFILE"
     fi 
     rm -f "$TEMPFILE"
@@ -368,7 +368,7 @@ case "$1" in
 		test -z "$4" && die "Specify access controller DN (example: uid=door1,ou=machines,dc=hsbxl,dc=be)"
 		test -z "$5" && die "Specify password for account '$4'"
 		# Run every 10 minutes
-		echo "*/10 *	* * * root [-x \"$(realpath "$0")\" ] && $(realpath "$0") cron run \"$3\" \"$4\" \"$5\"" #> "/etc/cron.d/$ME"
+		echo "*/10 *	* * * root [-x \"$(realpath "$0")\" ] && $(realpath "$0") cron run \"$3\" \"$4\" \"$5\"" > "/etc/cron.d/$ME"
 		;;
 	    'uninstall')
 		rm "/etc/cron.d/$ME"
