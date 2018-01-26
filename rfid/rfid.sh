@@ -118,14 +118,14 @@ friendlyusertags()
     shift
     local ARR=( "$@" )
     local i j
-    printf "Index|Scanned|ver.|Createtime    |Validity start|Validity end  |Tag hash                        |Status  |Nickname\n"
+    printf "Index|Scanned|ver.|Createtime    |Validity start|Validity end  |Tag hash                        |Status|Nickname\n"
     for (( i=0 ; i<${#ARR[@]} ; i++ )) do 
 	for (( j=1 ; j<8 ; j++ )) do 
 	    test -n "$INDEX" -a "$i" == "$INDEX" && TAGMARK='>' || TAGMARK=''
 	    SPLITTAGS[$(( $j - 1 ))]="$( cut -d ';' -f $j <<< "${ARR[$i]}" )"
 	    test -z "${SPLITTAGS[$(( $j - 1 ))]}" && SPLITTAGS[$(( $j - 1 ))]=0
 	done
-	test -n "${ARR[$i]}" && printf '  %-3s| [ %-2s] | %-3s|%-14s|%-14s|%-14s|%-32s|%-8s|%s\n' "$i" "$TAGMARK" "${SPLITTAGS[0]}" "$(date --iso-8601 --date="@${SPLITTAGS[1]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[2]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[3]}" 2> /dev/null)" "${SPLITTAGS[4]}" "${SPLITTAGS[5]}" "${SPLITTAGS[6]}"
+	test -n "${ARR[$i]}" && printf '  %-3s| [ %-2s] | %-3s|%-14s|%-14s|%-14s|%-32s|%-6s|%s\n' "$i" "$TAGMARK" "${SPLITTAGS[0]}" "$(date --iso-8601 --date="@${SPLITTAGS[1]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[2]}" 2> /dev/null)" "$(date --iso-8601 --date="@${SPLITTAGS[3]}" 2> /dev/null)" "${SPLITTAGS[4]}" "${SPLITTAGS[5]}" "${SPLITTAGS[6]}"
 #	echo "  $i		${TAGSARRAY[$i]}"  "${SPLITTAGS[1]}"
     done
 }
@@ -320,7 +320,7 @@ run_cron()
     test -f '/root/rfidpoll.txt.original' || cp "$TAGFILE" '/root/rfidpoll.txt.original'
     TEMPFILE="$(mktemp /tmp/$ME.XXXXXXXXXXXXXXXXXXX)"
     dumpflat "$1" "$2" "$3" | formattoV1 > "$TEMPFILE"
-    if [ "$(md5sum <<< "$TAGFILE")" != "$(md5sum <<< "$TEMPFILE")" -a $(cat "$TEMPFILE" | wc -l) -ge 1 ]; then
+    if [ "$(sort < "$TAGFILE" | md5sum)" != "$(sort < "$TEMPFILE" | md5sum)" -a $(cat "$TEMPFILE" | wc -l) -ge 1 ]; then
 	test -f "$TAGFILE.OLD" && rm "$TAGFILE.OLD"
 	test ! -f "$TAGFILE.OLD" && mv "$TAGFILE" "$TAGFILE.OLD"
 	cp "$TEMPFILE" "$TAGFILE"
@@ -368,7 +368,7 @@ case "$1" in
 		test -z "$4" && die "Specify access controller DN (example: uid=door1,ou=machines,dc=hsbxl,dc=be)"
 		test -z "$5" && die "Specify password for account '$4'"
 		# Run every 10 minutes
-		echo "*/10 *	* * * root [-x \"$(realpath "$0")\" ] && $(realpath "$0") cron run \"$3\" \"$4\" \"$5\"" > "/etc/cron.d/$ME"
+		echo "*/10 *	* * * root test -x $(realpath "$0")  && $(realpath "$0") cron run \"$3\" \"$4\" \"$5\"" > "/etc/cron.d/$ME"
 		;;
 	    'uninstall')
 		rm "/etc/cron.d/$ME"
