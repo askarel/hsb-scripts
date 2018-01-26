@@ -34,9 +34,3 @@ INSERT INTO hsb_groups (shortdesc, fulldesc) VALUES
 			('cohabitants','People unrelated to the hackerspace, but living in the same building'),
 			('guests','Guests, staying/using the space for a few days, do not want to be members for whatever reason');
 
-INSERT INTO tag_states (shortdesc, fulldesc) VALUES
-			('ACTIVE', 'Tag is active'),
-			('INACTIVE', 'Tag is in the reserve drawer'),
-			('LOST','The tag is lost in entropy'),
-			('STOLEN','The tag has been stolen. Raise an alarm if it appears'),
-			('DESTROYED','The tag has been obliterated');
