@@ -94,6 +94,18 @@ templatecat()
     test -f "$myfooter" && cat "$myfooter" | envsubst
 }
 
+# Return the DN of specified user
+# Parameter 1: LDAP server
+# Parameter 2: Bind DN
+# Parameter 3: Password for bind DN
+# Parameter 4: Base DN
+# Parameter 5: Username to search for
+# Output: list of existing DNs. Nothing if no match.
+ldap_getUserDN()
+{
+    ldapsearch -o ldif-wrap=no -LLL -h "$1" -D "$2" -w "$3" -b "$4" "(uid=$5)" dn
+}
+
 # NEED REPAIR
 # This function is a fucking mess ! Being clever is too much. :-(
 # Once we go full LDAP, this will disappear: add user from LDAP server
@@ -157,7 +169,11 @@ addperson()
 }
 
 # Attempt to rewrite above function in a cleaner way.
-addperson2()
+# Create a new LDAP user/member
+# Parameter 1: user DN to query/update the LDAP
+# Parameter 2: Password for above user
+# Parameter 3: User DN to create. If the string does not look like a DN, transform it into one.
+addperson2ldap()
 {
     local REQUESTED_FIELDS=(lang firstname name nickname phonenumber emailaddress birthdate openpgpkeyid machinestate_data)
     echo
@@ -187,7 +203,7 @@ function lookup_person_id()
 # Parameter 1: user to modify (e-mail address or nickname)
 # Parameter 2: name of field to modify
 # Parameter 3: field data
-# Once we go full LDAP, this will disappear: add user from LDAP server
+# Once we go full LDAP, this will disappear: modify user from phpldapadmin
 modifyperson()
 {
     local SELECTED_FIELD
@@ -216,13 +232,20 @@ changepassword()
     local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
     local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
     local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
-
     local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
     local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
-
     if runsql "update person set passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH' where id=$PERSONID" ; then
 	templatecat "$MYLANG" "$ME.sh_person_changepassword.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
     fi
+}
+
+# Send a new password for specified user
+# Parameter 1: user DN to query the LDAP
+# Parameter 2: Password for above user
+# Parameter 3: User DN to change password for. If the string does not look like a DN, 
+changeLdapPassword()
+{
+    echo
 }
 
 # Re-send the payment infos for specified user
@@ -549,34 +572,6 @@ get_machine_state()
     echo
 }
 
-############################################# <RFID> #############################################
-
-# Set the RFID tag hash for specified DN
-# PArameter 1: User DN
-# Parameter 2: tag data
-set_rfid_tag()
-{
-    echo
-}
-
-# Get the RFID tag hash list for specified DN
-# PArameter 1: User DN
-# output: all tags from specified user
-get_rfid_tag()
-{
-    echo
-}
-
-
-# Get the RFID tag hash list for specified access control DN
-# PArameter 1: Access control DN
-# output: all valid tags for that access controller
-get_rfid_tags()
-{
-    echo
-}
-
-############################################# </RFID> #############################################
 
 ############################################# <MIGRATION> #############################################
 # TO DELETE
@@ -625,6 +620,7 @@ ldapexport()
 	echo "objectclass: inetOrgPerson"
 	echo "objectclass: posixAccount"
 	echo "objectclass: top"
+	echo "objectclass: x-hsbxl-person"
 	echo "sn: $NAME"
 	echo "uid: $NICKNAME"
 	echo "userpassword: $LDAPPASS"
