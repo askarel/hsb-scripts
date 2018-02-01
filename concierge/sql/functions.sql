@@ -51,7 +51,7 @@ end;;
 -- Create the internal account
 -- Return account ID in case of success
 DROP procedure IF EXISTS intacc_create;;
-create procedure intacc_create (ACCNTTYPE char(20), OWNER_DN char(255), REF_DN char(255))
+create procedure intacc_create (ACCNTTYPE char(20), OWNER__DN char(255), REF__DN char(255))
 begin
  DECLARE INTERNALACCOUNT char(20);
  set INTERNALACCOUNT:=(select structuredcomm from internal_accounts where account_type is null limit 1);
@@ -59,14 +59,14 @@ begin
     then 
 	signal SQLSTATE '45000'	SET MESSAGE_TEXT = 'No spare accound IDs found! Run intacc_provision() first!';
     else
-	update internal_accounts set in_use=1, account_type=ACCNTTYPE, owner_dn=OWNER_DN, created_on=CURRENT_TIMESTAMP, ref_dn=REF_DN where structuredcomm like INTERNALACCOUNT;
+	update internal_accounts set in_use=1, account_type=ACCNTTYPE, owner_dn=OWNER__DN, created_on=CURRENT_TIMESTAMP, ref_dn=REF__DN where structuredcomm like INTERNALACCOUNT;
 	select INTERNALACCOUNT;
  END IF;
 end;;
 
 -- Preload an amount on the internal account
 DROP PROCEDURE IF EXISTS intacc_preload;;
-create procedure intacc_preload (accid char(20), POSID char(50), AMOUNT decimal(15,4), CURRENCY char(5), Message char(255))
+create procedure intacc_preload (accid char(20), AMOUNT2LOAD decimal(15,4), CURRENCY char(5), MSG char(255))
 begin
  DECLARE TRANS_ID char(255);
  DECLARE INTERNALACCOUNT char(20);
@@ -75,15 +75,15 @@ begin
     then 
 	signal SQLSTATE '45001'	SET MESSAGE_TEXT = 'Specified internal account ID does not exist.';
     else
-	SET TRANS_ID:=concat ('INTERNAL/', accid, '/', POSID, '/', sha1(concat (current_timestamp(), Message)) );
-	insert into moneymovements (date_val, date_account, amount, currency, other_account, this_account, message, transaction_id) VALUES 
-                        	    (curdate(), curdate(), concat ('-', abs (AMOUNT)), CURRENCY, POSID, accid, Message, TRANS_ID);
+	SET TRANS_ID:=concat ('INTERNAL/', accid, '/', current_user(), '/', sha1(concat (current_timestamp(), Message)) );
+	insert into moneymovements (date_val, date_account, amount, currency, this_account, message, transaction_id) VALUES 
+                        	    (curdate(), curdate(), concat ('-', abs (AMOUNT2LOAD)), CURRENCY, accid, MSG, TRANS_ID);
  END IF;
 end;;
 
 -- Consume an internal account
 DROP PROCEDURE IF EXISTS intacc_consume;;
-create procedure intacc_consume (accid char(20), POSID char(50), AMOUNT2PAY decimal(15,4), CURRENCY char(5), MSG char(255))
+create procedure intacc_consume (accid char(20), AMOUNT2PAY decimal(15,4), CURRENCY char(5), MSG char(255))
 begin
  DECLARE TRANS_ID char(255);
  DECLARE INTERNALACCOUNT char(20);
@@ -101,9 +101,9 @@ begin
 	then 
 	    signal SQLSTATE '45002'	SET MESSAGE_TEXT = 'Cannot pay: not enough money on account.';
 	else
-	    SET TRANS_ID:=concat ('INTERNAL/', accid, '/', POSID, '/', sha1(concat (current_timestamp(), MSG)) );
-	    insert into moneymovements (date_val, date_account, amount, currency, other_account, this_account, message, transaction_id) VALUES 
-                        		(curdate(), curdate(), abs (AMOUNT2PAY), CURRENCY, POSID, accid, MSG, TRANS_ID);
+	    SET TRANS_ID:=concat ('INTERNAL/', accid, '/', current_user(), '/', sha1(concat (current_timestamp(), MSG)) );
+	    insert into moneymovements (date_val, date_account, amount, currency, this_account, message, transaction_id) VALUES 
+                        		(curdate(), curdate(), abs (AMOUNT2PAY), CURRENCY, accid, MSG, TRANS_ID);
 	end if;
  END IF;
 end;;
