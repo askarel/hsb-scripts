@@ -107,6 +107,22 @@ die()
     test -n "$2" && exit $2
 }
 
+# run a SQL command.
+# Parameter 1: SQL request. If it's a valid file, run it's content
+# Parameter 2: if set, do not bail out on error
+# output: tab-separated data
+# exit code 0: request successful
+runsql()
+{
+    test -z "$1" && die "Empty SQL request"
+    local SQPROG='echo'
+    test -f "$1" && SQPROG='cat'
+    if [ -z "$2" ]; then $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  || die "Failed query: '$1'" # Fix your junk !
+		    else $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  2>&1 # We want the error
+    fi
+}
+
+
 # Callback to redraw the screen in case of terminal resize
 redrawscreen()
 {
@@ -701,6 +717,25 @@ while true; do
 		# donation barcode processing
 		
 		# paycard processing
+		BARCODEBALANCE="$(runsql "call hsbprod.intacc_get_balance ('$REPLY')" a )" #"
+		if [ $? -eq 0 ]; then
+		    if [ -e $SALEFILE ]; then # Do the payment
+			SALETOTAL="$(computesaletotal "$SALEFILE" "$CACHEDIR/$BARCODEFILE")"
+			BARCODEMESSAGE="$(runsql "call hsbprod.intacc_consume ('$REPLY', $SALETOTAL, '$CURRENCY', 'zoppas' )" a )" #"
+			if [ $? -eq 0 ]; then
+			    badbarcode "Successfully paid $SALETOTAL $CURRENCY from card $REPLY"
+			    mv "$SALEFILE" "$TODAYDIR/$(date '+%s %N'|md5sum|cut -d ' ' -f 1)-$(md5sum $SALEFILE|cut -d ' ' -f 1).sale"
+			    test -n "$CASHCOMMAND" && $CASHCOMMAND &
+			    unset REPLY
+			else
+			    badbarcode "Payment failure"
+			    unset REPLY
+			fi
+		    else # Check account balance
+			badbarcode "There is $(echo "$BARCODEBALANCE"| cut -f 1) $CURRENCY on account $REPLY." #"
+			unset REPLY
+		    fi
+		fi
 		
 		# When all else fail:
 		test -n "$REPLY" && badbarcode "No idea what to do with barcode '$REPLY'. Try again."
@@ -723,6 +758,9 @@ case "$1" in
     ;;
     "newmain")
 	mainapp
+    ;;
+    "runsql")
+	runsql "$2"
     ;;
     *)
 	oldmain
