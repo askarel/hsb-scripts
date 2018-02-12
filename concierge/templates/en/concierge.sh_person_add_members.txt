@@ -18,12 +18,14 @@ You can give more if you can afford it.
 You *MUST* use the communication string above: it allow us to automate the
 day by day follow up of the financial aspect of the association.
 
-Your membership fee must arrive before $EXPIRYDATE. Past that date, your membership 
-application will be dropped.
+An HSBXL account and a password have been automatically generated for you for 
+HSBXL services, like the trolling page (https://troll.hsbxl.be), our Matrix 
+server (https://ptt.hackerspace.be), the thin client desktops and the elevator 
+RFID tag manager. You can change it at the bar or at the thin client 
+workstations at the electronic lab.
 
-A password has been automatically generated for you for future services. Keep 
-this mail around: since we're hashing your passwords, it cannot be emailed back
-to you.
+Keep this mail around: since we're hashing your passwords, it cannot be emailed
+back to you.
 
 Username: $NICKNAME
 Password: $PASSWORD
