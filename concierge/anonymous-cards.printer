@@ -1,0 +1,15 @@
+b€$STRUCTUREDCOMM
+
+$ORGNAME
+   DRINK TICKET
+
+Initial amount: 
+    $AMOUNT $CURRENCY
+
+This ticket is anonymous
+expires on $EXPDATE.
+
+Message:
+$MESSAGE
+
+
