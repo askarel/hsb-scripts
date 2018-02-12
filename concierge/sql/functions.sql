@@ -75,7 +75,7 @@ begin
     then 
 	signal SQLSTATE '45001'	SET MESSAGE_TEXT = 'Specified internal account ID does not exist.';
     else
-	SET TRANS_ID:=concat ('INTERNAL/', accid, '/', current_user(), '/', sha1(concat (current_timestamp(), Message)) );
+	SET TRANS_ID:=concat ('INTERNAL/', accid, '/', current_user(), '/', sha1(concat (current_timestamp(), MSG)) );
 	insert into moneymovements (date_val, date_account, amount, currency, this_account, message, transaction_id) VALUES 
                         	    (curdate(), curdate(), concat ('-', abs (AMOUNT2LOAD)), CURRENCY, accid, MSG, TRANS_ID);
  END IF;
