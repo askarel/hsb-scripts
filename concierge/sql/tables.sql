@@ -83,10 +83,10 @@ create table if not exists contractors (id int not null auto_increment primary k
 				    );
 
 -- Once we go full LDAP, this will go away
-create table if not exists member_sponsors (id int not null auto_increment primary key,
-				    member_id int not null,
-				    sponsor_id int
-				    );
+-- create table if not exists member_sponsors (id int not null auto_increment primary key,
+--				    member_id int not null,
+--				    sponsor_id int
+--				    );
 
 -- The history of the person state changes
 create table if not exists person_history (id int not null auto_increment primary key,
@@ -130,17 +130,3 @@ create table if not exists expenses (id int not null auto_increment primary key,
 				    flags int, -- should be a bitfield
 				    category int not null, -- should be enum
 				    in_year_seq_no int not null);
-
--- Once we go full LDAP, this will go away
-create table if not exists user_tags (id int not null auto_increment primary key,
-				    owner_id int,
-				    tag_uid char(100),
-				    validitystart timestamp default current_timestamp,
-				    validityend timestamp,
-				    tag_state int);
-
-create table if not exists tag_states (id int not null auto_increment primary key,
-				    shortdesc char(50) unique not null,
-				    fulldesc text
-				    );
-
