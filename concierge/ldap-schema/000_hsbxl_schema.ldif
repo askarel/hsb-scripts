@@ -160,6 +160,25 @@ olcAttributeTypes: ( HSBXLat:24
   NAME 'x-hsbxl-providerDataBlob'
   DESC 'Free-form blob of text or data about the provider'
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 )
+######################################################################################
+olcAttributeTypes: ( HSBXLat:25
+  NAME 'x-hsbxl-padlockDescription'
+  DESC 'Description of the combo lock'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#
+olcAttributeTypes: ( HSBXLat:26
+  NAME 'x-hsbxl-padlockCode'
+  DESC 'Combo lock code'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
+#######################################################################################
+olcAttributeTypes: ( HSBXLat:27
+  NAME 'x-hsbxl-membershipStructComm'
+  DESC 'Membership structured communication. This object is INFORMATIVE ONLY and is NOT AUTHORITATIVE because uniqueness CANNOT be guaranteed. The SQL internal_accounts table contains authoritative data and uses the user DN like a foreign key'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 
+  SINGLE-VALUE )
 #
 #######################################################################################
 olcObjectClasses: ( HSBXLoc:1
@@ -171,7 +190,7 @@ olcObjectClasses: ( HSBXLoc:1
   MAY ( x-hsbxl-RFIDid $ 
         x-hsbxl-membershipRequested $ x-hsbxl-votingRequested $ x-hsbxl-sponsor $ 
         x-hsbxl-socialTariff $ x-hsbxl-sshPubKey $ x-hsbxl-pgpPubKey $ x-hsbxl-machineState $
-        x-hsbxl-machineStateData $ x-hsbxl-textDataBlob $ x-hsbxl-creationDate) )
+        x-hsbxl-machineStateData $ x-hsbxl-textDataBlob $ x-hsbxl-creationDate ) )
 #
 olcObjectClasses: ( HSBXLoc:2
   NAME 'x-hsbxl-structuredcomm'
@@ -186,3 +205,17 @@ olcObjectClasses: ( HSBXLoc:3
   STRUCTURAL
   MUST ( x-hsbxl-providerName )
   MAY ( x-hsbxl-providerUserName $ x-hsbxl-providerPassword $ x-hsbxl-providerDataBlob ) )
+#
+olcObjectClasses: ( HSBXLoc:4
+  NAME 'x-hsbxl-padlock'
+  DESC 'Tumbler Padlock codes'
+  STRUCTURAL
+  MUST ( x-hsbxl-padlockCode )
+  MAY ( x-hsbxl-padlockDescription ) )
+#
+olcObjectClasses: ( HSBXLoc:5
+  NAME 'x-hsbxl-structuredcomm-addon'
+  DESC 'Membership structured communication. This object is INFORMATIVE ONLY and is NOT AUTHORITATIVE because uniqueness CANNOT be guaranteed. The SQL internal_accounts table contains authoritative data and uses the user DN like a foreign key'
+  SUP x-hsbxl-person AUXILIARY
+  MAY ( x-hsbxl-membershipStructComm ) )
+#
