@@ -28,6 +28,12 @@ readonly LDAPSCHEMADIR="$MYDIR/ldap-schema/"
 readonly TEMPLATEDIR="$MYDIR/templates"
 readonly GPGHOME="$MYDIR/.gnupg"
 #readonly DEBUGGING=true
+# Fields required for LDAP server
+declare -A -r LDAP_FIELDS=( [uid]='Nickname/username *' [sn]='Family Name *' [givenname]='First name *' [mail]='Email address *' 
+			[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member *'
+			[x-hsbxl-membershiprequested]='Membership requested #' [x-hsbxl-votingrequested]='Do you want to vote at the general assembly #'
+			[x-hsbxl-socialTariff]='Do you require the social tariff #' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key' )
+declare -A LDAP_REPLY
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -175,9 +181,23 @@ addperson()
 # Parameter 3: User DN to create. If the string does not look like a DN, transform it into one.
 addperson2ldap()
 {
-    local REQUESTED_FIELDS=(lang firstname name nickname phonenumber emailaddress birthdate openpgpkeyid machinestate_data)
     echo
 }
+
+# Ask a bunch of questions to user
+# Parameter 1: *name* of the variable array containing the prompts
+# Parameter 2: *name* of the variable array to fill
+askquestions()
+{
+	declare -A PROMPTS
+	eval "PROMPTS=( \${$1} )"
+	for i in ${PROMPTS[@]} ; do
+#	    echo "\$1[$i]=${LDAP_REPLY[$i]}"
+	    echo "$i"
+#	    echo "${!LDAP_FIELDS[@]}"
+	done
+}
+
 
 # Lookup person ID
 # Parameter 1: nickname or email address
@@ -883,6 +903,16 @@ case "$CASEVAR" in
 	;;
     'accounting/balance')
 	show_account_balance "$3"
+	;;
+
+### Function debugging
+    'debugfunc/')
+	askquestions LDAP_FIELDS LDAP_REPLY
+	for i in ${!LDAP_REPLY[@]} ; do
+	    echo "LDAP_REPLY[$i]=${LDAP_REPLY[$i]}"
+#	    echo "$i"
+#	    echo "${!LDAP_FIELDS[@]}"
+	done
 	;;
 
 ### Catch-all parts: in case of invalid arguments
