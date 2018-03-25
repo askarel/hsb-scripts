@@ -34,7 +34,7 @@ create table if not exists price (id int not null auto_increment primary key,
 				    product_id int not null,
 				    event_id char(40),
 				    price_validfrom date not null,
-				    price_validto date not null,
+				    price_validto date,
 				    price_purchase decimal (15,4) not null,
 				    price_sell decimal (15,4) not null,
 				    FOREIGN KEY(product_id) REFERENCES products(product_id)
