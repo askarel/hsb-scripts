@@ -26,14 +26,47 @@ runsql()
     fi
 }
 
-# This will make a fresh install of the database
+# This will make a fresh install of the database.
+# Can also be used to restore a backup if a file is specified as parameter.
 installzoppas()
 {
-    SQLINSTALL="./zoppas-install.sql"
+    test -z "$1" && SQLINSTALL="./zoppas-install.sql" && echo "This is a fresh install"
+    test -n "$1" && SQLINSTALL="$1" && echo "This is a database restore"
     test -f "$SQLINSTALL" || die "File $SQLINSTALL not found"
     runsql "$SQLINSTALL"
 }
 
+# Perform a backup of the database
+# Parameter 1: destination filename
+db_dump()
+{
+    test -z "$1" && die "Specify destination file for backup"
+    mysqldump -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" --routines --triggers --hex-blob --add-drop-database --add-drop-table --flush-privileges --databases "$SQLDB" > "$1"
+}
+
+# Add a product to the database (CRUDE AND NEEDS REWRITE)
+zoppasnewproduct()
+{
+    read -p "Brief product description (mandatory): " PRODUCT_DESCRIPTION
+    test -z "$PRODUCT_DESCRIPTION" && die "No description given"
+    read -p "Longer description (optional): " LONG_DESCRIPTION
+    read -p "Product category (optional): " PRODUCT_CATEGORY
+    read -p "Initial stock quantity: " PRODUCT_QUANTITY
+    read -p "Barcode identifier: " PRODUCT_BARCODE
+    read -p "Purchasing price: " PURCHASING_PRICE
+    read -p "Default Selling price: " SELLING_PRICE
+    test -z "$PURCHASING_PRICE" && PURCHASING_PRICE='0'
+#    runsql "insert into products (description, shortdescription, category, stock_quantity) VALUES ( '$LONG_DESCRIPTION', '$PRODUCT_DESCRIPTION', '$PRODUCT_CATEGORY', $PRODUCT_QUANTITY )"
+#    runsql "insert into barcodes (product_id, barcode) VALUES ((select max(product_id) from products), '$PRODUCT_BARCODE')"
+    runsql "insert into price (product_id, price_purchase, price_sell, price_validfrom) VALUES ((select max(product_id) from products), $PURCHASING_PRICE, $SELLING_PRICE, curdate() )"
+}
+
+zoppaslistprod()
+{
+    for i in $(runsql "select product_id from products"); do
+	echo "Product ID: $i"
+    done
+}
 
 ############### CONFIG FILE ###############
 # Look for config file in the following locations: /etc, user directory and 
@@ -56,30 +89,32 @@ test -n "$CURRENCY" || CURRENCY="EUR"
 # If empty, use localhost
 test -n "$SQLHOST" || SQLHOST="127.0.0.1"
 
-
 case "$1" in
     'install')
-	installzoppas
+	installzoppas "$2"
 	;;
     'importoldcsv')
-	echo
+	echo "Stabilize database format first! :-) "
 	;;
-    'addprod')
-	echo
+    'newprod')
+	zoppasnewproduct
 	;;
     'modifyprod')
 	echo
 	;;
     'listprod')
-	echo
+	zoppaslistprod
 	;;
     'lookup')
-	echo
+	lookup-barcode "$2"
+	;;
+    'backup')
+	db_dump "$2"
 	;;
     'runsql')
 	runsql "$2"
 	;;
     *)
-	echo "Specify the main action (install|addprod|modifyprod|lookup|..."
+	echo "Specify the main action (install|newprod|modifyprod|lookup|..."
 	;;
 esac
