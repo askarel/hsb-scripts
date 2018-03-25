@@ -17,16 +17,17 @@
 --    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 --
 
-create table if not exists product (product_id int not null auto_increment primary key, 
+create table if not exists products (product_id int not null auto_increment primary key, 
 				    description char(255),
-				    shortdescription char(255),
+				    shortdescription char(64),
 				    category char(60),
 				    stock_quantity int not null
 				    );
 
 create table if not exists barcodes (id int not null auto_increment primary key, 
 				    product_id int not null,
-				    barcode char(255) unique not null
+				    barcode char(255) unique not null,
+				    FOREIGN KEY(product_id) REFERENCES products(product_id)
 				    );
 
 create table if not exists price (id int not null auto_increment primary key, 
@@ -35,7 +36,8 @@ create table if not exists price (id int not null auto_increment primary key,
 				    price_validfrom date not null,
 				    price_validto date not null,
 				    price_purchase decimal (15,4) not null,
-				    price_sell decimal (15,4) not null
+				    price_sell decimal (15,4) not null,
+				    FOREIGN KEY(product_id) REFERENCES products(product_id)
 				    );
 
 --create table if not exists sale_tickets ( -- id int not null auto_increment primary key, 
