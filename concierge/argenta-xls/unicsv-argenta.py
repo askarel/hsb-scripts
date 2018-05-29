@@ -1,3 +1,20 @@
+# 	Argenta Excel parser HSBXL 
+#	(c) 2018 Vincent Baggerman <vincent@baggerman.email>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
 import argparse
 import csv
 import sys
@@ -39,24 +56,24 @@ def csv_date_format(value, xldatemode):
 
 parser = argparse.ArgumentParser(description='Process the Argenta Excel file')
 parser.add_argument('output', choices=["import", "header"], help="import|header")
-parser.add_argument('excel_file')
-
-args = parser.parse_args()
-book = xlrd.open_workbook(args.excel_file)
-datemode = book.datemode
-
-transactions = xls_to_dict(book)
+parser.add_argument('excel_file', nargs="*")
 
 headers = ['@date_val', '@date_account', 'this_account', 'other_account',
            'amount', 'currency', 'message', 'other_account_name', 'transaction_id']
 
-w = csv.writer(sys.stdout, headers, delimiter=";", quoting=csv.QUOTE_ALL)
+args = parser.parse_args()
 
+w = csv.writer(sys.stdout, headers, delimiter=";", quoting=csv.QUOTE_ALL)
 
 if args.output == "header":
     w.writerow(headers)
 
-if args.output == "import":
+elif args.output == "import":
+    book = xlrd.open_workbook(args.excel_file[0])
+    datemode = book.datemode
+
+    transactions = xls_to_dict(book)
+
     for transaction in transactions:
         csv_line = [
             csv_date_format(transaction['Date valeur'], datemode),
