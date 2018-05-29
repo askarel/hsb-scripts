@@ -38,6 +38,7 @@ def csv_date_format(value, xldatemode):
     return xlrd.xldate_as_datetime(value, xldatemode).date().isoformat()
 
 parser = argparse.ArgumentParser(description='Process the Argenta Excel file')
+parser.add_argument('output', choices=["import", "header"], help="import|header")
 parser.add_argument('excel_file')
 
 args = parser.parse_args()
@@ -46,20 +47,26 @@ datemode = book.datemode
 
 transactions = xls_to_dict(book)
 
-for transaction in transactions:
-    transaction.pop('Description')
-    transaction.pop('Date de la transaction')
-    transaction['@date_val'] = csv_date_format(transaction.pop('Date valeur'), datemode)
-    transaction['@date_account'] = csv_date_format(transaction.pop('Date comptable'), datemode)
-    transaction['this_account'] = "".join(transaction.pop('Compte').split())
-    transaction['other_account'] = "".join(transaction.pop('Compte de la contrepartie').split())
-    transaction['amount'] = transaction.pop('Montant')
-    transaction['currency'] = transaction.pop('Devise')
-    transaction['message'] = transaction.pop('Communication')
-    transaction['other_account_name'] = transaction.pop('Nom de la contrepartie')
-    transaction['transaction_id'] = "BANK/ARGENTA/" + transaction['this_account'] + \
-                                    "/" + transaction.pop('Référence')
+headers = ['@date_val', '@date_account', 'this_account', 'other_account',
+           'amount', 'currency', 'message', 'other_account_name', 'transaction_id']
 
-w = csv.DictWriter(sys.stdout, transactions[0].keys(), delimiter=";", quoting=csv.QUOTE_ALL)
-w.writeheader()
-w.writerows(transactions)
+w = csv.writer(sys.stdout, headers, delimiter=";", quoting=csv.QUOTE_ALL)
+
+
+if args.output == "header":
+    w.writerow(headers)
+
+if args.output == "import":
+    for transaction in transactions:
+        csv_line = [
+            csv_date_format(transaction['Date valeur'], datemode),
+            csv_date_format(transaction['Date comptable'], datemode),
+            "".join(transaction['Compte'].split()),
+            "".join(transaction['Compte de la contrepartie'].split()),
+            transaction['Montant'],
+            transaction['Devise'],
+            transaction['Communication'],
+            transaction['Nom de la contrepartie'],
+            "BANK/ARGENTA/" + transaction['Compte'] + "/" + transaction['Référence']
+        ]
+        w.writerow(csv_line)
