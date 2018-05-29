@@ -84,6 +84,6 @@ elif args.output == "import":
             transaction['Devise'],
             transaction['Communication'],
             transaction['Nom de la contrepartie'],
-            "BANK/ARGENTA/" + transaction['Compte'] + "/" + transaction['Référence']
+            "BANK/ARGENTA/" + "".join(transaction['Compte'].split()) + "/" + transaction['Référence']
         ]
         w.writerow(csv_line)

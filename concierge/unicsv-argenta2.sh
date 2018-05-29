@@ -31,12 +31,13 @@ die()
 
 case "$1" in
     'header')
-	python3 ./argenta-xls/unicsv-argenta.py header
+	python3 ./argenta-xls/unicsv-argenta.py header | sed -e 's/"//g' | tr -d '\r'
     ;;
     'import')
         test -z "$2" && die "No file specified"
         test -f "$2" || die "File '$2' does not exist or not regular file"
-	python3 ./argenta-xls/unicsv-argenta.py import "$2"
+	$0 header
+	python3 ./argenta-xls/unicsv-argenta.py import "$2" | tr -d '\r'
     ;;
     'install')
 	echo 'todo'
