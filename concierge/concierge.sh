@@ -59,11 +59,21 @@ runsql()
     fi
 }
 
+# This will check that all binaries needed are available
+check_prerequisites()
+{
+    while test -n "$1"; do
+	which "$1" > /dev/null || die "Command '$1' not found in path ($PATH)"
+	shift
+    done
+}
+
 # Send the data on STDIN by e-mail.
 # Parameter 1: sender address
 # Parameter 2: receiver address
 # Parameter 3: optional GnuPG key ID. If the key is usable, the mail will be encrypted before sending
 # First line will be pasted as subject line
+# This function will send e-mail using the local SMTP server
 do_mail()
 {
     test -z "$1" && die 'No sender address specified'
@@ -162,10 +172,35 @@ addperson()
 	    ;;
     esac
 #    echo "$SQL_QUERY"
+    USER_UID="$(runsql 'select count(id)+1005 from person')"
     runsql "$SQL_QUERY" && echo "$ME: Added $persontype to database."
-    runsql "insert into member_groups (member_id, group_id) values ( (select max(id) from person),(select bit_id from hsb_groups where shortdesc like '$persontype') )" && echo "$ME: Added to group $persontype"
+#    runsql "insert into member_groups (member_id, group_id) values ( (select max(id) from person),(select bit_id from hsb_groups where shortdesc like '$persontype') )" && echo "$ME: Added to group $persontype"
+    test "$persontype" = 'member' && STRUCTUREDCOMM="$(account_create "MEMBERSHIP" "$(lookup_person_id "${REPLY_FIELD[5]}")")" #"
+    # WARNING: Shitty code below:
+    USERDN="uid=${REPLY_FIELD[3]},ou=users,$BASEDN"
+    echo "dn: $USERDN"
+    echo "cn: ${REPLY_FIELD[1]} ${REPLY_FIELD[2]}"
+    echo "gidnumber: 503"
+    echo "givenname: ${REPLY_FIELD[1]}"
+    echo "homedirectory: /home/users/${REPLY_FIELD[3]}"
+    test -n "${REPLY_FIELD[4]}" && echo "homephone: ${REPLY_FIELD[4]}"
+    echo "mail: ${REPLY_FIELD[5]}"
+    echo "objectclass: inetOrgPerson"
+    echo "objectclass: posixAccount"
+    echo "objectclass: top"
+    echo "objectclass: x-hsbxl-person"
+    echo "objectclass: x-hsbxl-structuredcomm-addon"
+    test -n "${REPLY_FIELD[0]}" && echo "${REPLY_FIELD[0]}"
+    echo "sn: ${REPLY_FIELD[2]}"
+    echo "uid: ${REPLY_FIELD[3]}"
+    echo "userpassword: $LDAPHASH"
+    test "$persontype" = 'member' && echo "x-hsbxl-membershiprequested: TRUE"
+    test "$persontype" = 'member' && echo "x-hsbxl-membershipstructcomm: $STRUCTUREDCOMM"
+    echo "uidnumber: $USER_UID"
+    test -n "$DESCRIPTION" && echo "description: $DESCRIPTION"
+    echo ""
+
     # If we're here, we have successfully inserted person data
-    STRUCTUREDCOMM="$(account_create "MEMBERSHIP" "$(lookup_person_id "${REPLY_FIELD[5]}")")" #"
 #    STRUCTUREDCOMM="$(runsql 'select structuredcomm from person order by id desc limit 1')"
     EXPIRYDATE="$(runsql 'select machinestate_expiration_date from person order by id desc limit 1')"
     FIRSTNAME="${REPLY_FIELD[1]}"
@@ -712,6 +747,9 @@ test -d "$SQLDIR" || die "SQL files repository not found. Current path: $SQLDIR"
 mkdir -p "$GPGHOME" || die 'Cannot create GnuPG directory'
 chmod 700 "$GPGHOME"
 
+# Check availability of required external software
+check_prerequisites mysql bsd-mailx ldapsearch
+
 CASEVAR="$1/$2"
 
 # Nested case statement is shit and unreadable: to delete
@@ -903,6 +941,34 @@ case "$CASEVAR" in
 	;;
     'accounting/balance')
 	show_account_balance "$3"
+	;;
+    'login/')
+	# As the current design is as close as running as root (application username/password in config file has full access to databases), 
+	# this is a new design that will allow separate administrators accounts. 
+	# This is the start of the move away from the single-user database design, and will allow better role segregation and delegation.
+	# From now on, LDAP is a hard requirement.
+	read -p 'LDAP Username: ' UserName
+	test -z "$UserName" && die 'You must specify user name'
+	read -s -p 'LDAP Password: ' PassWord
+	test -z "$PassWord" && die 'Password cannot be empty'
+	echo 
+	ldapsearch -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" -b "$BASEDN" > /dev/null || die 'Cannot connect to LDAP server (see above error)'
+	while read -p "$UserName@$ME> " COMMAND ARGUMENTS; do
+	    case "$COMMAND" in
+		'exit'|'quit') break
+		;;
+		'whoami')
+		    echo "ldapsearch: $? '$UserName' : '$PassWo'"
+		;;
+		'runsql') runsql "$ARGUMENTS"
+		;;
+		'') echo
+		;;
+		*) echo "Unknown command: $COMMAND"
+		;;
+	    esac
+	done
+	printf "\nGoodbye %s\n" "$UserName"
 	;;
 
 ### Function debugging
