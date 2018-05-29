@@ -748,10 +748,6 @@ done
 
 ############### CODE ###############
 
-# Fetch the CSV holding the barcodes
-test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
-#wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
-
 case "$1" in
     "testmode")
 	testmode
@@ -763,6 +759,9 @@ case "$1" in
 	runsql "$2"
     ;;
     *)
+	# Fetch the CSV holding the barcodes
+	test -n "$URLBAR" || die "Variable URLBAR is empty. Set it to the server holding the barcode database"
+	wget -O "$CACHEDIR/$BARCODEFILE" "$URLBAR/$BARCODEFILE"|| die "Problem downloading file $URLBAR/$BARCODEFILE"
 	oldmain
     ;;
 esac
