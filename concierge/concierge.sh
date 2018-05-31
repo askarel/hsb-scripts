@@ -44,19 +44,48 @@ die()
     exit 1
 }
 
-# run a SQL command.
+# Run a SQL command as user (new style)
+# Parameter 1: username
+# Parameter 2: password
+# Parameter 3: SQL query. If it's a valid file, run it's content
+# Parameter 4: if set, do not bail out on error
+# output: tab-separated data
+# exit code 0: request successful
+user_runsql()
+{
+    test -z "$1" && die "Empty username"
+    test -z "$2" && die "Empty password"
+    test -z "$3" && die "Empty SQL request"
+    local SQPROG='echo'
+    test -f "$3" && SQPROG='cat'
+    case "$DBTYPE" in
+	'mysql')
+	    if [ -z "$4" ]; then $SQPROG "$3" | mysql -h"$SQLHOST" -u"$1" -p"$2" -D"$SQLDB" -s --skip-column-names  || die "Failed query: '$3'" # Fix your junk !
+			    else $SQPROG "$3" | mysql -h"$SQLHOST" -u"$1" -p"$2" -D"$SQLDB" -s --skip-column-names  2>&1 # We want the error
+	    fi
+	;;
+	'postgres')
+	    die 'PostgresQL is not implemented (yet)'
+	;;
+	*) die "Unknown database type: $DBTYPE"
+	;;
+    esac
+}
+
+# run a SQL command. (old style)
 # Parameter 1: SQL request. If it's a valid file, run it's content
 # Parameter 2: if set, do not bail out on error
 # output: tab-separated data
 # exit code 0: request successful
 runsql()
 {
-    test -z "$1" && die "Empty SQL request"
-    local SQPROG='echo'
-    test -f "$1" && SQPROG='cat'
-    if [ -z "$2" ]; then $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  || die "Failed query: '$1'" # Fix your junk !
-		    else $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  2>&1 # We want the error
-    fi
+    user_runsql "$SQLUSER" "$SQLPASS" "$1" "$2"
+#    test -z "$1" && die "Empty SQL request"
+#    local SQPROG='echo'
+#    test -f "$1" && SQPROG='cat'
+#    if [ -z "$2" ]; then $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  || die "Failed query: '$1'" # Fix your junk !
+#		    else $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  2>&1 # We want the error
+#    fi
 }
 
 # This will check that all binaries needed are available
@@ -730,6 +759,7 @@ test -n "$SQLPASS" || die "$CONFIGFILE: SQLPASS variable is empty"
 test -n "$SQLDB" || die "$CONFIGFILE: SQLDB: Database to use not specified"
 test -n "$ORGNAME" || die "$CONFIGFILE: ORGNAME: Organisation name is not set"
 test -n "$BASEDN" || die "$CONFIGFILE: BASEDN for LDAP server is not set"
+test -n "$DBTYPE" || die "$CONFIGFILE: DBTYPE: Database type is not defined"
 # By default we talk in euros
 test -n "$CURRENCY" || CURRENCY="EUR"
 # A year is (usually) 12 months. This is an override if needed
@@ -748,7 +778,7 @@ mkdir -p "$GPGHOME" || die 'Cannot create GnuPG directory'
 chmod 700 "$GPGHOME"
 
 # Check availability of required external software
-check_prerequisites mysql bsd-mailx ldapsearch
+check_prerequisites mysql bsd-mailx ldapsearch sed awk tr
 
 CASEVAR="$1/$2"
 
@@ -954,11 +984,10 @@ case "$CASEVAR" in
 	echo 
 	ldapsearch -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" -b "$BASEDN" > /dev/null || die 'Cannot connect to LDAP server (see above error)'
 	while read -p "$UserName@$ME> " COMMAND ARGUMENTS; do
-	    case "$COMMAND" in
+	    case "$COMMAND" in # The different commands
 		'exit'|'quit') break
 		;;
-		'whoami')
-		    echo "ldapsearch: $? '$UserName' : '$PassWo'"
+		'whoami') echo "ldapsearch: $? '$UserName' : '$PassWo'"
 		;;
 		'runsql') runsql "$ARGUMENTS"
 		;;
@@ -1011,7 +1040,7 @@ case "$CASEVAR" in
     'runsql/'*)
 	shift
 	test -z "$1" && die 'Specify SQL query to run'
-	runsql "$*"
+	runsql "$1" "$2"
 	;;
 
 # when everything else fails...
