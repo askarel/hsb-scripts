@@ -714,6 +714,34 @@ ldapexport()
     done
 }
 
+###################################### Interactive functions ######################################
+
+CMD_adduser()
+{
+    test "$1" == 'helptext' && echo "add user"
+}
+
+CMD_deluser()
+{
+    test "$1" == 'helptext' && echo "delete user"
+}
+
+CMD_dumpargs()
+{
+    test "$1" == 'helptext' && echo "Dumps arguments" || echo "Arguments: '$1' '$2' '$3'"
+}
+
+CMD_runsql()
+{
+    case "$1" in
+    '') echo "Specify SQL request" 
+    ;;
+    'helptext') echo "Run an SQL command" 
+    ;;
+    *) runsql "$1" p
+    ;;
+    esac
+}
 
 ############################################# </MIGRATION> #############################################
 
@@ -977,9 +1005,9 @@ case "$CASEVAR" in
 	# this is a new design that will allow separate administrators accounts. 
 	# This is the start of the move away from the single-user database design, and will allow better role segregation and delegation.
 	# From now on, LDAP is a hard requirement.
-	read -p 'LDAP Username: ' UserName
+	test -z "$UserName" && read -p 'LDAP Username: ' UserName
 	test -z "$UserName" && die 'You must specify user name'
-	read -s -p 'LDAP Password: ' PassWord
+	test -z "$PassWord" && read -s -p 'LDAP Password: ' PassWord
 	test -z "$PassWord" && die 'Password cannot be empty'
 	echo 
 	ldapsearch -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" -b "$BASEDN" > /dev/null || die 'Cannot connect to LDAP server (see above error)'
@@ -989,11 +1017,18 @@ case "$CASEVAR" in
 		;;
 		'whoami') echo "ldapsearch: $? '$UserName' : '$PassWo'"
 		;;
-		'runsql') runsql "$ARGUMENTS"
+		'?'|'help')
+		    printf "List of available commands:\n"
+		    printf ' %s	- %s\n' 'help' 'this text'
+		    printf ' %s	- %s\n' 'exit' 'Quit this shell'
+		    for i in $(declare -F | cut -d ' ' -f 3 | grep 'CMD_'); do
+			printf ' %s	- %s\n' "$(sed -e 's/^CMD_//' <<< "$i" )" "$($i helptext)"
+		    done
 		;;
 		'') echo
 		;;
-		*) echo "Unknown command: $COMMAND"
+		*) test -z "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && echo "Unknown command: $COMMAND"
+		   test -n "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && CMD_$COMMAND "$ARGUMENTS"
 		;;
 	    esac
 	done
@@ -1002,6 +1037,7 @@ case "$CASEVAR" in
 
 ### Function debugging
     'debugfunc/')
+	declare -F | cut -d ' ' -f 3 | grep 'db'
 	askquestions LDAP_FIELDS LDAP_REPLY
 	for i in ${!LDAP_REPLY[@]} ; do
 	    echo "LDAP_REPLY[$i]=${LDAP_REPLY[$i]}"
