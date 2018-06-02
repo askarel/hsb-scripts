@@ -743,6 +743,31 @@ CMD_runsql()
     esac
 }
 
+# NEW: the cashbox appliation
+CMD_cashbox()
+{
+    case "$1" in
+    'helptext') echo "Start the cashbox application" 
+    ;;
+    'auth_type') echo 'internal'
+    ;;
+    '') echo 'Specify cashbox to use'
+    ;;
+    *) while true; do
+	    select CashBoxCmd in show exit add; do
+		case "$CashBoxCmd" in
+		    'exit') break 2
+		    ;;
+		    *)
+		        echo "cashbox $1 $CashBoxCmd"
+		    ;;
+		esac
+	    done
+	done
+    ;;
+    esac
+}
+
 ############################################# </MIGRATION> #############################################
 
 ############################################# <INSTALLER> #############################################
@@ -804,6 +829,7 @@ mkdir -p "$BANKDIR" || die "Can't create csv archive directory"
 test -d "$SQLDIR" || die "SQL files repository not found. Current path: $SQLDIR"
 mkdir -p "$GPGHOME" || die 'Cannot create GnuPG directory'
 chmod 700 "$GPGHOME"
+HelpLine=' %-10s - %s\n'
 
 # Check availability of required external software
 check_prerequisites mysql bsd-mailx ldapsearch sed awk tr
@@ -1011,24 +1037,26 @@ case "$CASEVAR" in
 	test -z "$PassWord" && die 'Password cannot be empty'
 	echo 
 	ldapsearch -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" -b "$BASEDN" > /dev/null || die 'Cannot connect to LDAP server (see above error)'
-	while read -p "$UserName@$ME> " COMMAND ARGUMENTS; do
+	history -r ~/.${ME}_history
+	while read -e -p "$UserName@$ME> " COMMAND ARGUMENTS; do
+	    history -s "$COMMAND $ARGUMENTS"
 	    case "$COMMAND" in # The different commands
-		'exit'|'quit') break
-		;;
-		'whoami') echo "ldapsearch: $? '$UserName' : '$PassWo'"
+		'exit'|'quit')
+		    history -w ~/.${ME}_history
+		    break
 		;;
 		'?'|'help')
 		    printf "List of available commands:\n"
-		    printf ' %s	- %s\n' 'help' 'this text'
-		    printf ' %s	- %s\n' 'exit' 'Quit this shell'
+		    printf "$HelpLine" 'help' 'this text'
+		    printf "$HelpLine" 'exit' 'Quit this shell'
 		    for i in $(declare -F | cut -d ' ' -f 3 | grep 'CMD_'); do
-			printf ' %s	- %s\n' "$(sed -e 's/^CMD_//' <<< "$i" )" "$($i helptext)"
+			printf "$HelpLine" "$(sed -e 's/^CMD_//' <<< "$i" )" "$($i helptext)"
 		    done
 		;;
 		'') echo
 		;;
-		*) test -z "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && echo "Unknown command: $COMMAND"
-		   test -n "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && CMD_$COMMAND "$ARGUMENTS"
+		*)  test -z "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && echo "Unknown command: $COMMAND"
+		    test -n "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && CMD_$COMMAND "$ARGUMENTS"
 		;;
 	    esac
 	done
