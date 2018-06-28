@@ -28,12 +28,7 @@ readonly LDAPSCHEMADIR="$MYDIR/ldap-schema/"
 readonly TEMPLATEDIR="$MYDIR/templates"
 readonly GPGHOME="$MYDIR/.gnupg"
 #readonly DEBUGGING=true
-# Fields required for LDAP server
-declare -A -r LDAP_FIELDS=( [uid]='Nickname/username *' [sn]='Family Name *' [givenname]='First name *' [mail]='Email address *' 
-			[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member *'
-			[x-hsbxl-membershiprequested]='Membership requested #' [x-hsbxl-votingrequested]='Do you want to vote at the general assembly #'
-			[x-hsbxl-socialTariff]='Do you require the social tariff #' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key' )
-declare -A LDAP_REPLY
+#declare -A LDAP_REPLY
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -204,7 +199,7 @@ addperson()
     USER_UID="$(runsql 'select count(id)+1005 from person')"
     runsql "$SQL_QUERY" && echo "$ME: Added $persontype to database."
 #    runsql "insert into member_groups (member_id, group_id) values ( (select max(id) from person),(select bit_id from hsb_groups where shortdesc like '$persontype') )" && echo "$ME: Added to group $persontype"
-    test "$persontype" = 'member' && STRUCTUREDCOMM="$(account_create "MEMBERSHIP" "$(lookup_person_id "${REPLY_FIELD[5]}")")" #"
+    test "$persontype" = 'members' && STRUCTUREDCOMM="$(account_create "MEMBERSHIP" "$(lookup_person_id "${REPLY_FIELD[5]}")")" #"
     # WARNING: Shitty code below:
     USERDN="uid=${REPLY_FIELD[3]},ou=users,$BASEDN"
     echo "dn: $USERDN"
@@ -219,7 +214,7 @@ addperson()
     echo "objectclass: top"
     echo "objectclass: x-hsbxl-person"
     echo "objectclass: x-hsbxl-structuredcomm-addon"
-    test -n "${REPLY_FIELD[0]}" && echo "${REPLY_FIELD[0]}"
+    test -n "${REPLY_FIELD[0]}" && echo "preferredLanguage: ${REPLY_FIELD[0]}"
     echo "sn: ${REPLY_FIELD[2]}"
     echo "uid: ${REPLY_FIELD[3]}"
     echo "userpassword: $LDAPHASH"
@@ -248,18 +243,51 @@ addperson2ldap()
     echo
 }
 
-# Ask a bunch of questions to user
-# Parameter 1: *name* of the variable array containing the prompts
-# Parameter 2: *name* of the variable array to fill
-askquestions()
+# Ask a bunch of questions to user about entry
+# Parameter 1: Subtree
+# Parameter 2: Key for item DN. If there is an '=' symbol, it will be considered as pre-filled by caller and not asked
+# Parameter 3: list of items to ask from user 
+ldap_ask_questions()
 {
-	declare -A PROMPTS
-	eval "PROMPTS=( \${$1} )"
-	for i in ${PROMPTS[@]} ; do
+    # LDAP fields friendly description
+    # Meaning of array's last char:
+    # #: numbers
+    # |: yes|no
+    # *: multiline text
+    # none of the above: single-line text
+    declare -A -r LDAP_FIELDS=( [uid]='Nickname/username' [sn]='Family Name' [givenname]='First name' [mail]='Email address' 
+	[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member*'
+	[x-hsbxl-membershiprequested]='Membership requested|' [x-hsbxl-votingrequested]='Do you want to vote at the general assembly|'
+	[x-hsbxl-socialTariff]='Do you require the social tariff|' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key*' )
+    declare -A LDAP_RESULTS
+    test -z "$1" && die "Specify LDAP subtree to use"
+    test -z "$2" && die "Specify key entry for DN"
+    test -z "$3" && die "Specify list of fields to ask user"
+    for i in $3; do
+	echo -n "$i ${LDAP_FIELDS[$i]} '${LDAP_FIELDS[$i]: -1}'"
+	case "${LDAP_FIELDS[$i]: -1}" in
+	    '|')
+		echo yesno
+		;;
+	    '*')
+		echo multiline
+		;;
+	    '#')
+		echo numbers
+		;;
+	    *)
+		echo string
+		;;
+	esac
+    done
+
+#	declare -A PROMPTS
+#	eval "PROMPTS=( \${$1} )"
+#	for i in ${PROMPTS[@]} ; do
 #	    echo "\$1[$i]=${LDAP_REPLY[$i]}"
-	    echo "$i"
+#	    echo "$i"
 #	    echo "${!LDAP_FIELDS[@]}"
-	done
+#	done
 }
 
 
@@ -677,7 +705,7 @@ finish_migration()
     fi
 }
 
-# Export database to LDIF files
+# Export MySQL users database to LDIF files
 ldapexport()
 {
     local UIDBASE=1000
@@ -718,7 +746,15 @@ ldapexport()
 
 CMD_adduser()
 {
-    test "$1" == 'helptext' && echo "add user"
+    case "$1" in
+	'') echo 'Specify username'
+	;;
+	'helptext') echo "add user to system - Username must be specified"
+	;;
+	*)
+	echo adding user
+	;;
+    esac
 }
 
 CMD_deluser()
@@ -749,7 +785,7 @@ CMD_cashbox()
     case "$1" in
     'helptext') echo "Start the cashbox application" 
     ;;
-    'auth_type') echo 'internal'
+    'auth_type') echo 'internal' # Will this ever be used ?
     ;;
     '') echo 'Specify cashbox to use'
     ;;
@@ -1065,13 +1101,8 @@ case "$CASEVAR" in
 
 ### Function debugging
     'debugfunc/')
-	declare -F | cut -d ' ' -f 3 | grep 'db'
-	askquestions LDAP_FIELDS LDAP_REPLY
-	for i in ${!LDAP_REPLY[@]} ; do
-	    echo "LDAP_REPLY[$i]=${LDAP_REPLY[$i]}"
-#	    echo "$i"
-#	    echo "${!LDAP_FIELDS[@]}"
-	done
+#	declare -F | cut -d ' ' -f 3 
+	ldap_ask_questions "$USERSDN" "uid=askarel" "$LDAPPARAMS"
 	;;
 
 ### Catch-all parts: in case of invalid arguments
