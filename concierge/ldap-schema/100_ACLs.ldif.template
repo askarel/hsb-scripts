@@ -10,17 +10,27 @@ dn: olcDatabase={1}mdb,cn=config
 changetype: modify
 delete: olcAccess
 -
+# Username and user e-mail address
+add: olcAccess
+olcAccess: {0}to attrs=uid,mail
+  by self write
+  by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
+  by group.exact="cn=password resetters,ou=groups,$BASEDN" read
+  by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
+  by dn.subtree="$BASEDN" read
+-
 # Password access
 add: olcAccess
-olcAccess: {0}to attrs=userPassword
+olcAccess: {1}to attrs=userPassword
   by self write 
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
+  by group.exact="cn=password resetters,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by anonymous auth 
   by * auth
 -
 add: olcAccess
-olcAccess: {1}to attrs=shadowLastChange,loginShell,gecos
+olcAccess: {2}to attrs=shadowLastChange,loginShell,gecos
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
@@ -28,7 +38,7 @@ olcAccess: {1}to attrs=shadowLastChange,loginShell,gecos
 -
 # RFID tags hashes
 add: olcAccess
-olcAccess: {2}to attrs=x-hsbxl-RFIDid
+olcAccess: {3}to attrs=x-hsbxl-RFIDid
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
@@ -36,28 +46,29 @@ olcAccess: {2}to attrs=x-hsbxl-RFIDid
 -
 # User-writeable data (TO REWORK FOR PRIVACY)
 add: olcAccess
-olcAccess: {3}to attrs=x-hsbxl-pgpPubKey,x-hsbxl-sshPubKey,mail,carLicense,jpegPhoto,homePostalAddress,mobile,mobileTelephoneNumber,photo 
+olcAccess: {4}to attrs=x-hsbxl-pgpPubKey,x-hsbxl-sshPubKey,carLicense,jpegPhoto,homePostalAddress,mobile,mobileTelephoneNumber,photo 
   by self write
+  by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by dn.subtree="$BASEDN" read
 -
 # Machine state data
 add: olcAccess
-olcAccess: {4}to attrs=x-hsbxl-machineState,x-hsbxl-machineStateData
+olcAccess: {5}to attrs=x-hsbxl-machineState,x-hsbxl-machineStateData
   by dn.subtree="ou=services,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by * read
 -
 # Password manager (too generic, to rework)
 add: olcAccess
-olcAccess: {5} to attrs=x-hsbxl-providerUserName,x-hsbxl-providerPassword
+olcAccess: {6} to attrs=x-hsbxl-providerUserName,x-hsbxl-providerPassword
   by group.exact="cn=Password manager,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by * none
 -
 # Padlock code: only for members :-)
 add: olcAccess
-olcAccess: {6} to attrs=x-hsbxl-padlockCode
+olcAccess: {7} to attrs=x-hsbxl-padlockCode
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by group.exact="cn=Members,ou=groups,$BASEDN" read
@@ -65,13 +76,13 @@ olcAccess: {6} to attrs=x-hsbxl-padlockCode
 -
 # Padlock description
 add: olcAccess
-olcAccess: {7} to attrs=x-hsbxl-padlockDescription
+olcAccess: {8} to attrs=x-hsbxl-padlockDescription
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
   by * read
 -
 # Some members object about having some of their data, like their name or phone number, exposed
 add: olcAccess
-olcAccess: {8} to attrs=homePhone,givenName,sn
+olcAccess: {9} to attrs=homePhone,givenName,sn
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
