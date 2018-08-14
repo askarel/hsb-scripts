@@ -167,7 +167,7 @@ managetags()
     test -z "$1" && die "Specify LDAP server to use"
     test -z "$2" && die "Specify user name"
     test -z "$3" && die "Specify password for account '$2'"
-    local i SCANNEDTAG USERDN="uid=$2,ou=users,$BASEDN"
+    local i j SCANNEDTAG USERDN="uid=$2,ou=users,$BASEDN"
     TAGSARRAY=( $(dumpusertags "$1" "$USERDN" "$3" ) )
     OLDDATAHASH="$( md5sum <<< "${TAGSARRAY[*]}" )" # To ask if the user want to save the data
 #    tput smcup
