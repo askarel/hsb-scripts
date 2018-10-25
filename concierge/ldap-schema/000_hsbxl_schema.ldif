@@ -24,11 +24,18 @@ cn: hsbxlschema
 # - Unused and obsolete attributes should NEVER be removed (but they can be marked as obsolete in the description)
 # - Attributes OIDs should NEVER be changed
 #
+# HSBXL arc
 olcObjectIdentifier: HSBXL 1.3.6.1.4.1.43666
+# HSBXL EXPERIMENTAL arc
 olcObjectIdentifier: HSBXLexp HSBXL:1
+# HSBXL LDAP arc
 olcObjectIdentifier: HSBXLldap HSBXL:2
+# HSBXL LDAP attributes
 olcObjectIdentifier: HSBXLat HSBXLldap:1
+# HSBXL Object classes
 olcObjectIdentifier: HSBXLoc HSBXLldap:2
+# Arc for GDPR compliance: everything under this arc contains various user-controlled switches.
+olcObjectIdentifier: HSBXLgdpr HSBXLldap:3
 olcObjectIdentifier: HSBXLpersonAttr HSBXLat:100
 olcObjectIdentifier: HSBXLserverAttr HSBXLat:101
 ######################################################################################
