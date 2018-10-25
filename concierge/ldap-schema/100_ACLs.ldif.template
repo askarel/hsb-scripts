@@ -80,9 +80,19 @@ olcAccess: {8} to attrs=x-hsbxl-padlockDescription
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
   by * read
 -
+# Firstname
+add: olcAccess
+olcAccess: {9} to attrs=givenName
+  by self write
+  by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
+  by group.exact="cn=Board members,ou=groups,$BASEDN" write
+  by group.exact="cn=password resetters,ou=groups,$BASEDN" read
+  by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
+  by * none
+-
 # Some members object about having some of their data, like their name or phone number, exposed
 add: olcAccess
-olcAccess: {9} to attrs=homePhone,givenName,sn
+olcAccess: {10} to attrs=homePhone,sn
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
@@ -90,7 +100,7 @@ olcAccess: {9} to attrs=homePhone,givenName,sn
   by * none
 -
 add: olcAccess
-olcAccess: {10}to *
+olcAccess: {11}to *
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by * read
