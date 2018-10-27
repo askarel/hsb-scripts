@@ -228,7 +228,7 @@ switch ($_SESSION['machinestate']) {
 		} else { // No empty password supplied. Check match...
 		    if ( $_REQUEST['pwd1'] === $_REQUEST['pwd2'] ) { // Password match !
 			$ldapentry['userPassword'] = hash_password($_REQUEST['pwd1']);
-			if ( ldap_mod_add($ldapconn, $_SESSION['userdn'], $ldapentry) ) { // Successfully changed password !
+			if ( ldap_mod_replace($ldapconn, $_SESSION['userdn'], $ldapentry) ) { // Successfully changed password !
 			    $_SESSION['machinestate'] = '';
 			    html_header ('SUCCESS');
 			    die ("<H1>Password successfully changed.</H1><br />\n");
