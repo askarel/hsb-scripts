@@ -81,7 +81,7 @@ function populatetemplate($templatefile, $templatedata)
 function randomstring($length=20)
 {
     $STR='';
-    $CHRS='()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}';
+    $CHRS='()*+,-./0123456789:;=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}';
     for ($i=0; $i < $length; $i++) {
 	$STR .= $CHRS[ mt_rand(0, strlen($CHRS)-1) ];
     }
