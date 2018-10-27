@@ -1,14 +1,17 @@
 webconcierge - a bunch of small scripts for self service management...
 		... Because writing user input in bash is quite cumbersome. :-)
 
-All modules are independent and self-contained at the moment. The consequence
-is that you will need to set server and credentials in multiple files. This is
-going to be fixed in the future for server settings.
+All modules are independent and self-contained at the moment. The only shared 
+bit is a library that contain some helper functions to avoid copy/pasting similar
+functions across several files. The consequence is that you will need to set 
+server and credentials in multiple files. This is going to be fixed in the future
+for server settings.
 
 A working LDAP setup is MANDATORY, the HSBXL schema add-on is OPTIONAL, but
 recommended if you want to use ldapviewer.php to it's full potential.
 
 It consist of the following files:
 
+* libaskarel.php - a library of simple helper functions
 * ldapviewer.php - a simple and crude password manager
 * lostcredentials.php - a simple password changer
