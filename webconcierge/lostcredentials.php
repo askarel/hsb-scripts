@@ -35,7 +35,6 @@ static $CONFIG = array (
 # This will send the page end to the client
 function html_footer()
 {
-    printf ("\n <p><A HREF=\"%s?startover=yes\">Click here</A> to start over<br />", $_SERVER['SCRIPT_NAME']);
     echo ("\n Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/\">Askarel</A></p>\n </body>\n</html>\n");
 }
 
@@ -74,6 +73,7 @@ function tokenform($Message)
     printf (" <INPUT type=\"submit\" value=\"Send\">\n");
     printf (" </FORM>\n");
     printf ("</div>\n");
+    printf ("\n <p><A HREF=\"%s?startover=yes\">Click here</A> to start over<br />", $_SERVER['SCRIPT_NAME']);
 }
 
 function newpass($Message)
@@ -87,6 +87,7 @@ function newpass($Message)
     printf (" <INPUT type=\"submit\" value=\"Change password\">\n");
     printf (" </FORM>\n");
     printf ("</div>\n");
+    printf ("\n <p><A HREF=\"%s?startover=yes\">Click here</A> to start over<br />", $_SERVER['SCRIPT_NAME']);
 }
 
 // Taken from https://blog.michael.kuron-germany.de/2012/07/hashing-and-verifying-ldap-passwords-in-php/
