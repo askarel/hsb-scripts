@@ -38,12 +38,6 @@ static $CONFIG = array (
 		)
 );
 
-# This will send the page end to the client
-function html_footer()
-{
-    echo ("\n <p>Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/\">Askarel</A></p>\n </body>\n</html>\n");
-}
-
 function LoginPage($ButtonMessage)
 {
 	html_header ('Hello');

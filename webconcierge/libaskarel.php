@@ -88,5 +88,10 @@ function randomstring($length=20)
     return $STR;
 }
 
+# This will send the page end to the client
+function html_footer()
+{
+    echo ("\n Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/\">Askarel</A></p>\n </body>\n</html>\n");
+}
 
 ?>

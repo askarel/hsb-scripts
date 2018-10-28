@@ -32,12 +32,6 @@ static $CONFIG = array (
 	'ldapbindpw' => 'T0pS3cr3t'
 );
 
-# This will send the page end to the client
-function html_footer()
-{
-    echo ("\n Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/\">Askarel</A></p>\n </body>\n</html>\n");
-}
-
 function mainform($Message)
 {
     global $CONFIG;
