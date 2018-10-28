@@ -84,13 +84,6 @@ function newpass($Message)
     printf ("\n <p><A HREF=\"%s?startover=yes\">Click here</A> to start over<br />", $_SERVER['SCRIPT_NAME']);
 }
 
-// Taken from https://blog.michael.kuron-germany.de/2012/07/hashing-and-verifying-ldap-passwords-in-php/
-function hash_password($password) // SSHA with random 4-character salt
-{
-    $salt = substr(str_shuffle(str_repeat('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',4)),0,4);
-    return '{SSHA}' . base64_encode(sha1( $password.$salt, TRUE ). $salt);
-}
-
 # First thing first: it's a modern script (?) supposed to be used on
 # decent browsers.
 header ("Content-type: text/html; charset=utf8");

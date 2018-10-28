@@ -94,4 +94,11 @@ function html_footer()
     echo ("\n Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/\">Askarel</A></p>\n </body>\n</html>\n");
 }
 
+// Taken from https://blog.michael.kuron-germany.de/2012/07/hashing-and-verifying-ldap-passwords-in-php/
+function hash_password($password) // SSHA with random 4-character salt
+{
+    $salt = substr(str_shuffle(str_repeat('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',4)),0,4);
+    return '{SSHA}' . base64_encode(sha1( $password.$salt, TRUE ). $salt);
+}
+
 ?>
