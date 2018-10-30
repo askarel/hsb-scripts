@@ -10,18 +10,27 @@ dn: olcDatabase={1}mdb,cn=config
 changetype: modify
 delete: olcAccess
 -
-# Username and user e-mail address
+# Username 
 add: olcAccess
-olcAccess: {0}to attrs=uid,mail
+olcAccess: {0}to attrs=uid
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=password resetters,ou=groups,$BASEDN" read
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by dn.subtree="$BASEDN" read
 -
+# user e-mail address
+add: olcAccess
+olcAccess: {1}to attrs=mail
+  by self write
+  by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
+  by group.exact="cn=password resetters,ou=groups,$BASEDN" read
+  by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
+  by dn.subtree="ou=services,$BASEDN" read
+-
 # Password access
 add: olcAccess
-olcAccess: {1}to attrs=userPassword
+olcAccess: {2}to attrs=userPassword
   by self write 
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=password resetters,ou=groups,$BASEDN" write
@@ -30,7 +39,7 @@ olcAccess: {1}to attrs=userPassword
   by * auth
 -
 add: olcAccess
-olcAccess: {2}to attrs=shadowLastChange,loginShell,gecos
+olcAccess: {3}to attrs=shadowLastChange,loginShell,gecos
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
@@ -38,7 +47,7 @@ olcAccess: {2}to attrs=shadowLastChange,loginShell,gecos
 -
 # RFID tags hashes
 add: olcAccess
-olcAccess: {3}to attrs=x-hsbxl-RFIDid
+olcAccess: {4}to attrs=x-hsbxl-RFIDid
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
@@ -46,29 +55,30 @@ olcAccess: {3}to attrs=x-hsbxl-RFIDid
 -
 # User-writeable data (TO REWORK FOR PRIVACY)
 add: olcAccess
-olcAccess: {4}to attrs=x-hsbxl-pgpPubKey,x-hsbxl-sshPubKey,carLicense,jpegPhoto,homePostalAddress,mobile,mobileTelephoneNumber,photo 
+olcAccess: {5}to attrs=x-hsbxl-pgpPubKey,x-hsbxl-sshPubKey,carLicense,jpegPhoto,homePostalAddress,mobile,mobileTelephoneNumber,photo 
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
-  by dn.subtree="$BASEDN" read
+  by dn.subtree="ou=services,$BASEDN" read
+  by * none
 -
 # Machine state data
 add: olcAccess
-olcAccess: {5}to attrs=x-hsbxl-machineState,x-hsbxl-machineStateData
+olcAccess: {6}to attrs=x-hsbxl-machineState,x-hsbxl-machineStateData
   by dn.subtree="ou=services,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by * read
 -
 # Password manager (too generic, to rework)
 add: olcAccess
-olcAccess: {6} to attrs=x-hsbxl-providerUserName,x-hsbxl-providerPassword
+olcAccess: {7} to attrs=x-hsbxl-providerUserName,x-hsbxl-providerPassword
   by group.exact="cn=Password manager,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by * none
 -
 # Padlock code: only for members :-)
 add: olcAccess
-olcAccess: {7} to attrs=x-hsbxl-padlockCode
+olcAccess: {8} to attrs=x-hsbxl-padlockCode
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by group.exact="cn=Members,ou=groups,$BASEDN" read
@@ -76,13 +86,13 @@ olcAccess: {7} to attrs=x-hsbxl-padlockCode
 -
 # Padlock description
 add: olcAccess
-olcAccess: {8} to attrs=x-hsbxl-padlockDescription
+olcAccess: {9} to attrs=x-hsbxl-padlockDescription
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
   by * read
 -
 # Firstname
 add: olcAccess
-olcAccess: {9} to attrs=givenName
+olcAccess: {10} to attrs=givenName
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
@@ -92,7 +102,7 @@ olcAccess: {9} to attrs=givenName
 -
 # Some members object about having some of their data, like their name or phone number, exposed
 add: olcAccess
-olcAccess: {10} to attrs=homePhone,sn
+olcAccess: {11} to attrs=homePhone,sn
   by self write
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=Board members,ou=groups,$BASEDN" write
@@ -100,7 +110,7 @@ olcAccess: {10} to attrs=homePhone,sn
   by * none
 -
 add: olcAccess
-olcAccess: {11}to *
+olcAccess: {12} to *
   by group.exact="cn=LDAP admins,ou=groups,$BASEDN" write
   by group.exact="cn=LDAP replicators,ou=groups,$BASEDN" read
   by * read
