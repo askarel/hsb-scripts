@@ -45,6 +45,7 @@ function lostpw_page()
 
 function print_mailsent($sentto)
 {
+	html_header ("Password reset");
 	printf ("<div>\n");
 	printf (" <H1>Password request sent.</H1>\n");
 	printf (" Your password reset request has been sent. Please check your mailbox (%s) and follow the instructions<br />\n<br />\n", $sentto);
