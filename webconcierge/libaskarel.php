@@ -18,7 +18,9 @@
 # Place, Suite 330, Boston, MA  02111-1307   USA
 #
 
-// Dump the content of specified array
+# Dump the content of specified array 
+# $MYARRAY is the array to dump 
+# $arrayname is the name of the array you dump (i know, not clean)
 function dumparray($MYARRAY, $arrayname)
 {
     printf ("<H3>Content of array '%s'</H3>\n", $arrayname);
@@ -54,20 +56,28 @@ function dumpglobals()
     printf ("</td></tr></table>\n");
 }
 
-# This will send the page start to the client
+# This will send the page start to the client. 
+# $TITLE is the page title in the browser tab,
+# $EXTRAHEAD is any extra tags you want between the <head> and </head> tags. This defaults to nothing.
 function html_header($TITLE, $EXTRAHEAD = '')
 {
     printf ("<!DOCTYPE HTML>\n<html>\n <head>\n  <title>%s</title>\n%s\n </head>\n <body>\n", $TITLE, $EXTRAHEAD);
 }
 
-// Abort and tell user there is something definitely wrong
+# Abort script and tell user there is something definitely wrong.
+# Makes a very basic HTML page in the process
+# This will stop the script. It does not return to caller.
 function abort($str)
 {
     html_header ('FAIL');
     die (sprintf ("<H1>%s</H1><br />\n", $str));
 }
 
-// Populate chosen template
+# Populate chosen template
+# $templatefile is the name of a text file containing the text body
+# $templatedata is an array containing the variable to substitute
+# Returns to caller with the template loaded and the placeholders substituted by data
+# Placeholder are in the form {{ placeholder }}
 function populatetemplate($templatefile, $templatedata)
 {
     $template = file_get_contents($templatefile);
@@ -77,7 +87,7 @@ function populatetemplate($templatefile, $templatedata)
     return $template;
 }
 
-// Generate a random string. Parameter gives the length of the random string
+// Generate a random string. Parameter gives the length of the random string. Defaults to 20 chars
 function randomstring($length=20)
 {
     $STR='';
