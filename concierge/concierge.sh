@@ -75,12 +75,6 @@ user_runsql()
 runsql()
 {
     user_runsql "$SQLUSER" "$SQLPASS" "$1" "$2"
-#    test -z "$1" && die "Empty SQL request"
-#    local SQPROG='echo'
-#    test -f "$1" && SQPROG='cat'
-#    if [ -z "$2" ]; then $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  || die "Failed query: '$1'" # Fix your junk !
-#		    else $SQPROG "$1" | mysql -h"$SQLHOST" -u"$SQLUSER" -p"$SQLPASS" -D"$SQLDB" -s --skip-column-names  2>&1 # We want the error
-#    fi
 }
 
 # This will check that all binaries needed are available
@@ -246,7 +240,7 @@ addperson2ldap()
 # Ask a bunch of questions to user about entry
 # Parameter 1: Subtree
 # Parameter 2: Key for item DN. If there is an '=' symbol, it will be considered as pre-filled by caller and not asked
-# Parameter 3: list of items to ask from user 
+# Parameter 3: list of items to ask from user. Mark the item with '*' at the end to make it mandatory.
 ldap_ask_questions()
 {
     # LDAP fields friendly description
@@ -255,32 +249,52 @@ ldap_ask_questions()
     # |: yes|no
     # *: multiline text
     # none of the above: single-line text
-    declare -A -r LDAP_FIELDS=( [uid]='Nickname/username' [sn]='Family Name' [givenname]='First name' [mail]='Email address' 
-	[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member*'
+    declare -A -r LDAP_FIELDS=( [uid]='Nickname/username' [sn]='Family Name' [givenname]='First name' [mail]='Email address'
+	[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member$'
 	[x-hsbxl-membershiprequested]='Membership requested|' [x-hsbxl-votingrequested]='Do you want to vote at the general assembly|'
-	[x-hsbxl-socialTariff]='Do you require the social tariff|' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key*' )
+	[x-hsbxl-socialTariff]='Do you require the social tariff|' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key$' )
     declare -A LDAP_RESULTS
     test -z "$1" && die "Specify LDAP subtree to use"
     test -z "$2" && die "Specify key entry for DN"
     test -z "$3" && die "Specify list of fields to ask user"
+    # Split key into components
+    DNKEY="$(sed -e 's/\ *\=\ */\=/' <<< "$2" |cut -d '=' -f 1)"
+    DNVALUE="$(sed -e 's/\ *\=\ */\=/' <<< "$2" |cut -d '=' -f 2-)"
+    # If both the key and the value are equal, there was no pre-filled value specified.
+    # Unfortunately, it cannot differ empty value from a value equal to the key
+    test "$DNKEY" != "$DNVALUE" && LDAP_RESULTS[$DNKEY]="$DNVALUE"
+#    echo "### DEBUG: DNKEY='$DNKEY' DNVALUE='$DNVALUE' LDAP_RESULTS[$DNKEY]=${LDAP_RESULTS[$DNKEY]}"
     for i in $3; do
-	echo -n "$i ${LDAP_FIELDS[$i]} '${LDAP_FIELDS[$i]: -1}'"
-	case "${LDAP_FIELDS[$i]: -1}" in
+	KEYSTR="${i%\*}"
+#	test -z "${LDAP_RESULTS[$KEYSTR]}" && echo "'$KEYSTR'='${LDAP_RESULTS[$KEYSTR]}' '${i: -1}' '${LDAP_FIELDS[$i]%[\#\*\|]}' "
+	test -z "${LDAP_RESULTS[$KEYSTR]}" && case "${LDAP_FIELDS[$i]: -1}" in
 	    '|')
-		echo yesno
+		read -p "'$KEYSTR' --- ${LDAP_FIELDS[$i]%[\#\*\|]} [y/n]? " -n 1 LDAP_RESULTS[$KEYSTR]
+		test -n "${LDAP_RESULTS[$KEYSTR]}" && echo
+#		echo "LDAP_RESULTS[$KEYSTR]='${LDAP_RESULTS[$KEYSTR]}'"
 		;;
-	    '*')
-		echo multiline
+	    '$')
+		echo "'$KEYSTR' --- ${LDAP_FIELDS[$i]%[\#\*\|]} (Use a line with just '.' to finish"
+		while test "$mycurrentline" != '.' ;do 
+		    read -p '>' mycurrentline
+		    test "$mycurrentline" != '.' && LDAP_RESULTS[$KEYSTR]="${LDAP_RESULTS[$KEYSTR]} $mycurrentline"
+		done
 		;;
 	    '#')
-		echo numbers
+		echo number 
 		;;
 	    *)
-		echo string
+		read -p "'$KEYSTR' --- ${LDAP_FIELDS[$i]%[\#\*\|]} ? " LDAP_RESULTS[$KEYSTR]
+#		echo "LDAP_RESULTS[$KEYSTR]='${LDAP_RESULTS[$KEYSTR]}'"
 		;;
 	esac
     done
-
+    # Set DN entry here
+    echo "dn: $DNKEY=$DNVALUE,$1"
+    for i in $3; do
+	KEYSTR="${i%\*}"
+	echo "$KEYSTR: '${LDAP_RESULTS[$KEYSTR]}'"
+    done
 #	declare -A PROMPTS
 #	eval "PROMPTS=( \${$1} )"
 #	for i in ${PROMPTS[@]} ; do
@@ -330,34 +344,6 @@ modifyperson()
     test -z "$SELECTED_FIELD" && die "Field '$2' does not exist. Available fields: $(tr ' ' ',' <<< "$AVAILABLE_FIELDS")"
     test -z "$3" && die "Specify the new data"
     runsql "update person set $SELECTED_FIELD='$3' where id=$PERSONID" && die "Modification Successful" 0
-}
-
-# Send a new password for specified user
-# Parameter 1: user to change password for
-changepassword()
-{
-    test -z "$1" && die "Specify the nickname or e-mail address of the person that need a new password"
-    local PERSONID="$(lookup_person_id "$1")"
-    local PASSWORD="$(pwgen 20 1)"
-    test -z "$PERSONID" && die "No match found for user '$1'"
-    local MYLANG="$(runsql "select lang from person where id=$PERSONID")"
-    local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
-    local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
-    local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
-    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
-    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
-    if runsql "update person set passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH' where id=$PERSONID" ; then
-	templatecat "$MYLANG" "$ME.sh_person_changepassword.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
-    fi
-}
-
-# Send a new password for specified user
-# Parameter 1: user DN to query the LDAP
-# Parameter 2: Password for above user
-# Parameter 3: User DN to change password for. If the string does not look like a DN, 
-changeLdapPassword()
-{
-    echo
 }
 
 # Re-send the payment infos for specified user
@@ -708,7 +694,7 @@ finish_migration()
 # Export MySQL users database to LDIF files
 ldapexport()
 {
-    local UIDBASE=1000
+    local UIDBASE=10000
 #    for i in $(runsql 'select id from person where ldaphash not like ""'); do
     for i in $(runsql 'select id from person order by id'); do
 	local FIRSTNAME="$(runsql "select firstname from person where id=$i")"
@@ -970,10 +956,6 @@ case "$CASEVAR" in
 	PERSONID="$(lookup_person_id "$3")"
 	modifyperson "$3" "$4" "$5"
 	;;
-    'person/changepass')
-	PERSONID="$(lookup_person_id "$3")"
-	changepassword "$3"
-	;;
     'person/resendinfos')
 	PERSONID="$(lookup_person_id "$3")"
 	resendinfos "$3"
@@ -988,7 +970,7 @@ case "$CASEVAR" in
 ### Group processing
 	'group/list')
 	echo "$ME: Available groups:"
-	runsql 'select * from hsb_groups order by bit_id'
+#	runsql 'select * from hsb_groups order by bit_id'
 	;;
 	'group/add')
 	echo
@@ -1074,7 +1056,11 @@ case "$CASEVAR" in
 	echo 
 	ldapsearch -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" -b "$BASEDN" > /dev/null || die 'Cannot connect to LDAP server (see above error)'
 	history -r ~/.${ME}_history
-	while read -e -p "$UserName@$ME> " COMMAND ARGUMENTS; do
+	SUBPROMPT='>'
+	SHELLPROMPT="$UserName@$ME/$SUBPROMPT "
+	while read -e -p "$SHELLPROMPT" COMMAND ARGUMENTS; do
+	    SUBPROMPT='>'
+	    SHELLPROMPT="$UserName@$ME/$SUBPROMPT "
 	    history -s "$COMMAND $ARGUMENTS"
 	    case "$COMMAND" in # The different commands
 		'exit'|'quit')
@@ -1091,8 +1077,14 @@ case "$CASEVAR" in
 		;;
 		'') echo
 		;;
-		*)  test -z "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && echo "Unknown command: $COMMAND"
-		    test -n "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && CMD_$COMMAND "$ARGUMENTS"
+		*) # If the command does not exist:
+		    test -z "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && echo "Unknown command: $COMMAND"
+		   # If the command exist, run it with parameters
+		    test -n "$(declare -F | cut -d ' ' -f 3 | grep "CMD_$COMMAND")" && 
+			{ SUBPROMPT="$COMMAND>"
+			  CMD_$COMMAND $ARGUMENTS
+			  SUBPROMPT='>'
+			}
 		;;
 	    esac
 	done
@@ -1113,7 +1105,7 @@ case "$CASEVAR" in
 	die "Please specify subaction (add|modify|changepass|resendinfos|...)"
 	;;
     'bank/'*)
-	die "Please specify subaction (importcsv|balance||attributes|...)"
+	die "Please specify subaction (importcsv|balance|attributes|...)"
 	;;
     'legacy/'*)
 	die "Please specify subaction (import|activate_all|activate_one|...)"
