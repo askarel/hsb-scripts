@@ -56,20 +56,6 @@ create table if not exists internal_accounts (
 create table if not exists membership_fuckup_messages (member_id int not null,
 				    fuckup_message char(60) unique not null);
 
--- List of available groups
--- Once we go full LDAP, this will go away
-create table if not exists hsb_groups (bit_id int not null auto_increment primary key,
-				    shortdesc char(50) unique not null,
-				    fulldesc text
-				    );
-
--- Groups a person is member of
--- Once we go full LDAP, this will go away
-create table if not exists member_groups (id int not null auto_increment primary key,
-				    member_id int not null,
-				    group_id int not null
-				    );
-
 -- Contractors and providers (electricity, water, gas, internet, insurance, bank,...)
 -- Once we go full LDAP, this will go away
 create table if not exists contractors (id int not null auto_increment primary key,
