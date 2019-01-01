@@ -28,7 +28,6 @@ readonly LDAPSCHEMADIR="$MYDIR/ldap-schema/"
 readonly TEMPLATEDIR="$MYDIR/templates"
 readonly GPGHOME="$MYDIR/.gnupg"
 #readonly DEBUGGING=true
-#declare -A LDAP_REPLY
 
 ############### <FUNCTIONS> ###############
 # Function to call when we bail out
@@ -227,15 +226,6 @@ addperson()
     templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REPLY_FIELD[5]}" "${REPLY_FIELD[7]}"
 }
 
-# Attempt to rewrite above function in a cleaner way.
-# Create a new LDAP user/member
-# Parameter 1: user DN to query/update the LDAP
-# Parameter 2: Password for above user
-# Parameter 3: User DN to create. If the string does not look like a DN, transform it into one.
-addperson2ldap()
-{
-    echo
-}
 
 # Return a friendly prompt for LDAP field
 # If field is not found, just echoes the input back.
@@ -682,24 +672,6 @@ get_machine_state()
 
 
 ############################################# <MIGRATION> #############################################
-# TO DELETE
-# Finish the migration and send new password to member
-# Parameter 1: Member ID
-finish_migration()
-{
-    local FIRSTNAME="$(runsql "select firstname from person where id=$1")"
-    local NICKNAME="$(runsql "select nickname from person where id=$1")"
-    local PASSWORD="$(pwgen 20 1)"
-    local MYLANG="$(runsql "select lang from person where id=$1")"
-    local GPGID="$(runsql "select openpgpkeyid from person where id=$1")"
-    local EMAILADDRESS="$(runsql "select emailaddress from person where id=$1")"
-    local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
-    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
-    if runsql "update person set passwordhash='$CRYPTPASSWORD', ldaphash='$LDAPHASH', machinestate='MEMBERSHIP_ACTIVE' where id=$1" ; then
-	echo "Sending new password to $EMAILADDRESS"
-	templatecat "$MYLANG" "$ME.sh_person_migrated.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
-    fi
-}
 
 # Export MySQL users database to LDIF files
 ldapexport()
@@ -751,7 +723,7 @@ CMD_adduser()
 	USERTEST="$(ldapsearch -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" -b "$BASEDN" -LLL -o ldif-wrap=no "(uid=$1)" dn |sed -e '/^$/d')" #"
 	if [ -n "$USERTEST" ]; then
 	    echo "User already exist: $USERTEST"
-	else
+	else # User ID not found: create it
 	    OPS3="$PS3"
 	    PS3="Select type of user to add to the system: "
 	    select userType in member machine app cancel; do
@@ -955,25 +927,6 @@ case "$1" in
 		test -z "$1" && die 'Specify faulty transaction ID'
 		test -z "$2" && die 'Specify correct message'
 		runsql "update moneymovements set fix_fuckup_msg='$2' where transaction_id like '$1'"
-		;;
-	esac
-	;;
-    "legacy")
-	shift
-	case "$1" in
-	    'activate_all') # To delete
-		printf 'Activating %s accounts...\n' "$(runsql 'select count(id) from person where machinestate like "IMPORTED_MEMBER_INACTIVE"')"
-		for i in $(runsql 'select id from person where machinestate like "IMPORTED_MEMBER_INACTIVE"') ; do
-		    runsql "select id, firstname, name, emailaddress from person where id=$i"
-		    finish_migration $i
-		done
-		;;
-	    'activate_one') # to delete
-		    test -z "$2" && echo "Awaiting activation:"
-		    test -z "$2" && runsql 'select id, nickname, emailaddress from person where machinestate like "IMPORTED_MEMBER_INACTIVE"'
-		    test -z "$2" && die "Specify e-mail address to activate"
-		    PERSONID="$(lookup_person_id "$2")"
-		    finish_migration $PERSONID
 		;;
 	esac
 	;;
@@ -1187,6 +1140,6 @@ case "$CASEVAR" in
 
 # when everything else fails...
     *)
-	die "Specify the main action (person|group|bank|member|cron|install|...)"
+	die "Specify the main action (person|bank|member|cron|install|...)"
 	;;
 esac
