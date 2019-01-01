@@ -237,11 +237,11 @@ addperson2ldap()
     echo
 }
 
-# Ask a bunch of questions to user about entry
-# Parameter 1: Subtree
-# Parameter 2: Key for item DN. If there is an '=' symbol, it will be considered as pre-filled by caller and not asked
-# Parameter 3: list of items to ask from user. Mark the item with '*' at the end to make it mandatory.
-ldap_ask_questions()
+# Return a friendly prompt for LDAP field
+# If field is not found, just echoes the input back.
+# Parameter 1: LDAP field
+# Output: friendly field name. Returns parameter 1 if no match.
+ldap_fieldname_lookup()
 {
     # LDAP fields friendly description
     # Meaning of array's last char:
@@ -250,9 +250,19 @@ ldap_ask_questions()
     # *: multiline text
     # none of the above: single-line text
     declare -A -r LDAP_FIELDS=( [uid]='Nickname/username' [sn]='Family Name' [givenname]='First name' [mail]='Email address'
-	[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member$'
+	[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member*'
 	[x-hsbxl-membershiprequested]='Membership requested|' [x-hsbxl-votingrequested]='Do you want to vote at the general assembly|'
-	[x-hsbxl-socialTariff]='Do you require the social tariff|' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key$' )
+	[x-hsbxl-socialTariff]='Do you require the social tariff|' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key*' )
+    test -z "$1" && break
+    test -n "${LDAP_FIELDS[$1]}" && echo "${LDAP_FIELDS[$1]}" || echo "$1"
+}
+
+# Ask a bunch of questions to user about entry
+# Parameter 1: Subtree
+# Parameter 2: Key for item DN. If there is an '=' symbol, it will be considered as pre-filled by caller and not asked
+# Parameter 3: list of items to ask from user. Mark the item with '*' at the end to make it mandatory.
+ldap_ask_questions()
+{
     declare -A LDAP_RESULTS
     test -z "$1" && die "Specify LDAP subtree to use"
     test -z "$2" && die "Specify key entry for DN"
@@ -738,7 +748,50 @@ CMD_adduser()
 	'helptext') echo "add user to system - Username must be specified"
 	;;
 	*)
-	echo adding user
+	USERTEST="$(ldapsearch -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" -b "$BASEDN" -LLL -o ldif-wrap=no "(uid=$1)" dn |sed -e '/^$/d')" #"
+	if [ -n "$USERTEST" ]; then
+	    echo "User already exist: $USERTEST"
+	else
+	    OPS3="$PS3"
+	    PS3="Select type of user to add to the system: "
+	    select userType in member machine app cancel; do
+		case $userType in
+		    'member') # Add a new member to the system
+			for i in $LDAPPARAMS; do
+			    echo "$i"
+			done
+			echo 'member'
+			break
+			;;
+		    'landlord')
+			echo 'landlord'
+		        break
+			;;
+		    'contractor')
+			echo 'contractor'
+			break
+			;;
+		    'cohabitant')
+			echo 'cohabitant'
+			break
+			;;
+		    'machine')
+			echo 'machine'
+			break
+			;;
+		    'app')
+			echo 'app'
+			break
+			;;
+		    'cancel')
+			break
+			;;
+		    *)  echo "Invalid option"
+			;;
+		esac
+	    done
+	    PS3="$OPS3"
+	fi
 	;;
     esac
 }
@@ -1092,9 +1145,11 @@ case "$CASEVAR" in
 	;;
 
 ### Function debugging
-    'debugfunc/')
+    'debugfunc/'*)
 #	declare -F | cut -d ' ' -f 3 
-	ldap_ask_questions "$USERSDN" "uid=askarel" "$LDAPPARAMS"
+	echo "$2"
+	ldap_fieldname_lookup "$2"
+#	ldap_ask_questions "$USERSDN" "uid=askarel" "$LDAPPARAMS"
 	;;
 
 ### Catch-all parts: in case of invalid arguments
