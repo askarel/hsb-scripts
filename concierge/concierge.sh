@@ -226,82 +226,59 @@ addperson()
     templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REPLY_FIELD[5]}" "${REPLY_FIELD[7]}"
 }
 
-
-# Return a friendly prompt for LDAP field
-# If field is not found, just echoes the input back.
-# Parameter 1: LDAP field
-# Output: friendly field name. Returns parameter 1 if no match.
-ldap_fieldname_lookup()
+# Ask the user to fill one field
+# Parameter 1: Field to ask
+# Parameter 2: Old field data. May be empty
+# Parameter 3: If filled, this field should not be empty
+# Output: Sanitized LDIF line. Base64-encoded if needed
+# Behaviour: The prompt depends on the field type. 
+ldap_get_fieldata_from_user()
 {
-    # LDAP fields friendly description
-    # Meaning of array's last char:
-    # #: numbers
-    # |: yes|no
-    # *: multiline text
-    # none of the above: single-line text
+    # Field friendly names
     declare -A -r LDAP_FIELDS=( [uid]='Nickname/username' [sn]='Family Name' [givenname]='First name' [mail]='Email address'
-	[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member*'
-	[x-hsbxl-membershiprequested]='Membership requested|' [x-hsbxl-votingrequested]='Do you want to vote at the general assembly|'
-	[x-hsbxl-socialTariff]='Do you require the social tariff|' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key*' )
-    test -z "$1" && break
-    test -n "${LDAP_FIELDS[$1]}" && echo "${LDAP_FIELDS[$1]}" || echo "$1"
-}
-
-# Ask a bunch of questions to user about entry
-# Parameter 1: Subtree
-# Parameter 2: Key for item DN. If there is an '=' symbol, it will be considered as pre-filled by caller and not asked
-# Parameter 3: list of items to ask from user. Mark the item with '*' at the end to make it mandatory.
-ldap_ask_questions()
-{
-    declare -A LDAP_RESULTS
-    test -z "$1" && die "Specify LDAP subtree to use"
-    test -z "$2" && die "Specify key entry for DN"
-    test -z "$3" && die "Specify list of fields to ask user"
-    # Split key into components
-    DNKEY="$(sed -e 's/\ *\=\ */\=/' <<< "$2" |cut -d '=' -f 1)"
-    DNVALUE="$(sed -e 's/\ *\=\ */\=/' <<< "$2" |cut -d '=' -f 2-)"
-    # If both the key and the value are equal, there was no pre-filled value specified.
-    # Unfortunately, it cannot differ empty value from a value equal to the key
-    test "$DNKEY" != "$DNVALUE" && LDAP_RESULTS[$DNKEY]="$DNVALUE"
-#    echo "### DEBUG: DNKEY='$DNKEY' DNVALUE='$DNVALUE' LDAP_RESULTS[$DNKEY]=${LDAP_RESULTS[$DNKEY]}"
-    for i in $3; do
-	KEYSTR="${i%\*}"
-#	test -z "${LDAP_RESULTS[$KEYSTR]}" && echo "'$KEYSTR'='${LDAP_RESULTS[$KEYSTR]}' '${i: -1}' '${LDAP_FIELDS[$i]%[\#\*\|]}' "
-	test -z "${LDAP_RESULTS[$KEYSTR]}" && case "${LDAP_FIELDS[$i]: -1}" in
-	    '|')
-		read -p "'$KEYSTR' --- ${LDAP_FIELDS[$i]%[\#\*\|]} [y/n]? " -n 1 LDAP_RESULTS[$KEYSTR]
-		test -n "${LDAP_RESULTS[$KEYSTR]}" && echo
-#		echo "LDAP_RESULTS[$KEYSTR]='${LDAP_RESULTS[$KEYSTR]}'"
-		;;
-	    '$')
-		echo "'$KEYSTR' --- ${LDAP_FIELDS[$i]%[\#\*\|]} (Use a line with just '.' to finish"
-		while test "$mycurrentline" != '.' ;do 
-		    read -p '>' mycurrentline
-		    test "$mycurrentline" != '.' && LDAP_RESULTS[$KEYSTR]="${LDAP_RESULTS[$KEYSTR]} $mycurrentline"
-		done
-		;;
-	    '#')
-		echo number 
-		;;
-	    *)
-		read -p "'$KEYSTR' --- ${LDAP_FIELDS[$i]%[\#\*\|]} ? " LDAP_RESULTS[$KEYSTR]
-#		echo "LDAP_RESULTS[$KEYSTR]='${LDAP_RESULTS[$KEYSTR]}'"
-		;;
-	esac
-    done
-    # Set DN entry here
-    echo "dn: $DNKEY=$DNVALUE,$1"
-    for i in $3; do
-	KEYSTR="${i%\*}"
-	echo "$KEYSTR: '${LDAP_RESULTS[$KEYSTR]}'"
-    done
-#	declare -A PROMPTS
-#	eval "PROMPTS=( \${$1} )"
-#	for i in ${PROMPTS[@]} ; do
-#	    echo "\$1[$i]=${LDAP_REPLY[$i]}"
-#	    echo "$i"
-#	    echo "${!LDAP_FIELDS[@]}"
-#	done
+	[preferredlanguage]='preferred language' [homephone]='Phone number' [description]='Why do you want to become member'
+	[x-hsbxl-membershiprequested]='Membership requested' [x-hsbxl-votingrequested]='Do you want to vote at the general assembly'
+	[x-hsbxl-socialTariff]='Do you require the social tariff' [x-hsbxl-sshpubkey]='SSH Public key' [x-hsbxl-pgpPubKey]='PGP Public key' )
+    # Fields data types
+    declare -A -r LDAP_TYPES=( [description]='multiline' [x-hsbxl-membershiprequested]='yesno' [x-hsbxl-votingrequested]='yesno' 
+	[x-hsbxl-socialTariff]='yesno' [x-hsbxl-pgpPubKey]='multiline')
+    test -z "$1" && die "Specify LDAP field to fill"
+    OLDPS3="$PS3"
+    test -n "$3" && REQUIRED='REQUIRED:' || unset REQUIRED
+    test -n "${LDAP_FIELDS[$1]}" && PS3="$REQUIRED ${LDAP_FIELDS[$1]}" || PS3="$REQUIRED ${1}" # Prepare the prompt
+    case "${LDAP_TYPES[$1]}" in
+	'multiline') # Multiple lines text. End with a line with a single dot
+	    PS3="$PS3 (end input with a line with a single dot)"
+	    while test "$MyLine" != '.'; do
+		read -p "${PS3}: " MyLine
+		test "$MyLine" != '.' && MyData="$MyData
+$MyLine"
+	    done
+	    echo "$1:: $( base64 -w 0 <<< "$MyData")"
+	    ;;
+	'yesno') # Simple yes/no question. It is implicitly required.
+	    PS3="${PS3} ? "
+	    select MyReply in yes no ; do
+		case "$MyReply" in
+		    'yes') echo "$1: TRUE"
+			   break
+			;;
+		    'no')  echo "$1: FALSE"
+			   break
+			;;
+		esac
+	    done
+	    ;;
+	*)  read -p "${PS3}: " MyData
+	    test -n "$MyData" && echo "$1: $MyData"
+	    while test -z "$MyData" -a -n "$3"; do
+		echo "Field cannot be empty" >&2
+		read -p "${PS3}: " MyData
+		test -n "$MyData" && echo "$1: $MyData"
+	    done
+	    ;;
+    esac
+    PS3="$OLDPS3"
 }
 
 
@@ -726,25 +703,30 @@ CMD_adduser()
 	else # User ID not found: create it
 	    OPS3="$PS3"
 	    PS3="Select type of user to add to the system: "
+	    declare -a LDIFREPLIES
+	    PASSWORD="$(pwgen 20 1)"
+	    local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
+	    LDIFREPLIES+=("uid: $1" "userpassword: $LDAPHASH")	# We already know the username and password to create
 	    select userType in member machine app cancel; do
 		case $userType in
 		    'member') # Add a new member to the system
-			for i in $LDAPPARAMS; do
-			    echo "$i"
+			for i in $LDAPPARAMS; do # Iterate through the list of fields we require
+			    test "${i%\*}" != "uid" && LDIFREPLIES+=("$(ldap_get_fieldata_from_user "${i%\*}" '' "$(test "${i: -1}" = '*' && echo 'mandatory')" )" ) #"
+			    test "${i%\*}" = "sn" && MySN="$(sed -e 's/sn\:\ //' <<< "${LDIFREPLIES[-1]}")"
+			    test "${i%\*}" = "givenname" && MyGV="$(sed -e 's/givenname\:\ //' <<< "${LDIFREPLIES[-1]}")"
 			done
-			echo 'member'
-			break
-			;;
-		    'landlord')
-			echo 'landlord'
-		        break
-			;;
-		    'contractor')
-			echo 'contractor'
-			break
-			;;
-		    'cohabitant')
-			echo 'cohabitant'
+			NEWUID=$(( 10000 + 10 + $(ldapsearch -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" -b "$USERSDN" -LLL -o ldif-wrap=no dn |sed -e '/^$/d'|wc -l ) ))
+			LDIFREPLIES+=("gidnumber: 503" "homedirectory: /home/users/${1}" "cn: $MyGV $MySN" "uidnumber: $NEWUID")
+			echo "dn: uid=${1},$USERSDN"
+			echo "objectclass: inetOrgPerson"
+			echo "objectclass: posixAccount"
+			echo "objectclass: top"
+			echo "objectclass: x-hsbxl-person"
+			echo "objectclass: x-hsbxl-structuredcomm-addon"
+#			test "$persontype" = 'member' && echo "x-hsbxl-membershipstructcomm: $STRUCTUREDCOMM"
+			for i in ${!LDIFREPLIES[@]}; do
+			    test -n "${LDIFREPLIES[$i]}" && echo "${LDIFREPLIES[$i]}"
+			done
 			break
 			;;
 		    'machine')
@@ -1101,7 +1083,7 @@ case "$CASEVAR" in
     'debugfunc/'*)
 #	declare -F | cut -d ' ' -f 3 
 	echo "$2"
-	ldap_fieldname_lookup "$2"
+#	ldap_fieldname_lookup "$2"
 #	ldap_ask_questions "$USERSDN" "uid=askarel" "$LDAPPARAMS"
 	;;
 
