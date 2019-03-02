@@ -80,7 +80,7 @@ runsql()
 # Parameter 3: optional GnuPG key ID. If the key is usable, the mail will be encrypted before sending
 # First line will be pasted as subject line
 # This function will send e-mail using the local SMTP server
-do_mail()
+do___mail()
 {
     test -z "$1" && die 'No sender address specified'
     test -z "$2" && die 'No receiver address specified'
@@ -212,7 +212,7 @@ addperson()
     FIRSTNAME="${REPLY_FIELD[1]}"
     NICKNAME="${REPLY_FIELD[3]}"
     JOINREASON="${REPLY_FIELD[8]}"
-    templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do_mail "$MAILFROM" "${REPLY_FIELD[5]}" "${REPLY_FIELD[7]}"
+    templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do___mail "$MAILFROM" "${REPLY_FIELD[5]}" "${REPLY_FIELD[7]}"
 }
 
 # Ask the user to fill one field
@@ -325,7 +325,7 @@ resendinfos()
     local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
 #    local STRUCTUREDCOMM="$(runsql "select structuredcomm from person where id=$PERSONID")"
     local STRUCTUREDCOMM="$(runsql "select structuredcomm from internal_accounts where account_type like 'MEMBERSHIP' and owner_id=$PERSONID")"
-    templatecat "$MYLANG" "$ME.sh_person_resendinfos.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+    templatecat "$MYLANG" "$ME.sh_person_resendinfos.txt" |  do___mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
 # Cancel membership for specified member
@@ -348,7 +348,7 @@ membercancel()
     read LEAVEREASON
     runsql "update person set machinestate='MEMBERSHIP_CANCELLED', machinestate_data='' where id=$PERSONID"
 #    templatecat "$MYLANG" "$ME.sh_member_cancel.txt"
-    templatecat "$MYLANG" "$ME.sh_member_cancel.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+    templatecat "$MYLANG" "$ME.sh_member_cancel.txt" |  do___mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
 # Reactivate membership for specified member
@@ -368,7 +368,7 @@ member_reactivate()
     local STRUCTUREDCOMM="$(runsql "select structuredcomm from internal_accounts where account_type like 'MEMBERSHIP' and owner_id=$PERSONID")"
     runsql "update person set machinestate='MEMBERSHIP_ACTIVE', machinestate_data='' where id=$PERSONID"
 #    templatecat "$MYLANG" "$ME.sh_member_reactivate.txt"
-    templatecat "$MYLANG" "$ME.sh_member_reactivate.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+    templatecat "$MYLANG" "$ME.sh_member_reactivate.txt" |  do___mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
 # Parameter 1: bank name (will be used to call the right parser)
@@ -450,7 +450,7 @@ massmail()
 		local FIRSTNAME="$(runsql "select firstname from person where id=$P")"
 		local GPGID="$(runsql "select openpgpkeyid from person where id=$P")"
 		templatecat "$MYLANG" "$1"
-#		templatecat "$MYLANG" "$1" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+#		templatecat "$MYLANG" "$1" |  do___mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 	    done
 	else
 	    local P=$(runsql "select id from person where machinestate like '$MACHINESTATE' limit 1")
@@ -608,7 +608,7 @@ add_bar_account()
     local EMAILADDRESS="$(runsql "select emailaddress from person where id=$PERSONID")"
     local FIRSTNAME="$(runsql "select firstname from person where id=$PERSONID")"
     local GPGID="$(runsql "select openpgpkeyid from person where id=$PERSONID")"
-    templatecat "$MYLANG" "$ME.sh_person_add_bar.txt" |  do_mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
+    templatecat "$MYLANG" "$ME.sh_person_add_bar.txt" |  do___mail "$MAILFROM" "$EMAILADDRESS" "$GPGID"
 }
 
 ############################################# </INTERNAL ACCOUNTING> #############################################
@@ -979,9 +979,16 @@ case "$CASEVAR" in
 		test -z "$2" && die "Specify the year for which you need stats"
 		runsql 'select this_account from moneymovements where this_account not like "+++%" group by this_account' | while read line; do
 		    echo "--- Account $line ---"
-		echo "Req.Date	Balance		LastDate"
+#		echo "Req.Date	Balance		LastDate"
 		    for i in $(seq 1 12); do
-			test "$(date +%Y)" = "$2" -a "$i" -gt "$(date +%m)" || runsql "select '$2-$i-01', sum(amount), max(date_val) from moneymovements where this_account like '$line' and date_val between '0000-01-01' and '$2-$i-01'"
+			test "$(date +%Y)" = "$2" -a "$i" -gt "$(date +%m)" || {
+			    printf 'Date: %10s BalanceStart: %12s BalanceEnd: %12s Income: %12s Spending: %12s Trend: %12s\n' "$2-$i-31" \
+			    "$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-01' and '$2-$i-00'")" \
+			    "$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-00' and '$2-$i-31'")" \
+			    "$(runsql "select sum(amount) from moneymovements where amount > 0 and this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" \
+			    "$(runsql "select sum(amount) from moneymovements where amount < 0 and this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" \
+			    "$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")"
+			}
 		    done
 		done
 		;;
