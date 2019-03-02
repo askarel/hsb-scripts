@@ -978,11 +978,12 @@ case "$CASEVAR" in
 	    'year')
 		test -z "$2" && die "Specify the year for which you need stats"
 		runsql 'select this_account from moneymovements where this_account not like "+++%" group by this_account' | while read line; do
-		    echo "--- Account $line ---"
+		    echo "--- Account $line, year $2 ---"
 #		echo "Req.Date	Balance		LastDate"
-		    for i in $(seq 1 12); do
+		    for i in {01..12}; do
 			test "$(date +%Y)" = "$2" -a "$i" -gt "$(date +%m)" || {
-			    printf 'Date: %10s BalanceStart: %12s BalanceEnd: %12s Income: %12s Spending: %12s Trend: %12s\n' "$2-$i-31" \
+			    LANG=C
+			    printf '%-12s BalanceStart: %-12s BalanceEnd: %-12s Income: %-12s Spending: %-12s Trend: %-12s\n' "$(date +%B --date $2-$i-01)" \
 			    "$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-01' and '$2-$i-00'")" \
 			    "$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-00' and '$2-$i-31'")" \
 			    "$(runsql "select sum(amount) from moneymovements where amount > 0 and this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" \
