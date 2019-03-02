@@ -17,7 +17,12 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-readonly ME="$(basename "$0" .sh)"
+# Load libaskarel
+test -f "$(dirname "$0")/libaskarel/libaskarel.sh" || git clone https://github.com/askarel/libaskarel
+test -f "$(dirname "$0")/libaskarel/libaskarel.sh" || { echo 'Failed to download libaskarel'; exit 1;  }
+. "$(dirname "$0")/libaskarel/libaskarel.sh"
+
+#readonly ME="$(basename "$0" .sh)"
 readonly MYDIR="$(dirname "$0")"
 readonly CONFIGFILE="$ME.conf"
 # Default path for the SQL files
@@ -30,13 +35,6 @@ readonly GPGHOME="$MYDIR/.gnupg"
 #readonly DEBUGGING=true
 
 ############### <FUNCTIONS> ###############
-# Function to call when we bail out
-die()
-{
-    echo "$ME: $1. Exit" >&2
-    test -n "$2" && exit $2
-    exit 1
-}
 
 # Run a SQL command as user (new style)
 # Parameter 1: username
@@ -74,15 +72,6 @@ user_runsql()
 runsql()
 {
     user_runsql "$SQLUSER" "$SQLPASS" "$1" "$2"
-}
-
-# This will check that all binaries needed are available
-check_prerequisites()
-{
-    while test -n "$1"; do
-	which "$1" > /dev/null || die "Command '$1' not found in path ($PATH)"
-	shift
-    done
 }
 
 # Send the data on STDIN by e-mail.
@@ -709,7 +698,7 @@ CMD_adduser()
 	    LDIFREPLIES+=("uid: $1" "userpassword: $LDAPHASH")	# We already know the username and password to create
 	    select userType in member machine app cancel; do
 		case $userType in
-		    'member') # Add a new member to the system
+		    'member') # Add a new member to the system (ou=Users,$BASEDN)
 			for i in $LDAPPARAMS; do # Iterate through the list of fields we require
 			    test "${i%\*}" != "uid" && LDIFREPLIES+=("$(ldap_get_fieldata_from_user "${i%\*}" '' "$(test "${i: -1}" = '*' && echo 'mandatory')" )" ) #"
 			    test "${i%\*}" = "sn" && MySN="$(sed -e 's/sn\:\ //' <<< "${LDIFREPLIES[-1]}")"
@@ -976,8 +965,30 @@ case "$CASEVAR" in
 
 ### Bank processing
     'bank/balance')
-	echo "Account			balance		date last movement"
-	runsql 'select this_account, sum(amount), max(date_val) from moneymovements group by this_account'
+	shift
+	case "$1" in
+	    'all')
+		echo "Account			balance		date last movement"
+		runsql 'select this_account, sum(amount), max(date_val) from moneymovements group by this_account'
+	    ;;
+	    'bank')
+		echo "Account			balance		date last movement"
+		runsql 'select this_account, sum(amount), max(date_val) from moneymovements where this_account not like "+++%" group by this_account'
+	    ;;
+	    'year')
+		test -z "$2" && die "Specify the year for which you need stats"
+		runsql 'select this_account from moneymovements where this_account not like "+++%" group by this_account' | while read line; do
+		    echo "--- Account $line ---"
+		echo "Req.Date	Balance		LastDate"
+		    for i in $(seq 1 12); do
+			test "$(date +%Y)" = "$2" -a "$i" -gt "$(date +%m)" || runsql "select '$2-$i-01', sum(amount), max(date_val) from moneymovements where this_account like '$line' and date_val between '0000-01-01' and '$2-$i-01'"
+		    done
+		done
+		;;
+	    *)
+		echo "Select subcommand (all|bank|year|)"
+	    ;;
+	esac
 	;;
     'bank/importcsv')
 	importbankcsv "$2" "$3"
