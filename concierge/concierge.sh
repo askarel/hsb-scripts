@@ -761,6 +761,56 @@ CMD_runsql()
     esac
 }
 
+
+CMD_massmail()
+{
+    case "$1" in
+    '') echo "Specify LDAP group name" 
+    ;;
+    'helptext') echo "Mass-mail the members of an LDAP group" 
+    ;;
+    *)	# Test group existence
+	GROUPDN="$(ldapsearch -b "$BASEDN" -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" "(cn=$1)" dn | grep '^dn' | sed -e 's/^dn\:\ //g')" #"
+	# Parameters sanity checks
+	test -z "$GROUPDN" && { echo "Group '$1' does not exist."; return; }
+	test -n "$2" || { echo "No template specified"; return; }
+	test -e "$2" || { echo "File '$2' does not exist"; return; }
+	test -f "$2" || { echo "File '$2' is not a regular file"; return; }
+	LDAPGROUPNAME="$(cut -d ',' -f 1 <<< "$GROUPDN" | sed -e 's/^cn\=//g')"
+	LDAPGROUPDN="$(cut -d ',' -f 2- <<< "$GROUPDN")"
+	# Iterate through group
+	MEMBERCOUNT="$(ldapsearch -b "$LDAPGROUPDN" -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" "(cn=$LDAPGROUPNAME)" member | grep '^member' | wc -l)" #"
+	ldapsearch -b "$LDAPGROUPDN" -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" "(cn=$LDAPGROUPNAME)" member | grep '^member' | sed -e 's/^member\:\ //g' | while read line; do
+	    LDAPRESULTNAME="$(cut -d ',' -f 1 <<< "$line")"
+	    LDAPRESULTDN="$(cut -d ',' -f 2- <<< "$line")"
+	    eval "$(ldapsearch -b "$LDAPRESULTDN" -o ldif-wrap=no -LLL -h "$LDAPHOST" -D "uid=$UserName,$USERSDN" -w "$PassWord" "($LDAPRESULTNAME)" givenname mail | sed -e 's/^dn\:\ .*$//g; s/^givenName\:\ /FIRSTNAME\=\"/g; s/^givenName\:\:\ /FIRSTNAME\=\"\:/g; s/^mail\:\ /RECIPIENT_EMAIL\=\"/g; /^$/d; s/$/\"/g')" #"
+	    # Check if variable bas been base64-encoded
+	    test "${FIRSTNAME::1}" = ':' && FIRSTNAME="$(base64 -d <<< "${FIRSTNAME:1}")"
+	    QUORUM="$(( $MEMBERCOUNT / 2 ))"
+	    export FIRSTNAME QUORUM 
+	    case "$3" in
+	    'go') # Do send mail
+		echo "--- go $line $LDAPRESULTNAME $LDAPRESULTDN"
+		cat "$2" | envsubst | do___mail "$MAILFROM" "$RECIPIENT_EMAIL"
+		;;
+	    'test') # Send mail to yourself for testing
+		test "$(tr '[:upper:]' '[:lower:]' <<< "uid=$UserName,$USERSDN")" = "$(tr '[:upper:]' '[:lower:]' <<< "$line")" && {
+		    echo "--- go test $line $LDAPRESULTNAME $LDAPRESULTDN $MEMBERCOUNT $FIRSTNAME $RECIPIENT_EMAIL"
+		    cat "$2" | envsubst | do___mail "$MAILFROM" "$RECIPIENT_EMAIL"
+		    }
+		;;
+	    *) # Dump mails to console
+		echo "--- masstest $line $LDAPRESULTNAME $LDAPRESULTDN $FIRSTNAME $RECIPIENT_EMAIL"
+		DEBUGGING=true
+		cat "$2" | envsubst | do___mail "$MAILFROM" "$RECIPIENT_EMAIL"
+		;;
+	    esac
+	done
+#	echo "$1 $2 $3 $GROUPDN $LDAPGROUPNAME $LDAPGROUPDN"
+    ;;
+    esac
+}
+
 # NEW: the cashbox appliation
 CMD_cashbox()
 {
@@ -988,7 +1038,7 @@ case "$CASEVAR" in
 			    "$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-00' and '$2-$i-31'")" \
 			    "$(runsql "select sum(amount) from moneymovements where amount > 0 and this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" \
 			    "$(runsql "select sum(amount) from moneymovements where amount < 0 and this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" \
-			    "$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")"
+			    "$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" #"
 			}
 		    done
 		done
