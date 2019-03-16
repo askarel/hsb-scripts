@@ -1,0 +1,36 @@
+General Assembly invitation
+
+Hello $FIRSTNAME,
+
+tl;dr
+Yearly general assembly is Saturday 30th of March 2019, starting 14h.
+You are invited. As we need a minimum of $QUORUM members to be present, it is important you come over.
+
+\\\
+
+As Hackerspace Brussels is a Belgian non-profit (VZW/ASBL), 
+we need to have at least one General Assembly a year.
+
+We will have our yearly GA on Saturday 30th of March 2019, starting 14h.
+https://hsbxl.be/events/ga/14
+
+On a general assembly we discuss and vote on important issues, like:
+- Acceptance books of last year
+- Acceptance financial budget plan for next year
+- Acceptance of the decisions of the board for last year
+- Votes on new boardmembers
+- Changes of statute
+
+As you are a member of the Hackerspace, please come over and have a voice.
+To be a lawful GA, we need a presence of at least $QUORUM people.
+This means it is important you come over.
+
+If you want to read more about General assemblies and non-profits,
+we collected a few interesting links on https://hsbxl.be/ga
+
+Hope to see you there!
+
+
+Cheers,
+the HSBXL board.
+
