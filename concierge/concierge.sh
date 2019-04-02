@@ -1043,8 +1043,46 @@ case "$CASEVAR" in
 		    done
 		done
 		;;
+	    'jsonyears')
+		printf '{\n'
+		runsql 'select this_account from moneymovements where this_account not like "+++%" group by this_account' | while read line; do
+		    printf ' "%s": {\n  "data": { \n' "$line"
+		    MINYEAR="$(runsql 'select year(min(date_val)) from moneymovements')"
+		    MAXYEAR="$(runsql 'select year(max(date_val)) from moneymovements')"
+		    for (( i=${MINYEAR} ;i<=${MAXYEAR} ; i++ )); do
+			printf '    "%s": {\n' "$i"
+			for j in {1..12}; do
+			    test "$(date +%Y)" = "$2" -a "$i" -gt "$(date +%m)" || {
+				LANG=C
+				printf '     "%s": { "BalanceStart": "%s", "BalanceEnd": "%s", "Income": "%s", "Spending": "%s", "Trend": "%s" },' "$(date +%B --date $i-$j-01)" \
+			    	"$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-01' and '$2-$i-00'")" \
+			    	"$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-00' and '$2-$i-31'")" \
+			    	"$(runsql "select sum(amount) from moneymovements where amount > 0 and this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" \
+			    	"$(runsql "select sum(amount) from moneymovements where amount < 0 and this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" \
+			    	"$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '$2-$i-00' and '$2-$i-31'")" #"
+			    }
+			done | sed -e 's/\,$//g'
+			printf '},'
+		    done| sed -e 's/\,$//g'
+		    printf "   }\n  },"
+		done | sed -e 's/\,$//g'
+		printf "\n}\n"
+		;;
+	    'detail')
+		case "$2" in
+		    'income')
+			echo income
+		    ;;
+		    'spending')
+			echo spending
+		    ;;
+		    *)
+			echo "Syntax: $ME bank balance detail <income|spending>"
+		    ;;
+		esac
+	    ;;
 	    *)
-		echo "Select subcommand (all|bank|year|)"
+		echo "Select subcommand (all|bank|year|detail)"
 	    ;;
 	esac
 	;;
