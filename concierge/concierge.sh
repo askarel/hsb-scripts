@@ -1005,12 +1005,13 @@ case "$CASEVAR" in
 
 ### Cron processing
     "cron/hourly")
-	cron_mail_new_user
+#	cron_mail_new_user
 	preload_internal_accounts $ACCOUNT_PRELOAD
+	$0 bank balance jsonyears > /srv/www/tools.hsbxl.be/www/hsbxl-bank.json
 	;;
     "cron/daily")
 	shift
-	cron_pgp
+#	cron_pgp
 	;;
 
 ### Bank processing
@@ -1054,14 +1055,14 @@ case "$CASEVAR" in
 			printf '%s\n    "%s": {'  "$I_COMMA" "$i"
 			I_COMMA=','
 			for j in {1..12}; do
-			    if ! test "$(date +%Y)" = "$2" -a "$i" -gt "$(date +%m)" ; then
+			    if ! test "$(date +%Y)" = "$i" -a "$j" -gt "$(date +%m)" ; then
 				LANG=C
-				printf '%s\n     "%s": { "BalanceStart": "%s", "BalanceEnd": "%s", "Income": "%s", "Spending": "%s", "Trend": "%s" }' "$J_COMMA" "$(date +%B --date $i-$j-01)" \
-			    	"$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-01' and '$i-$j-00'")" \
-			    	"$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '0000-01-00' and '$i-$j-31'")" \
-			    	"$(runsql "select sum(amount) from moneymovements where amount > 0 and this_account like '$line' and date_val between '$i-$j-00' and '$i-$j-31'")" \
-			    	"$(runsql "select sum(amount) from moneymovements where amount < 0 and this_account like '$line' and date_val between '$i-$j-00' and '$i-$j-31'")" \
-			    	"$(runsql "select sum(amount) from moneymovements where this_account like '$line' and date_val between '$i-$j-00' and '$i-$j-31'")" #"
+				printf '%s\n     "%s": { "BalanceStart": %s, "BalanceEnd": %s, "Income": %s, "Spending": %s, "Trend": %s }' "$J_COMMA" "$(date +%B --date $i-$j-01)" \
+			    	"$(runsql "select ifnull(sum(amount), 0) from moneymovements where this_account like '$line' and date_val between '0000-01-01' and '$i-$j-00'")" \
+			    	"$(runsql "select ifnull(sum(amount), 0) from moneymovements where this_account like '$line' and date_val between '0000-01-00' and '$i-$j-31'")" \
+			    	"$(runsql "select ifnull(sum(amount), 0) from moneymovements where amount > 0 and this_account like '$line' and date_val between '$i-$j-00' and '$i-$j-31'")" \
+			    	"$(runsql "select ifnull(sum(amount), 0) from moneymovements where amount < 0 and this_account like '$line' and date_val between '$i-$j-00' and '$i-$j-31'")" \
+			    	"$(runsql "select ifnull(sum(amount), 0) from moneymovements where this_account like '$line' and date_val between '$i-$j-00' and '$i-$j-31'")" #"
 				J_COMMA=','
 			    fi
 			done
