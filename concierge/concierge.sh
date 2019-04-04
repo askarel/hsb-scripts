@@ -1044,7 +1044,7 @@ case "$CASEVAR" in
 		done
 		;;
 	    'jsonyears')
-		printf '{'
+		printf '{\n "generated-date-text": "%s",\n "generated-date-unixtime": %s,' "$(date)" "$(date '+%s')" 
 		runsql 'select this_account from moneymovements where this_account not like "+++%" group by this_account' | while read line; do
 		    printf '%s\n "%s": {\n  "data": {' "$LINE_COMMA" "$line"
 		    LINE_COMMA=','
