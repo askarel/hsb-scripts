@@ -1045,7 +1045,7 @@ case "$CASEVAR" in
 		done
 		;;
 	    'jsonyears')
-		printf '{\n "generated-date-text": "%s",\n "generated-date-unixtime": %s,' "$(date)" "$(date '+%s')" 
+		printf '{\n "generated-date-text": "%s",\n "generated-date-unixtime": %s,\n "last-import-date-text": "%s",\n "last-import-date-unixtime": %s,\n' "$(date)" "$(date '+%s')" "$(runsql 'select max(import_timestamp) from moneymovements')" "$(runsql 'select unix_timestamp(max(import_timestamp)) from moneymovements')"
 		runsql 'select this_account from moneymovements where this_account not like "+++%" group by this_account' | while read line; do
 		    printf '%s\n "%s": {\n  "data": {' "$LINE_COMMA" "$line"
 		    LINE_COMMA=','

@@ -97,7 +97,8 @@ create table if not exists moneymovements (id int not null auto_increment primar
 				    other_account_name char (50),
 				    transaction_id char(255) unique not null,
 				    fix_fuckup_msg char (60),
-				    raw_csv_line text
+				    raw_csv_line text,
+				    import_timestamp timestamp default current_timestamp
 				    );
 
 create table if not exists expenses (id int not null auto_increment primary key,
