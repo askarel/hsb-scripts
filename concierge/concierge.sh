@@ -133,8 +133,8 @@ ldap_getUserDN()
 # Once we go full LDAP, this will disappear: add user from LDAP server
 addperson()
 {
-    local REQUESTED_FIELDS=(lang firstname name nickname phonenumber emailaddress birthdate openpgpkeyid machinestate_data)
-    local REQUESTED_FIELDS_DESC=('Preferred language' 'Firstname' 'Family name' 'Nickname' 'phone number' 'Email address' 'Birth date' 
+    local REQUESTED_FIELDS=(lang firstname name nickname phonenumber emailaddress openpgpkeyid machinestate_data)
+    local REQUESTED_FIELDS_DESC=('Preferred language' 'Firstname' 'Family name' 'Nickname' 'phone number' 'Email address' 
 				'OpenPGP key ID' "informations (free text, use '|' to finish)\n")
     local -a REPLY_FIELD
     local SQL_QUERY="insert into person (entrydate, $(tr ' ' ',' <<< "${REQUESTED_FIELDS[@]}"), passwordhash, ldaphash, machinestate, machinestate_expiration_date) values ( \"$(date '+%Y-%m-%d')\", "
@@ -154,7 +154,7 @@ addperson()
 	SQL_QUERY="$SQL_QUERY '${REPLY_FIELD[$i]}',"
     done
     # Key specified ? Import it.
-    test -n  "${REPLY_FIELD[7]}" && gpg --no-permission-warning --homedir "$GPGHOME" --keyserver hkp://keys.gnupg.net --recv-keys "${REPLY_FIELD[7]}"
+    test -n  "${REPLY_FIELD[6]}" && gpg --no-permission-warning --homedir "$GPGHOME" --keyserver hkp://keys.gnupg.net --recv-keys "${REPLY_FIELD[6]}"
 
     local CRYPTPASSWORD="$(mkpasswd -m sha-512 -s <<< "$PASSWORD")"
     local LDAPHASH="$(/usr/sbin/slappasswd -s "$PASSWORD")"
