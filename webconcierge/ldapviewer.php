@@ -20,7 +20,12 @@
 
 # Load the common stuff (first thing)
 include_once('./libaskarel.php');
-
+# First thing first: it's a modern script (?) supposed to be used on
+# decent browsers.
+header ("Content-type: text/html; charset=utf8");
+header ("X-Frame-Options: SAMEORIGIN");
+// Automagically insert footer on exit
+register_shutdown_function('html_footer');
 
 static $CONFIG = array (
 # LDAP parameters
@@ -58,12 +63,6 @@ function LoginPage($ButtonMessage)
 	printf ("</div>\n");
 }
 
-# First thing first: it's a modern script (?) supposed to be used on
-# decent browsers.
-header ("Content-type: text/html; charset=utf8");
-header ("X-Frame-Options: SAMEORIGIN");
-// Automagically insert footer on exit
-register_shutdown_function('html_footer');
 
 switch ($_SERVER['REQUEST_METHOD']) {
     case 'GET':

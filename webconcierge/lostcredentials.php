@@ -90,7 +90,7 @@ header ("Content-type: text/html; charset=utf8");
 header ("X-Frame-Options: SAMEORIGIN");
 // Automagically insert footer on exit
 register_shutdown_function('html_footer');
-session_start();
+session_start([ 'cookie_lifetime' => 7200 ]); // Two hours cookie
 
 // Prepare LDAP connection
 $ldapconn = ldap_connect ($CONFIG['ldaphost'], $CONFIG['ldapport']);

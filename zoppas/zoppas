@@ -545,8 +545,12 @@ mainapp()
 		rm -rf $TMPDIR
 		exit 0
 	    ;;
+	    'entry')
+		echo 'Loading CSVs...'
+		STATE='mainscreen'
+	    ;;
 	    *)
-		die "mainapp(): Invalid state"
+		die "mainapp(): $STATE: Invalid state"
 	    ;;
 	esac
     done

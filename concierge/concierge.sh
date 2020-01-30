@@ -178,7 +178,7 @@ addperson()
 	    ;;
     esac
 #    echo "$SQL_QUERY"
-    USER_UID="$(runsql 'select count(id)+1005 from person')"
+    USER_UID="$(runsql 'select max(id)+1003 from person')"
     runsql "$SQL_QUERY" && echo "$ME: Added $persontype to database."
 #    runsql "insert into member_groups (member_id, group_id) values ( (select max(id) from person),(select bit_id from hsb_groups where shortdesc like '$persontype') )" && echo "$ME: Added to group $persontype"
     test "$persontype" = 'members' && STRUCTUREDCOMM="$(account_create "MEMBERSHIP" "$(lookup_person_id "${REPLY_FIELD[5]}")")" #"
@@ -211,7 +211,7 @@ addperson()
     EXPIRYDATE="$(runsql 'select machinestate_expiration_date from person order by id desc limit 1')"
     FIRSTNAME="${REPLY_FIELD[1]}"
     NICKNAME="${REPLY_FIELD[3]}"
-    JOINREASON="${REPLY_FIELD[8]}"
+    JOINREASON="${REPLY_FIELD[7]}"
     templatecat "${REPLY_FIELD[0]}" "${ME}.sh_person_add_${persontype}.txt" | do___mail "$MAILFROM" "${REPLY_FIELD[5]}" "${REPLY_FIELD[7]}"
 }
 
