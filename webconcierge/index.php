@@ -4,11 +4,6 @@ include_once('./libaskarel.php');
 header ("Content-type: text/html; charset=utf8");
 header ("X-Frame-Options: SAMEORIGIN");
 
-# This will send the page end to the client
-function html_footer()
-{
-    echo ("\n <p>Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/\">Askarel</A></p>\n </body>\n</html>\n");
-}
 
 // Automagically insert footer on exit
 register_shutdown_function('html_footer');
