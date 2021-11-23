@@ -61,7 +61,7 @@ function dumpglobals()
 # $EXTRAHEAD is any extra tags you want between the <head> and </head> tags. This defaults to nothing.
 function html_header($TITLE, $EXTRAHEAD = '')
 {
-    printf ("<!DOCTYPE HTML>\n<html>\n <head>\n  <title>%s</title>\n%s\n </head>\n <body>\n", $TITLE, $EXTRAHEAD);
+    printf ("<!DOCTYPE HTML>\n<html>\n <head>\n  <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n <title>%s</title>\n%s\n <style>\n #content {width: 50%} </style>\n</head>\n <body>\n", $TITLE, $EXTRAHEAD);
 }
 
 # Abort script and tell user there is something definitely wrong.
@@ -101,7 +101,7 @@ function randomstring($length=20)
 # This will send the page end to the client
 function html_footer()
 {
-    echo ("\n Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/\">Askarel</A></p>\n </body>\n</html>\n");
+    echo ("\n Powered by <A HREF=\"https://github.com/askarel/hsb-scripts/\">Askarel</A></p>\n </body>\n </html>\n");
 }
 
 // Taken from https://blog.michael.kuron-germany.de/2012/07/hashing-and-verifying-ldap-passwords-in-php/
