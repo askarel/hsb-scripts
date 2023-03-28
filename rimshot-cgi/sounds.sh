@@ -35,7 +35,7 @@ readonly JSONMETHOD="JSON"
 readonly JSMETHOD="JS"
 readonly POSTSPEAKMETHOD="SPEAK"
 readonly POSTRANDOMMETHOD="RANDOM"
-readonly PLAYPROG="paplay"
+readonly PLAYPROG="aplay"
 readonly SPEECHMETHOD="espeakmethod"
 # readonly FOOTER="Proudly brought to you by Askarel and many contributors in HSBXL."
 #DEBUG=blaah
@@ -54,7 +54,7 @@ espeakmethod()
 	    test -n "$2" -a "$i" = "$2" && REALLANG="$i" # Is language in the list ?
 	done
 	SPEECHBAR="Speech synth: <INPUT TYPE=\"text\"  NAME=\"SPEAK\" ID=\"SPEAK\" onkeydown=\"if (event.keyCode == 13 ) {troll ('SPEAK=' + document.getElementById('SPEAK').value + '&SPEECHLANG=' + document.getElementById('SPEECHLANG').value); return false; }\" /><SELECT ID=\"SPEECHLANG\" NAME=\"SPEECHLANG\">$SPEECHLANGLIST</SELECT>"
-	test -n "$1" && $SPEECHBIN -v "$REALLANG" "$1" 
+	test -n "$1" && echo "$1" | $SPEECHBIN  -s 135 -p 20 -v "$REALLANG" --stdin
     fi
 }
 
